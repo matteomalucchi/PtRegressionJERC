@@ -23,6 +23,7 @@ This will save the results in the `dir_name` directory inside the
 After running the full dataset, in order to compute the MC Truth corrections, you can use the following command:
 
 ```bash
+cd response_plot/
 python response.py --full -d <dir_name>
 ```
 
