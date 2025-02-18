@@ -24,7 +24,14 @@ After running the full dataset, in order to compute the MC Truth corrections, yo
 
 ```bash
 cd response_plot/
-python response.py --full -d <dir_name>
+python response.py --full -d <dir_name> --histo 
+```
+
+To run on SLURM on tier3:
+
+```bash
+cd response_plot/
+sbatch -p short --account=t3 --time=00:10:00 --mem 15gb --cpus-per-task=32 --wrap="python response.py --full -d  <dir_name> --histo -n 32"
 ```
 
 This will:
