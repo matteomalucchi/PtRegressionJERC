@@ -175,7 +175,7 @@ class QCDBaseProcessor(BaseProcessorABC):
 
             self.events["JetGood"] = ak.with_field(
                 self.events.Jet,
-                self.events.Jet.pt * (1 - self.events.Jet.rawFactor),
+                self.events.Jet.pt_raw,
                 "ptRaw",
             )
 
@@ -323,7 +323,7 @@ class QCDBaseProcessor(BaseProcessorABC):
 
             self.events[f"MatchedJets"] = ak.with_field(
                 self.events.MatchedJets,
-                self.events.JetMatched.pt * (1 - self.events.JetMatched.rawFactor),
+                self.events.JetMatched.pt_raw,
                 "JetPtRaw",
             )
             self.events[f"MatchedJets"] = ak.with_field(
@@ -485,8 +485,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                 if int(os.environ.get("NEUTRINO", 1)) == 1:
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
-                        self.events.JetNeutrinoMatched.pt
-                        * (1 - self.events.JetNeutrinoMatched.rawFactor),
+                        self.events.JetNeutrinoMatched.pt_raw,
                         "JetPtRaw",
                     )
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
