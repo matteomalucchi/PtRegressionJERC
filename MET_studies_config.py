@@ -6,7 +6,7 @@ from pocket_coffea.lib.categorization import CartesianSelection, MultiCut
 from pocket_coffea.parameters import defaults
 import os
 
-from workflow_MET import *
+from workflow_MET import METProcessor
 
 from cuts import *
 from custom_functions import *
@@ -35,38 +35,40 @@ parameters = defaults.merge_parameters_from_files(
 
 
 mc_truth_corr_pnetreg = None
-corr_files_pnetreg = {
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNet.txt",
-}
-if int(os.environ.get("CLOSURE", 0)) == 1:
-    print(f"Performing closure test with {corr_files_pnetreg[year]}")
-    mc_truth_corr_pnetreg = get_closure_function_information(corr_files_pnetreg[year])
-
 mc_truth_corr_pnetreg_neutrino = None
-corr_files_pnetreg_neutrino = {
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-}
-if int(os.environ.get("CLOSURE", 0)) == 1:
-    print(f"Performing closure test with {corr_files_pnetreg_neutrino[year]}")
-    mc_truth_corr_pnetreg_neutrino = get_closure_function_information(
-        corr_files_pnetreg_neutrino[year]
-    )
-
 mc_truth_corr = None
-corr_files = {
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V1_MC_L2Relative_AK4PUPPI.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EEVetoRun3_V1_MC_L2Relative_AK4PUPPI.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V1_MC_L2Relative_AK4PUPPI.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PUPPI.txt",
-}
-print(f"Reapplying correctios {corr_files[year]}")
-mc_truth_corr = get_closure_function_information(corr_files[year])
+
+if False:
+    corr_files_pnetreg = {
+        "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFPNet.txt",
+        "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFPNet.txt",
+        "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFPNet.txt",
+        "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNet.txt",
+    }
+    if int(os.environ.get("CLOSURE", 0)) == 1:
+        print(f"Performing closure test with {corr_files_pnetreg[year]}")
+        mc_truth_corr_pnetreg = get_closure_function_information(corr_files_pnetreg[year])
+
+    corr_files_pnetreg_neutrino = {
+        "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
+        "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
+        "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
+        "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
+    }
+    if int(os.environ.get("CLOSURE", 0)) == 1:
+        print(f"Performing closure test with {corr_files_pnetreg_neutrino[year]}")
+        mc_truth_corr_pnetreg_neutrino = get_closure_function_information(
+            corr_files_pnetreg_neutrino[year]
+        )
+
+    corr_files = {
+        "2022_preEE": f"{localdir}/params/Summer22Run3_V1_MC_L2Relative_AK4PUPPI.txt",
+        "2022_postEE": f"{localdir}/params/Summer22EEVetoRun3_V1_MC_L2Relative_AK4PUPPI.txt",
+        "2023_preBPix": f"{localdir}/params/Summer23Run3_V1_MC_L2Relative_AK4PUPPI.txt",
+        "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PUPPI.txt",
+    }
+    print(f"Reapplying correctios {corr_files[year]}")
+    mc_truth_corr = get_closure_function_information(corr_files[year])
 
 cuts_eta = []
 cuts_names_eta = []
@@ -118,13 +120,13 @@ samples_PNetReg15_dict = {
     "2023_postBPix": "QCD_PT-15to7000_PNetReg15_JMENano_Summer23BPix",
 }
 
-multicuts = [
-    MultiCut(
-        name="eta",
-        cuts=cuts_eta + cuts_eta_neutrino + cuts_reco_eta,
-        cuts_names=cuts_names_eta + cuts_names_eta_neutrino + cuts_names_reco_eta,
-    ),
-]
+# multicuts = [
+#     MultiCut(
+#         name="eta",
+#         cuts=cuts_eta + cuts_eta_neutrino + cuts_reco_eta,
+#         cuts_names=cuts_names_eta + cuts_names_eta_neutrino + cuts_names_reco_eta,
+#     ),
+# ]
 
 common_cats = {
     "baseline": [passthrough],
@@ -173,11 +175,11 @@ cfg = Configurator(
     },
     skim=[],
     preselections=[],
-    categories=CartesianSelection(multicuts=multicuts, common_cats=common_cats),
-    # categories={
-    #             **common_cats,
-    #     # **eta_cuts,
-    # },
+    # categories=CartesianSelection(multicuts=multicuts, common_cats=common_cats),
+    categories={
+                **common_cats,
+        # **eta_cuts,
+    },
     weights={
         "common": {
             "inclusive": [
@@ -198,7 +200,7 @@ cfg = Configurator(
             "bysample": {},
         }
     },
-    variables=variables_dict,
+    variables={},#variables_dict,
     columns={
         "common": {
             "inclusive": [
