@@ -2,6 +2,7 @@ from pocket_coffea.utils.configurator import Configurator
 from pocket_coffea.parameters.cuts import passthrough
 from pocket_coffea.lib.columns_manager import ColOut
 from pocket_coffea.lib.categorization import CartesianSelection, MultiCut
+from pocket_coffea.parameters.histograms import met_hists
 
 from pocket_coffea.parameters import defaults
 import os
@@ -107,12 +108,6 @@ else:
 
 variables_dict=get_variables_dict(cuts_names_eta, cuts_names_reco_eta, cuts_names_eta_neutrino)
 
-samples_dict = {
-    "2022_preEE": "QCD_PT-15to7000_JMENano_Summer22",
-    "2022_postEE": "QCD_PT-15to7000_JMENano_Summer22EE",
-    "2023_preBPix": "QCD_PT-15to7000_JMENano_Summer23",
-    "2023_postBPix": "QCD_PT-15to7000_JMENano_Summer23BPix",
-}
 samples_PNetReg15_dict = {
     "2022_preEE": "QCD_PT-15to7000_PNetReg15_JMENano_Summer22",
     "2022_postEE": "QCD_PT-15to7000_PNetReg15_JMENano_Summer22EE",
@@ -144,11 +139,6 @@ cfg = Configurator(
             "samples": [
                 (
                     samples_PNetReg15_dict[year]
-                    if (
-                        int(os.environ.get("PNETREG15", 0)) == 1
-                        or int(os.environ.get("SPLITPNETREG15", 0)) == 1
-                    )
-                    else samples_dict[year]
                 )
             ],
             "samples_exclude": [],
@@ -172,9 +162,10 @@ cfg = Configurator(
             )
             else 50
         ),
+        "only_physisical_jet":False,
     },
     skim=[],
-    preselections=[],
+    preselections=[PV_presel],
     # categories=CartesianSelection(multicuts=multicuts, common_cats=common_cats),
     categories={
                 **common_cats,
@@ -200,10 +191,21 @@ cfg = Configurator(
             "bysample": {},
         }
     },
-    variables={},#variables_dict,
+    variables={
+        **met_hists("PuppiMET"),
+        **met_hists("PuppiMETPNet"),
+        **met_hists("PuppiMETPNetPlusNeutrino"),
+        **met_hists("GenMET"),
+        **met_hists("GenMETPlusNeutrino"),
+    },
     columns={
         "common": {
             "inclusive": [
+                ColOut("PuppiMET", [ "pt", "phi"]),
+                ColOut("PuppiMETPNet", [ "pt", "phi"]),
+                ColOut("PuppiMETPNetPlusNeutrino", [ "pt", "phi"]),
+                ColOut("GenMET", [ "pt", "phi"]),
+                ColOut("GenMETPlusNeutrino", [ "pt", "phi"]),
             ]
         },
         "bysample": {
