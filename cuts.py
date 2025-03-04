@@ -1,7 +1,9 @@
-from pocket_coffea.lib.cut_definition import Cut
 import awkward as ak
 import os
-import custom_cut_functions as cf
+
+from pocket_coffea.lib.cut_definition import Cut
+
+import configs.jme.custom_cut_functions as cf
 
 
 def get_ptbin(pt_low, pt_high, name=None):

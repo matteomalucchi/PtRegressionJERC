@@ -1,7 +1,7 @@
 import awkward as ak
 import numpy as np
 
-from params.binning import *
+from .params.binning import *
 
 
 

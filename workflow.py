@@ -1,17 +1,16 @@
 import awkward as ak
+from time import sleep
+import os
 
 from pocket_coffea.workflows.base import BaseProcessorABC
 from pocket_coffea.utils.configurator import Configurator
 from pocket_coffea.lib.hist_manager import Axis
-
 from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
-from custom_cut_functions import *
-from custom_functions import *
 
-from params.binning import *
+from .custom_cut_functions import *
+from .custom_functions import *
+from .params.binning import *
 
-from time import sleep
-import os
 
 flav_dict = (
     {
@@ -45,6 +44,7 @@ print(f"\n flavour: {flavour}")
 class QCDBaseProcessor(BaseProcessorABC):
     def __init__(self, cfg: Configurator):
         super().__init__(cfg)
+        
         self.mc_truth_corr_pnetreg = self.workflow_options["mc_truth_corr_pnetreg"]
         self.mc_truth_corr_pnetreg_neutrino = self.workflow_options[
             "mc_truth_corr_pnetreg_neutrino"
