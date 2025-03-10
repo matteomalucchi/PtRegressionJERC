@@ -245,6 +245,26 @@
                 "dbs_instance": "prod/phys03"
             }
         ]
+    },
+    "DYJetsToLL_M-50": {
+        "sample": "DYJetsToLL_M-50",
+        "json_output": "datasets/DYJetsToLL_M-50.json",
+        "description": "Cross-section taken from https://xsdb-temp.app.cern.ch/xsdb/?columns=67108863&currentPage=0&ordDirection=1&ordFieldName=cross_section&pageSize=10&searchQuery=process_name%3DQCD_PT-15to7000_TuneCP5_13p6TeV_pythia8",
+        "files": [
+            {
+                "das_names": [
+                    "/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/Run3Summer22NanoAODv12-forPOG_130X_mcRun3_2022_realistic_v5-v2/NANOAODSIM"
+                ],
+                "metadata": {
+                    "year": "2022_preEE",
+                    "isMC": true,
+                    "xsec": 1438000000.0
+                },
+                "das_parents_names": [
+                    ""
+                ]
+            }
+        ]
     }
 
 }

@@ -2,24 +2,32 @@ object_preselection:
   Jet:
     pt_raw: 8 
     eta: 10 
-    jetId: 6 
+    jetId: 0
   JetPuppiMET:
-    pt_raw: 8
+    pt_raw: 15
     eta: 10 
-    jetId: 6 
+    jetId: 0
   JetPNet:
     pt: 10
     eta: 10
-    jetId: 6
+    jetId: 0
   JetPNetPlusNeutrino:
     pt: 10
     eta: 10
-    jetId: 6
+    jetId: 0
 
   GenJet:
     pt: 8 
     eta: 10 
     
-    
-    
-    
+  Muon:
+    pt: 20
+    eta: 10
+    id: tightId
+    iso: 0.25
+
+  Electron:
+    pt: 15
+    eta: 10
+    iso: 0.06
+    id: mvaIso_WP80
