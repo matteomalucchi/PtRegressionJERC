@@ -2,9 +2,25 @@
 
 Repository to compute MC Truth corrections for PNet regressed pT jets, structured as an analysis configurations for PocketCoffea.
 
+## Setup
+After the normal installation of PocketCoffea, you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script. On `lxplus`, it can be done by adding the following line to your `~/.bashrc`:
+
+```bash
+alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
+                --bind /tmp  --bind /eos/cms/ \
+    --env KRB5CCNAME=$KRB5CCNAME --bind /etc/sysconfig/ngbauth-submit  \
+    /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-cc7-latest && cd PocketCoffea && source myenv/bin/activate && cd -'
+```
+
+If instead you are using a different system, where you have installed the environment in micromamba, you can set the alias as follows:
+
+```bash
+alias pocket_coffea='micromamba activate pocket-coffea'
+```
+
 ## Workflow
 
-To run this over the full dataset for a particular ERA in each $\eta$ and $p_T$ bin, you can use the following command:
+To run this over the full dataset for a particular year in each $\eta$ and $p_T$ bin, you can use the following command:
 
 ```bash
 python exec.py --full -pnet --dir <dir_name> -y <year>

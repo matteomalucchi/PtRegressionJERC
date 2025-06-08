@@ -127,7 +127,8 @@ multicuts = [
 ]
 
 common_cats = {
-    "baseline": [passthrough],
+    # "baseline": [passthrough],
+    "PV_presel": [PV_presel],
 }
 
 cfg = Configurator(

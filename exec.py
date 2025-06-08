@@ -148,7 +148,7 @@ eta_bins = eta_bins if not args.inclusive_eta else None
 executor = (
     "--test"
     if args.test
-    else "-e dask@T3_CH_PSI --custom-run-options params/t3_run_options_long.yaml"
+    else "-e dask@T3_CH_PSI --custom-run-options params/t3_run_options_big.yaml"
 )
 
 eta_sign_list = list(eta_sign_dict.keys())
@@ -158,7 +158,6 @@ if len(eta_sign_list) == len(order_eta_sign_list):
 
 dir_prefix = os.environ.get("WORK", "") + "/out_jme/"
 print("dir_prefix", dir_prefix)
-
 
 def run_command(sign, flav, dir_name):
     neutrino_string = (
@@ -206,7 +205,7 @@ if args.cartesian or args.full:
     subprocess.run(command0, shell=True)
     print(f"killed session {tmux_session}")
     if not args.kill:
-        command1 = f'tmux new-session -d -s {tmux_session} && tmux send-keys "micromamba activate pocket-coffea" "C-m"'
+        command1 = f'tmux new-session -d -s {tmux_session} && tmux send-keys "pocket_coffea" "C-m"'
         subprocess.run(command1, shell=True)
 
     eta_string=""
@@ -247,7 +246,7 @@ else:
 
                 comand0 = f"tmux kill-session -t {eta_bin_min}to{eta_bin_max}"
                 command1 = f'tmux new-session -d -s {eta_bin_min}to{eta_bin_max} && tmux send-keys "export ETA_MIN={eta_bin_min}" "C-m" "export ETA_MAX={eta_bin_max}" "C-m"'
-                command2 = f'tmux send-keys "micromamba activate pocket-coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max}" "C-m"'
+                command2 = f'tmux send-keys "pocket_coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max}" "C-m"'
                 command3 = f'tmux send-keys "make_plots.py out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max} --overwrite -j 1" "C-m"'
                 subprocess.run(comand0, shell=True)
                 print(f"killed session {eta_bin_min}to{eta_bin_max}")
@@ -267,7 +266,7 @@ else:
             # os.system(comand0)
             # os.system(command1)
             print(f"tmux attach -t eta_bins")
-            command5 = f'tmux send-keys "micromamba activate pocket-coffea" "C-m"'
+            command5 = f'tmux send-keys "pocket_coffea" "C-m"'
             subprocess.run(command5, shell=True)
             for i in range(len(eta_bins) - 1):
                 eta_bin_min = eta_bins[i]
@@ -298,7 +297,7 @@ else:
         print("Running over inclusive eta")
         comand0 = f"tmux kill-session -t inclusive_eta"
         command1 = f"tmux new-session -d -s inclusive_eta"
-        command2 = f'tmux send-keys "micromamba activate pocket-coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_inclusive_eta" "C-m"'
+        command2 = f'tmux send-keys "pocket_coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_inclusive_eta" "C-m"'
         command3 = (
             f'tmux send-keys "make_plots.py out_inclusive_eta --overwrite -j 8" "C-m"'
         )

@@ -170,8 +170,8 @@ class QCDBaseProcessor(BaseProcessorABC):
     def apply_object_preselection(self, variation):
 
         if self._isMC:
-            PV_dz_mask = abs(self.events.PV.z - self.events.GenVtx.z) < 0.2
-            self.events = self.events[PV_dz_mask]
+            # PV_dz_mask = abs(self.events.PV.z - self.events.GenVtx.z) < 0.2
+            # self.events = self.events[PV_dz_mask]
 
             self.events["JetGood"] = ak.with_field(
                 self.events.Jet,
