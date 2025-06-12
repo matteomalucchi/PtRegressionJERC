@@ -41,7 +41,7 @@ alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
 
 ### Other systems
 
-If instead you are using a different system, where for example you have installed the environment in micromamba, you can do the following:
+If instead you are using a different system, where for example you want to install the environment in micromamba, you can do the following:
 
 ```bash
 curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
