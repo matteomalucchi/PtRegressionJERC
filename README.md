@@ -1,30 +1,95 @@
 # MC Truth corrections for PNet pT regression
 
-Repository to compute MC Truth corrections for PNet regressed pT jets, structured as an analysis configurations for PocketCoffea.
+Repository to compute MC Truth corrections for PNet regressed pT jets, structured as an analysis configurations for a specific development branch from a fork [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main).
 
 ## Setup
-After the normal installation of PocketCoffea, you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script. On `lxplus`, it can be done by adding the following line to your `~/.bashrc`:
+
+### lxplus
+To setup a local installation on `lxplus`:
+```bash
+# Clone the fork and checkout the desired branch
+git clone --branch met-rescaling-jec https://github.com/matteomalucchi/PocketCoffea.git
+cd PocketCoffea
+
+#Enter the Singularity image
+apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
+         --bind /tmp  --bind /eos/cms/ -B /etc/sysconfig/ngbauth-submit \
+         -B ${XDG_RUNTIME_DIR}  --env KRB5CCNAME="FILE:${XDG_RUNTIME_DIR}/krb5cc"  \
+         /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-el9-stable
+
+
+# Create a local virtual environment using the packages defined in the apptainer image
+python -m venv --system-site-packages pocket_coffea_env
+
+# Activate the environment
+source pocket_coffea_env/bin/activate
+
+# Install in EDITABLE mode
+pip install -e .[dev]
+```
+
+After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script. 
+
+On `lxplus`, it can be done by adding the following line to your `~/.bashrc`:
 
 ```bash
 alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
-                --bind /tmp  --bind /eos/cms/ \
-    --env KRB5CCNAME=$KRB5CCNAME --bind /etc/sysconfig/ngbauth-submit  \
-    /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-cc7-latest && cd PocketCoffea && source myenv/bin/activate && cd -'
+         --bind /tmp  --bind /eos/cms/ -B /etc/sysconfig/ngbauth-submit \
+         -B ${XDG_RUNTIME_DIR}  --env KRB5CCNAME="FILE:${XDG_RUNTIME_DIR}/krb5cc"  \
+         /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-el9-stable'
 ```
 
-If instead you are using a different system, where you have installed the environment in micromamba, you can set the alias as follows:
+### Other systems
+
+If instead you are using a different system, where for example you have installed the environment in micromamba, you can do the following:
+
+```bash
+curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+./bin/micromamba shell init -s bash -p /work/$USER/micromamba # or  ./bin/micromamba shell init -s bash -r ~/micromamba
+source ~/.bashrc
+micromamba create -n pocket-coffea python=3.11 -c conda-forge
+micromamba activate pocket-coffea
+pip install coffea==0.7.20
+
+# Clone the fork and checkout the desired branch
+git clone --branch met-rescaling-jec https://github.com/matteomalucchi/PocketCoffea.git
+cd PocketCoffea
+# For developers
+pip install -e .[dev,docs]
+```
+After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
+On your system, it can be done by adding the following line to your `~/.bashrc`:
 
 ```bash
 alias pocket_coffea='micromamba activate pocket-coffea'
 ```
 
-## Workflow
+## Activate the environment
+### lxplus
+To activate the environment, you can use the alias defined above:
 
+```bash
+source PocketCoffea/pocket_coffea_env/bin/activate
+export PYTHONPATH=$PWD/PocketCoffea:$PYTHONPATH
+```
+
+### Other systems
+To activate the environment, you can use the alias defined above:
+
+```bash
+pocket_coffea
+```
+
+
+## Workflow
+### Running the analysis
 To run this over the full dataset for a particular year in each $\eta$ and $p_T$ bin, you can use the following command:
 
 ```bash
-python exec.py --full -pnet --dir <dir_name> -y <year>
+python exec.py --full -pnet --dir <dir_name> -y <year> [--lxplus]
 ```
+
+Where `<dir_name>` is the name of the directory where you want to save the results, and `<year>` is the year you want to run the analysis for. The `--lxplus` flag is used to indicate that you are running this on `lxplus` and it will use the `pocket_coffea_env` environment.
 
 Year can be set to:
 
@@ -34,8 +99,16 @@ Year can be set to:
 - 2023_postBPix
 
 This will save the results in the `dir_name` directory inside the
-`output_all.coffea` file. This file contains 2D histograms for each $\eta$ bin in which the x-axis is the jet $p_T$ response and the y-axis is the jet $p_T$.
+`output_all.coffea` file. If running on `lxplus`, there will be an output file for each worker in the `dir_name` directory and you can merge them using:
+```bash
+cd <dir_name>
+pocket-coffea merge-outputs -o output_all.coffea output_job_*.coffea
+```
 
+The output file contains 2D histograms for each $\eta$ bin in which the x-axis is the jet $p_T$ response and the y-axis is the jet $p_T$.
+
+
+### Computing the MC Truth corrections
 After running the full dataset, in order to compute the MC Truth corrections, you can use the following command:
 
 ```bash
@@ -63,3 +136,11 @@ It will also:
 - Plot the median of the response in each bin in $\eta$ as a function of $p_T$.
 - Plot the inverse of the median in each bin in $\eta$ as a function of $p_T$.
 - Plot the resolution of the response in each bin in $\eta$ as a function of $p_T$ using 3 different definitions.
+
+To plot all eta bins on the same plot you can use the following command:
+
+```bash
+cd response_plot/
+python plot_summary_reponse.py -d <dir_name>
+```
+This can be used to plot the closure test of the MC Truth corrections.

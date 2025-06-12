@@ -19,18 +19,18 @@ import functools
 import json
 from scipy.optimize import curve_fit
 import scipy.stats as stats
-import ROOT
 
-ROOT.gROOT.SetBatch(True)
+# import ROOT
+# ROOT.gROOT.SetBatch(True)
 
 
-from pol_functions import *
-from write_l2rel import write_l2rel_txt
-from confidence import *
-from histograms_to_plot import *
+from configs.jme.response_plot.pol_functions import *
+from configs.jme.response_plot.write_l2rel import write_l2rel_txt
+from configs.jme.response_plot.confidence import *
+from configs.jme.response_plot.histograms_to_plot import *
 
-sys.path.append("../")
-from params.binning import *
+# sys.path.append("../")
+from configs.jme.params.binning import *
 
 hep.style.use("CMS")
 
@@ -126,6 +126,13 @@ parser.add_argument(
     default="inclusive",
 )
 parser.add_argument(
+    "-y",
+    "--year",
+    help="Year",
+    type=str,
+    default="",
+)
+parser.add_argument(
     "--all-flavs",
     help="Do all flavours",
     action="store_true",
@@ -174,6 +181,9 @@ elif "postBPix" in args.dir:
     year = "Summer23BPixRun3"
     year_txt = "Summer23BPixPrompt23"
 
+if args.year:
+    year = args.year
+
 year_txt = year
 if DP_NOTE_PLOTS:
     year = "2023" if "23" in year else "2022"
@@ -190,7 +200,7 @@ if args.full and (args.central or args.abs_eta_inclusive or args.all_flavs):
         ("b", "c"): ["o", "x"],
         ("uds", "g"): ["o", "x"],
     }
-elif args.full:
+else:
     flavs = {(args.flav,): ["o"]}
 
 
@@ -428,7 +438,7 @@ def get_info_from_histogram(
 
         rebinned_bins = list(rebinned_bins)
         rebinned_values = list(rebinned_values)
-
+    breakpoint()
     if args.histo:
         histogram_dict_el[variable][i].append((rebinned_values, rebinned_bins))
     if "Response" in variable:
@@ -828,12 +838,7 @@ else:
                                     # print(histo)
                                     categories = list(histo.axes["cat"])
 
-                                    # remove the baseline category
-                                    (
-                                        categories.remove("baseline")
-                                        if "baseline" in categories
-                                        else None
-                                    )
+                                    categories=[category for category in categories if "eta" in category]
 
                                     # order the categories so that the ranges in eta are increasing
                                     categories = sorted(

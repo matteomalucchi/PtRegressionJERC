@@ -4,7 +4,9 @@ import subprocess
 import argparse
 from params.binning import eta_bins, eta_sign_dict
 import os
-from time import sleep
+import shutil
+import sys
+import pocket_coffea
 
 parser = argparse.ArgumentParser(description="Run the jme analysis")
 parser.add_argument(
@@ -131,6 +133,12 @@ parser.add_argument(
     default=-1,
     type=int,
 )
+parser.add_argument(
+    "--lxplus",
+    action="store_true",
+    help="Run on lxplus",
+    default=False,
+)
 args = parser.parse_args()
 
 args.flavsplit = int(args.flavsplit)
@@ -145,25 +153,64 @@ args.abs_eta_inclusive = int(args.abs_eta_inclusive)
 # Define a list of eta bins
 eta_bins = eta_bins if not args.inclusive_eta else None
 
-executor = (
-    "--test"
-    if args.test
-    else "-e dask@T3_CH_PSI --custom-run-options params/t3_run_options_big.yaml"
-)
+pocket_coffea_env_commands= ["pocket_coffea"]
+if args.lxplus:
+    env_path = os.path.dirname(subprocess.run(["which pocket-coffea"], capture_output=True, text=True, shell=True).stdout.strip()).rsplit('/', 1)[0]
+    pocket_coffea_env_commands.append(f"source {env_path}/bin/activate")
+    pythonpath = env_path.rsplit('/', 1)[0]
+    pocket_coffea_env_commands.append(f"export PYTHONPATH={pythonpath}:$PYTHONPATH")
+
+if args.test:
+    executor = "--test"
+elif args.lxplus:
+    run_options_file = "params/lxplus_run_options_big.tmp.yaml"
+    executor = f"-e condor@lxplus --custom-run-options {run_options_file}"
+else:
+    run_options_file = "params/t3_run_options_big.yaml"
+    executor= f"-e dask@T3_CH_PSI --custom-run-options {run_options_file}"
 
 eta_sign_list = list(eta_sign_dict.keys())
 order_eta_sign_list=["pos1", "pos2", "pos3", "pos4", "neg4", "neg3", "neg2", "neg1"]
 if len(eta_sign_list) == len(order_eta_sign_list):
     eta_sign_list=order_eta_sign_list
 
-dir_prefix = os.environ.get("WORK", "") + "/out_jme/"
+dir_prefix = os.environ.get("WORK", ".") + "/out_jme/"
 print("dir_prefix", dir_prefix)
 
 def run_command(sign, flav, dir_name):
-    neutrino_string = (
-        f"&& export NEUTRINO={args.neutrino}" if args.neutrino != -1 else ""
-    )
-    command2 = f'tmux send-keys "export CARTESIAN=1 && export SIGN={sign} && export FLAVSPLIT={args.flavsplit} && export PNET={args.pnet} && export FLAV={flav} && export CENTRAL={args.central} && export ABS_ETA_INCLUSIVE={args.abs_eta_inclusive} && export CLOSURE={args.closure} && export PNETREG15={args.pnet_reg_15} && export SPLITPNETREG15={args.split_pnet_reg_15} {neutrino_string} && export YEAR={args.year}" "C-m"'
+    # neutrino_string = (
+    #     f"&& export NEUTRINO={args.neutrino}" if args.neutrino != -1 else ""
+    # )
+    env_var_dict = {
+        "CARTESIAN": 1,
+        "SIGN": sign,
+        "FLAVSPLIT": args.flavsplit,
+        "PNET": args.pnet,
+        "FLAV": flav,
+        "CENTRAL": args.central,
+        "ABS_ETA_INCLUSIVE": args.abs_eta_inclusive,
+        "CLOSURE": args.closure,
+        "PNETREG15": args.pnet_reg_15,
+        "SPLITPNETREG15": args.split_pnet_reg_15,
+        "YEAR": args.year,
+    }
+    if args.neutrino != -1:
+        env_var_dict["NEUTRINO"] = args.neutrino
+    command2 = 'tmux send-keys \"export ' + " && export ".join(
+        [f"{key}={value}" for key, value in env_var_dict.items()]
+    )+'" "C-m"'
+    
+    if args.lxplus:
+        # create a new run_options_file adding the environment variables
+            
+        shutil.copyfile(run_options_file.replace(".tmp", ""), f"{run_options_file}")
+        with open(f"{run_options_file}", "a") as f:
+            f.write("\n\n# Added by exec.py\n")
+            f.write("custom-setup-commands:\n")
+            for key, value in env_var_dict.items():
+                f.write(f"  - export {key}={value}\n")
+    
+    # command2 = f'tmux send-keys "export CARTESIAN=1 && export SIGN={sign} && export FLAVSPLIT={args.flavsplit} && export PNET={args.pnet} && export FLAV={flav} && export CENTRAL={args.central} && export ABS_ETA_INCLUSIVE={args.abs_eta_inclusive} && export CLOSURE={args.closure} && export PNETREG15={args.pnet_reg_15} && export SPLITPNETREG15={args.split_pnet_reg_15} {neutrino_string} && export YEAR={args.year}" "C-m"'
     command3 = f'tmux send-keys "time pocket-coffea run --cfg cartesian_config.py {executor} -o {dir_name}" "C-m"'
     command4 = f'tmux send-keys "make_plots.py {dir_name} --overwrite -j 16" "C-m"'
 
@@ -205,8 +252,10 @@ if args.cartesian or args.full:
     subprocess.run(command0, shell=True)
     print(f"killed session {tmux_session}")
     if not args.kill:
-        command1 = f'tmux new-session -d -s {tmux_session} && tmux send-keys "pocket_coffea" "C-m"'
+        command1 = f'tmux new-session -d -s {tmux_session}'
         subprocess.run(command1, shell=True)
+        for env_command in pocket_coffea_env_commands:
+            subprocess.run(f'tmux send-keys "{env_command}" "C-m"', shell=True)
 
     eta_string=""
     if args.abs_eta_inclusive:

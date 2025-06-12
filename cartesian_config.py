@@ -182,9 +182,6 @@ cfg = Configurator(
     weights={
         "common": {
             "inclusive": [
-                # "genWeight",
-                # "lumi",
-                # "XS",
             ],
             "bycategory": {},
         },
@@ -201,55 +198,5 @@ cfg = Configurator(
     },
     variables=variables_dict,
     columns={
-        "common": {
-            "inclusive": [
-                # ColOut("MatchedJets", [ "pt", "eta"]),
-                # ColOut("MatchedJetsNeutrino_reshape", [ "pt", "eta"]),
-            ]
-            # + [
-            #     ColOut(
-            #         f"MatchedJets_pt{pt_bins[j]}to{pt_bins[j+1]}",
-            #         ["Response", "pt", "eta"],
-            #         # fill_none=False,
-            #     )
-            #     for j in range(len(pt_bins) - 1)  # for each pt bin
-            # ],
-            # cat: [ColOut("MatchedJets", ["Response", "pt", "eta"])]
-            # + [
-            #     ColOut(
-            #         f"MatchedJets_pt{pt_bins[j]}to{pt_bins[j+1]}",
-            #         ["Response", "pt", "eta"],
-            #         # fill_none=False,
-            #     )
-            #     for j in range(len(pt_bins) - 1)  # for each pt bin
-            # ]
-            # for cat in cuts_names_eta
-        },
-        "bysample": {
-            # "QCD": {
-            #     "bycategory": {
-            #         # "baseline": [
-            #         #     ColOut("MatchedJets", ["pt", "eta"]),
-            #         #     # ColOut("MatchedJets", ["Response", "pt", "eta"]),
-            #         # ],
-            #         # + [
-            #         #     ColOut(
-            #         #         f"MatchedJets_pt{pt_bins[j]}to{pt_bins[j+1]}",
-            #         #         ["Response", "pt", "eta"],
-            #         #         # fill_none=False,
-            #         #     )
-            #         #     for j in range(len(pt_bins) - 1)  # for each pt bin
-            #         # ],
-            #         cat: [
-            #             ColOut(
-            #                 f"MatchedJets_pt{pt_bins[j]}to{pt_bins[j+1]}",
-            #                 ["Response", "pt", "eta"],
-            #             )
-            #             for j in range(len(pt_bins) - 1)  # for each pt bin
-            #         ]
-            #         for cat in cuts_names_eta
-            #     }
-            # },
-        },
     },
 )

@@ -1,8 +1,8 @@
 import json
 import sys
 
-sys.path.append("../")
-from params.binning import *
+# sys.path.append("../")
+from configs.jme.params.binning import *
 
 
 def create_pol_string(num_params):
