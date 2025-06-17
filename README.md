@@ -26,6 +26,9 @@ source pocket_coffea_env/bin/activate
 
 # Install in EDITABLE mode
 pip install -e .[dev]
+
+cd ../AnalysisConfigs
+pip install -e .
 ```
 
 After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script. 
@@ -56,7 +59,11 @@ git clone --branch met-rescaling-jec https://github.com/matteomalucchi/PocketCof
 cd PocketCoffea
 # For developers
 pip install -e .[dev,docs]
+
+cd ../AnalysisConfigs
+pip install -e .
 ```
+
 After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
 On your system, it can be done by adding the following line to your `~/.bashrc`:
 
