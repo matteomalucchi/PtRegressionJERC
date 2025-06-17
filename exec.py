@@ -6,7 +6,7 @@ from params.binning import eta_bins, eta_sign_dict
 import os
 import shutil
 import sys
-import pocket_coffea
+import shlex
 
 parser = argparse.ArgumentParser(description="Run the jme analysis")
 parser.add_argument(
@@ -153,11 +153,15 @@ args.abs_eta_inclusive = int(args.abs_eta_inclusive)
 # Define a list of eta bins
 eta_bins = eta_bins if not args.inclusive_eta else None
 
-pocket_coffea_env_commands= ["pocket_coffea"]
+pocket_coffea_env_commands = ["pocket_coffea"]
 if args.lxplus:
-    env_path = os.path.dirname(subprocess.run(["which pocket-coffea"], capture_output=True, text=True, shell=True).stdout.strip()).rsplit('/', 1)[0]
+    env_path = os.path.dirname(
+        subprocess.run(
+            ["which pocket-coffea"], capture_output=True, text=True, shell=True
+        ).stdout.strip()
+    ).rsplit("/", 1)[0]
     pocket_coffea_env_commands.append(f"source {env_path}/bin/activate")
-    pythonpath = env_path.rsplit('/', 1)[0]
+    pythonpath = env_path.rsplit("/", 1)[0]
     pocket_coffea_env_commands.append(f"export PYTHONPATH={pythonpath}:$PYTHONPATH")
 
 if args.test:
@@ -167,17 +171,18 @@ elif args.lxplus:
     executor = f"-e condor@lxplus --custom-run-options {run_options_file}"
 else:
     run_options_file = "params/t3_run_options_big.yaml"
-    executor= f"-e dask@T3_CH_PSI --custom-run-options {run_options_file}"
+    executor = f"-e dask@T3_CH_PSI --custom-run-options {run_options_file}"
 
 eta_sign_list = list(eta_sign_dict.keys())
-order_eta_sign_list=["pos1", "pos2", "pos3", "pos4", "neg4", "neg3", "neg2", "neg1"]
+order_eta_sign_list = ["pos1", "pos2", "pos3", "pos4", "neg4", "neg3", "neg2", "neg1"]
 if len(eta_sign_list) == len(order_eta_sign_list):
-    eta_sign_list=order_eta_sign_list
+    eta_sign_list = order_eta_sign_list
 
 dir_prefix = os.environ.get("WORK", ".") + "/out_jme/"
 print("dir_prefix", dir_prefix)
 
-def run_command(sign, flav, dir_name):
+
+def run_command(sign, flav, dir_name, complete_bash_list):
     # neutrino_string = (
     #     f"&& export NEUTRINO={args.neutrino}" if args.neutrino != -1 else ""
     # )
@@ -196,163 +201,259 @@ def run_command(sign, flav, dir_name):
     }
     if args.neutrino != -1:
         env_var_dict["NEUTRINO"] = args.neutrino
-    command2 = 'tmux send-keys \"export ' + " && export ".join(
-        [f"{key}={value}" for key, value in env_var_dict.items()]
-    )+'" "C-m"'
+    export_string = " && ".join(
+        [f"export {key}={value}" for key, value in env_var_dict.items()]
+    )
+    # command2 = (
+    #     'tmux send-keys "export '
+    #     + " && export ".join([f"{key}={value}" for key, value in env_var_dict.items()])
+    #     + '" "C-m"'
+    # )
+    command2 = f'tmux send-keys "{export_string}" "C-m"'
     
-    if args.lxplus:
+    complete_bash_list.append(export_string)
+
+    if args.lxplus and not args.test:
         # create a new run_options_file adding the environment variables
+
+        base_run_options_file = run_options_file.replace(".tmp", "")
+        
+        # Start the bash script as a string, with proper escaping
+        run_options_lines = [
+            f'cp "{base_run_options_file}" "{run_options_file}"',
+            f'echo "" >> "{run_options_file}"',
+            f'echo "" >> "{run_options_file}"',
+            f'echo "# Added by exec.py" >> "{run_options_file}"',
+            f'echo "custom-setup-commands:" >> "{run_options_file}"'
+        ]
+
+        for key, value in env_var_dict.items():
+            # Use single quotes inside echo to preserve spaces
+            run_options_lines.append(
+                f'echo "  - export {key}={shlex.quote(str(value))}" >> "{run_options_file}"'
+            )
+
+        complete_bash_list+= run_options_lines
+
+        # Join all the commands into a single bash command
+        full_bash_script = "\n".join(run_options_lines)
+        # Escape double quotes and newlines for tmux
+        tmux_command = f'tmux send-keys "bash -c \'{full_bash_script}\'" C-m'
+
+        print(f"Running tmux command:\n{tmux_command}")
+        # subprocess.run(tmux_command, shell=True)
             
-        shutil.copyfile(run_options_file.replace(".tmp", ""), f"{run_options_file}")
-        with open(f"{run_options_file}", "a") as f:
-            f.write("\n\n# Added by exec.py\n")
-            f.write("custom-setup-commands:\n")
-            for key, value in env_var_dict.items():
-                f.write(f"  - export {key}={value}\n")
-    
+            
+#         # Build the inline Bash script as a single string
+#         bash_command = f"""
+# cp "{base_run_options_file}" "{run_options_file}"
+
+# cat <<EOF >> "{run_options_file}"
+
+
+# # Added by exec.py
+# custom-setup-commands:
+# EOF
+#         """
+
+#         # Add export commands
+#         for key, value in env_var_dict.items():
+#             bash_command += f'echo "  - export {key}={value}" >> "{run_options_file}"\n'
+
+#         # Run the full command
+#         # subprocess.run(bash_command, shell=True)
+        
+        
+        
+#         print(f"Running command: {bash_command}")
+#         command_copy_file=f'tmux send-keys "bash -c \'{bash_command}\'" "C-m"'
+#         subprocess.run(command_copy_file, shell=True)
+
+        # shutil.copyfile(base_run_options_file, f"{run_options_file}")
+        # with open(f"{run_options_file}", "a") as f:
+        #     f.write("\n\n# Added by exec.py\n")
+        #     f.write("custom-setup-commands:\n")
+        #     for key, value in env_var_dict.items():
+        #         f.write(f"  - export {key}={value}\n")
+
     # command2 = f'tmux send-keys "export CARTESIAN=1 && export SIGN={sign} && export FLAVSPLIT={args.flavsplit} && export PNET={args.pnet} && export FLAV={flav} && export CENTRAL={args.central} && export ABS_ETA_INCLUSIVE={args.abs_eta_inclusive} && export CLOSURE={args.closure} && export PNETREG15={args.pnet_reg_15} && export SPLITPNETREG15={args.split_pnet_reg_15} {neutrino_string} && export YEAR={args.year}" "C-m"'
     command3 = f'tmux send-keys "time pocket-coffea run --cfg cartesian_config.py {executor} -o {dir_name}" "C-m"'
     command4 = f'tmux send-keys "make_plots.py {dir_name} --overwrite -j 16" "C-m"'
-
-    subprocess.run(command2, shell=True)
-    subprocess.run(command3, shell=True)
+    
+    complete_bash_list.append(
+        f"time pocket-coffea run --cfg cartesian_config.py {executor} -o {dir_name}"
+    )
     if args.plot:
-        subprocess.run(command4, shell=True)
+        complete_bash_list.append(f"make_plots.py {dir_name} --overwrite -j 16")
+    
+
+    # subprocess.run(command2, shell=True)
+    # subprocess.run(command3, shell=True)
+    # if args.plot:
+    #     subprocess.run(command4, shell=True)
 
     if args.neutrino == 1:
         dir_name_no_neutrino = dir_name.replace("_neutrino", "")
         os.makedirs(dir_name_no_neutrino, exist_ok=True)
         command5 = f'tmux send-keys "cp {dir_name}/output_all.coffea {dir_name_no_neutrino}/output_all_neutrino.coffea" "C-m"'
-        subprocess.run(command5, shell=True)
+        # subprocess.run(command5, shell=True)
         # send twice to make sure it is copied
-        subprocess.run(command5, shell=True)
+        # subprocess.run(command5, shell=True)
+        
+        complete_bash_list.append(
+            f"cp {dir_name}/output_all.coffea {dir_name_no_neutrino}/output_all_neutrino.coffea"
+        )
+        complete_bash_list.append(
+            f"cp {dir_name}/output_all.coffea {dir_name_no_neutrino}/output_all_neutrino.coffea"
+        )
+    
+    return complete_bash_list
 
 
-if args.cartesian or args.full:
-    print(
-        f"Running cartesian multicuts {'in full configuration sequentially' if args.full else ''}"
-    )
-    sign = args.sign
-    flav = args.flav
+if __name__ == "__main__":
+    if args.cartesian or args.full:
+        complete_bash_list = ["#!/bin/bash",]
+        print(
+            f"Running cartesian multicuts {'in full configuration sequentially' if args.full else ''}"
+        )
+        sign = args.sign
+        flav = args.flav
 
-    flavs_list = (
-        ["inclusive"] #, "b", "c", "g", "uds"
-        if (args.full and (args.central or args.abs_eta_inclusive))
-        else ["inclusive"]
-    )
+        flavs_list = (
+            ["inclusive"]  # , "b", "c", "g", "uds"
+            if (args.full and (args.central or args.abs_eta_inclusive))
+            else ["inclusive"]
+        )
 
-    if args.full and args.neutrino != 1:
-        tmux_session = "full_cartesian" + args.suffix + f"_{args.year}"
-    elif args.full and args.neutrino == 1:
-        tmux_session = "full_cartesian_neutrino" + args.suffix + f"_{args.year}"
-    else:
-        tmux_session = f"{sign}_cartesian" + args.suffix + f"_{args.year}"
+        if args.full and args.neutrino != 1:
+            tmux_session = "full_cartesian" + args.suffix + f"_{args.year}"
+        elif args.full and args.neutrino == 1:
+            tmux_session = "full_cartesian_neutrino" + args.suffix + f"_{args.year}"
+        else:
+            tmux_session = f"{sign}_cartesian" + args.suffix + f"_{args.year}"
 
-    command0 = f"tmux kill-session -t {tmux_session}"
-    subprocess.run(command0, shell=True)
-    print(f"killed session {tmux_session}")
-    if not args.kill:
-        command1 = f'tmux new-session -d -s {tmux_session}'
+        command0 = f"tmux kill-session -t {tmux_session}"
+        subprocess.run(command0, shell=True)
+        print(f"killed session {tmux_session}")
+        if args.kill:
+            sys.exit(0)
+            
+        command1 = f"tmux new-session -d -s {tmux_session}"
         subprocess.run(command1, shell=True)
         for env_command in pocket_coffea_env_commands:
             subprocess.run(f'tmux send-keys "{env_command}" "C-m"', shell=True)
+            # complete_bash_list.append(env_command)
 
-    eta_string=""
-    if args.abs_eta_inclusive:
-        eta_string="absinclusive"
-    elif args.central:
-        eta_string="central"
+        eta_string = ""
+        if args.abs_eta_inclusive:
+            eta_string = "absinclusive"
+        elif args.central:
+            eta_string = "central"
 
-    if args.full:
-        for sign in (eta_sign_list if (not args.central and not args.abs_eta_inclusive) else [""]):
-            if sign == "all":
-                continue
-            for flav in flavs_list:
-                dir_name = f"{dir_prefix}out_cartesian_full{args.dir}{'_pnetreg15' if args.pnet_reg_15 else ''}{'_splitpnetreg15' if args.split_pnet_reg_15 else ''}_{args.year}{'_closure' if args.closure else ''}{'_test' if args.test else ''}/{sign if not eta_string else eta_string}eta_{flav}flav{'_pnet' if args.pnet else ''}{'_neutrino' if args.neutrino == 1 else ''}"
-                if not os.path.isfile(f"{dir_name}/output_all.coffea"):
-                    print(f"{dir_name}")
-                    run_command(sign, flav, dir_name)
+        if args.full:
+            for sign in (
+                eta_sign_list if (not args.central and not args.abs_eta_inclusive) else [""]
+            ):
+                if sign == "all":
+                    continue
+                for flav in flavs_list:
+                    dir_name = f"{dir_prefix}out_cartesian_full{args.dir}{'_pnetreg15' if args.pnet_reg_15 else ''}{'_splitpnetreg15' if args.split_pnet_reg_15 else ''}_{args.year}{'_closure' if args.closure else ''}{'_test' if args.test else ''}/{sign if not eta_string else eta_string}eta_{flav}flav{'_pnet' if args.pnet else ''}{'_neutrino' if args.neutrino == 1 else ''}"
+                    if not os.path.isfile(f"{dir_name}/output_all.coffea"):
+                        print(f"{dir_name}")
+                        complete_bash_list=run_command(sign, flav, dir_name, complete_bash_list)
+        else:
+            dir_name = (
+                f"{dir_prefix}out_cartesian_{sign if not eta_string else eta_string}eta{'_flavsplit' if args.flavsplit else f'_{args.flav}flav'}{'_pnet' if args.pnet else ''}{'_neutrino' if args.neutrino == 1 else ''}{args.dir}{'_pnetreg15' if args.pnet_reg_15 else ''}{'_splitpnetreg15' if args.split_pnet_reg_15 else ''}_{args.year}{'_closure' if args.closure else ''}{'_test' if args.test else ''}"
+                if not args.dir
+                else args.dir
+            )
+            if not os.path.isfile(f"{dir_name}/output_all.coffea"):
+                print(f"{dir_name}")
+                complete_bash_list=run_command(sign, flav, dir_name, complete_bash_list)
+
+        complete_bash_script= "\n".join(complete_bash_list)
+        # save to a file
+        complete_bash_script_file=f"./run_cartesian_{tmux_session}.tmp.sh"
+        with open(complete_bash_script_file, "w") as f:
+            f.write(complete_bash_script)
+        # make the file executable
+        os.chmod(complete_bash_script_file, 0o755)
+        #execute the bash script in tmux
+        tmux_command = f'tmux send-keys "bash -c \'{complete_bash_script_file}\'" "C-m"'
+        subprocess.run(tmux_command, shell=True)
+        print(f"tmux attach -t {tmux_session}")
+
     else:
-        dir_name = (
-            f"{dir_prefix}out_cartesian_{sign if not eta_string else eta_string}eta{'_flavsplit' if args.flavsplit else f'_{args.flav}flav'}{'_pnet' if args.pnet else ''}{'_neutrino' if args.neutrino == 1 else ''}{args.dir}{'_pnetreg15' if args.pnet_reg_15 else ''}{'_splitpnetreg15' if args.split_pnet_reg_15 else ''}_{args.year}{'_closure' if args.closure else ''}{'_test' if args.test else ''}"
-            if not args.dir
-            else args.dir
-        )
-        if not os.path.isfile(f"{dir_name}/output_all.coffea"):
-            print(f"{dir_name}")
-            run_command(sign, flav, dir_name)
+        # Loop over the eta bins
+        if eta_bins:
+            if args.parallel:
+                print(f"Running over eta bins {eta_bins} in parallel")
+                for i in range(len(eta_bins) - 1):
+                    eta_bin_min = eta_bins[i]
+                    eta_bin_max = eta_bins[i + 1]
 
-    print(f"tmux attach -t {tmux_session}")
-
-else:
-    # Loop over the eta bins
-    if eta_bins:
-        if args.parallel:
-            print(f"Running over eta bins {eta_bins} in parallel")
-            for i in range(len(eta_bins) - 1):
-                eta_bin_min = eta_bins[i]
-                eta_bin_max = eta_bins[i + 1]
-
-                comand0 = f"tmux kill-session -t {eta_bin_min}to{eta_bin_max}"
-                command1 = f'tmux new-session -d -s {eta_bin_min}to{eta_bin_max} && tmux send-keys "export ETA_MIN={eta_bin_min}" "C-m" "export ETA_MAX={eta_bin_max}" "C-m"'
-                command2 = f'tmux send-keys "pocket_coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max}" "C-m"'
-                command3 = f'tmux send-keys "make_plots.py out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max} --overwrite -j 1" "C-m"'
-                subprocess.run(comand0, shell=True)
-                print(f"killed session {eta_bin_min}to{eta_bin_max}")
-                if not args.kill:
+                    comand0 = f"tmux kill-session -t {eta_bin_min}to{eta_bin_max}"
+                    command1 = f'tmux new-session -d -s {eta_bin_min}to{eta_bin_max} && tmux send-keys "export ETA_MIN={eta_bin_min}" "C-m" "export ETA_MAX={eta_bin_max}" "C-m"'
+                    command2 = f'tmux send-keys "pocket_coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max}" "C-m"'
+                    command3 = f'tmux send-keys "make_plots.py out_separate_eta_bin/eta{eta_bin_min}to{eta_bin_max} --overwrite -j 1" "C-m"'
+                    subprocess.run(comand0, shell=True)
+                    print(f"killed session {eta_bin_min}to{eta_bin_max}")
+                    if args.kill:
+                        sys.exit(0)
                     subprocess.run(command1, shell=True)
                     subprocess.run(command2, shell=True)
                     # subprocess.run(command3, shell=True)
                     print(f"tmux attach -t {eta_bin_min}to{eta_bin_max}")
+            else:
+                print(f"Running over eta bins {eta_bins} in sequence")
+                comand0 = f"tmux kill-session -t eta_bins"
+                command1 = f"tmux new-session -d -s eta_bins"
+                # execute the commands
+                subprocess.run(comand0, shell=True)
+                subprocess.run(command1, shell=True)
+
+                # os.system(comand0)
+                # os.system(command1)
+                print(f"tmux attach -t eta_bins")
+                command5 = f'tmux send-keys "pocket_coffea" "C-m"'
+                subprocess.run(command5, shell=True)
+                for i in range(len(eta_bins) - 1):
+                    eta_bin_min = eta_bins[i]
+                    eta_bin_max = eta_bins[i + 1]
+                    dir_name = (
+                        f"{dir_prefix}out_separate_eta_bin_seq{'_pnet' if args.pnet else ''}{'_pnetreg15' if args.pnet_reg_15 else ''}{'_splitpnetreg15' if args.split_pnet_reg_15 else ''}_{args.year}{'_closure' if args.closure else ''}{'_test' if args.test else ''}/eta{eta_bin_min}to{eta_bin_max}"
+                        if not args.dir
+                        else args.dir
+                    )
+                    command2 = f'tmux send-keys "export ETA_MIN={eta_bin_min} && export ETA_MAX={eta_bin_max} && export PNET={args.pnet}" "C-m"'
+                    command3 = f'tmux send-keys "time pocket-coffea run --cfg jme_config.py  {executor} -o {dir_name}" "C-m"'
+                    # command4 = f'tmux send-keys "make_plots.py {dir_name} --overwrite -j 8" "C-m"'
+
+                    # os.environ["ETA_MIN"] = f"{eta_bin_min}"
+                    # os.environ["ETA_MAX"] = f"{eta_bin_max}"
+
+                    if not os.path.isfile(f"{dir_name}/output_all.coffea"):
+                        print(f"{dir_name}")
+                        subprocess.run(command2, shell=True)
+                        subprocess.run(command3, shell=True)
+                        # subprocess.run(comand4, shell=True)
+                        # os.system(command3)
+                    else:
+                        print(f"{dir_name}/output_all.coffea already exists!")
+
         else:
-            print(f"Running over eta bins {eta_bins} in sequence")
-            comand0 = f"tmux kill-session -t eta_bins"
-            command1 = f"tmux new-session -d -s eta_bins"
-            # execute the commands
+            print("No eta bins defined")
+            print("Running over inclusive eta")
+            comand0 = f"tmux kill-session -t inclusive_eta"
+            command1 = f"tmux new-session -d -s inclusive_eta"
+            command2 = f'tmux send-keys "pocket_coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_inclusive_eta" "C-m"'
+            command3 = (
+                f'tmux send-keys "make_plots.py out_inclusive_eta --overwrite -j 8" "C-m"'
+            )
             subprocess.run(comand0, shell=True)
-            subprocess.run(command1, shell=True)
-
-            # os.system(comand0)
-            # os.system(command1)
-            print(f"tmux attach -t eta_bins")
-            command5 = f'tmux send-keys "pocket_coffea" "C-m"'
-            subprocess.run(command5, shell=True)
-            for i in range(len(eta_bins) - 1):
-                eta_bin_min = eta_bins[i]
-                eta_bin_max = eta_bins[i + 1]
-                dir_name = (
-                    f"{dir_prefix}out_separate_eta_bin_seq{'_pnet' if args.pnet else ''}{'_pnetreg15' if args.pnet_reg_15 else ''}{'_splitpnetreg15' if args.split_pnet_reg_15 else ''}_{args.year}{'_closure' if args.closure else ''}{'_test' if args.test else ''}/eta{eta_bin_min}to{eta_bin_max}"
-                    if not args.dir
-                    else args.dir
-                )
-                command2 = f'tmux send-keys "export ETA_MIN={eta_bin_min} && export ETA_MAX={eta_bin_max} && export PNET={args.pnet}" "C-m"'
-                command3 = f'tmux send-keys "time pocket-coffea run --cfg jme_config.py  {executor} -o {dir_name}" "C-m"'
-                # command4 = f'tmux send-keys "make_plots.py {dir_name} --overwrite -j 8" "C-m"'
-
-                # os.environ["ETA_MIN"] = f"{eta_bin_min}"
-                # os.environ["ETA_MAX"] = f"{eta_bin_max}"
-
-                if not os.path.isfile(f"{dir_name}/output_all.coffea"):
-                    print(f"{dir_name}")
-                    subprocess.run(command2, shell=True)
-                    subprocess.run(command3, shell=True)
-                    # subprocess.run(comand4, shell=True)
-                    # os.system(command3)
-                else:
-                    print(f"{dir_name}/output_all.coffea already exists!")
-
-    else:
-        print("No eta bins defined")
-        print("Running over inclusive eta")
-        comand0 = f"tmux kill-session -t inclusive_eta"
-        command1 = f"tmux new-session -d -s inclusive_eta"
-        command2 = f'tmux send-keys "pocket_coffea" "C-m" "time pocket-coffea run --cfg jme_config.py  {executor} -o out_inclusive_eta" "C-m"'
-        command3 = (
-            f'tmux send-keys "make_plots.py out_inclusive_eta --overwrite -j 8" "C-m"'
-        )
-        subprocess.run(comand0, shell=True)
-        print("killed session inclusive_eta")
-        if not args.kill:
+            print("killed session inclusive_eta")
+            if args.kill:
+                sys.exit(0)
             subprocess.run(command1, shell=True)
             subprocess.run(command2, shell=True)
             subprocess.run(command3, shell=True)
