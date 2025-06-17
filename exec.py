@@ -204,13 +204,6 @@ def run_command(sign, flav, dir_name, complete_bash_list):
     export_string = " && ".join(
         [f"export {key}={value}" for key, value in env_var_dict.items()]
     )
-    # command2 = (
-    #     'tmux send-keys "export '
-    #     + " && export ".join([f"{key}={value}" for key, value in env_var_dict.items()])
-    #     + '" "C-m"'
-    # )
-    command2 = f'tmux send-keys "{export_string}" "C-m"'
-    
     complete_bash_list.append(export_string)
 
     if args.lxplus and not args.test:
@@ -235,50 +228,6 @@ def run_command(sign, flav, dir_name, complete_bash_list):
 
         complete_bash_list+= run_options_lines
 
-        # Join all the commands into a single bash command
-        full_bash_script = "\n".join(run_options_lines)
-        # Escape double quotes and newlines for tmux
-        tmux_command = f'tmux send-keys "bash -c \'{full_bash_script}\'" C-m'
-
-        print(f"Running tmux command:\n{tmux_command}")
-        # subprocess.run(tmux_command, shell=True)
-            
-            
-#         # Build the inline Bash script as a single string
-#         bash_command = f"""
-# cp "{base_run_options_file}" "{run_options_file}"
-
-# cat <<EOF >> "{run_options_file}"
-
-
-# # Added by exec.py
-# custom-setup-commands:
-# EOF
-#         """
-
-#         # Add export commands
-#         for key, value in env_var_dict.items():
-#             bash_command += f'echo "  - export {key}={value}" >> "{run_options_file}"\n'
-
-#         # Run the full command
-#         # subprocess.run(bash_command, shell=True)
-        
-        
-        
-#         print(f"Running command: {bash_command}")
-#         command_copy_file=f'tmux send-keys "bash -c \'{bash_command}\'" "C-m"'
-#         subprocess.run(command_copy_file, shell=True)
-
-        # shutil.copyfile(base_run_options_file, f"{run_options_file}")
-        # with open(f"{run_options_file}", "a") as f:
-        #     f.write("\n\n# Added by exec.py\n")
-        #     f.write("custom-setup-commands:\n")
-        #     for key, value in env_var_dict.items():
-        #         f.write(f"  - export {key}={value}\n")
-
-    # command2 = f'tmux send-keys "export CARTESIAN=1 && export SIGN={sign} && export FLAVSPLIT={args.flavsplit} && export PNET={args.pnet} && export FLAV={flav} && export CENTRAL={args.central} && export ABS_ETA_INCLUSIVE={args.abs_eta_inclusive} && export CLOSURE={args.closure} && export PNETREG15={args.pnet_reg_15} && export SPLITPNETREG15={args.split_pnet_reg_15} {neutrino_string} && export YEAR={args.year}" "C-m"'
-    command3 = f'tmux send-keys "time pocket-coffea run --cfg cartesian_config.py {executor} -o {dir_name}" "C-m"'
-    command4 = f'tmux send-keys "make_plots.py {dir_name} --overwrite -j 16" "C-m"'
     
     complete_bash_list.append(
         f"time pocket-coffea run --cfg cartesian_config.py {executor} -o {dir_name}"
@@ -287,19 +236,9 @@ def run_command(sign, flav, dir_name, complete_bash_list):
         complete_bash_list.append(f"make_plots.py {dir_name} --overwrite -j 16")
     
 
-    # subprocess.run(command2, shell=True)
-    # subprocess.run(command3, shell=True)
-    # if args.plot:
-    #     subprocess.run(command4, shell=True)
-
     if args.neutrino == 1:
         dir_name_no_neutrino = dir_name.replace("_neutrino", "")
         os.makedirs(dir_name_no_neutrino, exist_ok=True)
-        command5 = f'tmux send-keys "cp {dir_name}/output_all.coffea {dir_name_no_neutrino}/output_all_neutrino.coffea" "C-m"'
-        # subprocess.run(command5, shell=True)
-        # send twice to make sure it is copied
-        # subprocess.run(command5, shell=True)
-        
         complete_bash_list.append(
             f"cp {dir_name}/output_all.coffea {dir_name_no_neutrino}/output_all_neutrino.coffea"
         )
