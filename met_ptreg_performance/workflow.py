@@ -316,45 +316,6 @@ class METProcessor(BaseProcessorABC):
         )
         self.events["ll"] = get_dilepton(None, self.events.MuonGood)
 
-        #### process_extra_after_presel ###
-        self.events["qT"] = ak.zip(
-            {"x": self.events["ll"].px, "y": self.events["ll"].py},
-            with_name="Vector2D",
-        )
-        # substract leptons from MET
-        for MET_coll in [
-            "PuppiMET",
-            "PuppiMETPNet",
-            "PuppiMETPNetPlusNeutrino",
-            # "GenMET",
-            # "GenMETPlusNeutrino",
-        ]:
-            lepton_coll = "MuonGood"
-            self.events[f"{MET_coll}_{lepton_coll}"] = self.subtract_leptons_from_MET(
-                lepton_coll, MET_coll
-            )
-            # print(f"{MET_coll}", self.events[f"{MET_coll}"].pt)
-            # print(
-            #     f"{MET_coll}_{lepton_coll}", self.events[f"{MET_coll}_{lepton_coll}"].pt
-            # )
-
-            u_perp_predict, u_paral_predict, response = self.compute_projections_qT(
-                f"{MET_coll}_{lepton_coll}"
-            )
-            self.events[f"{MET_coll}_{lepton_coll}"] = ak.with_field(
-                self.events[f"{MET_coll}_{lepton_coll}"],
-                u_perp_predict,
-                "u_perp_predict",
-            )
-            self.events[f"{MET_coll}_{lepton_coll}"] = ak.with_field(
-                self.events[f"{MET_coll}_{lepton_coll}"],
-                u_paral_predict,
-                "u_paral_predict",
-            )
-            self.events[f"{MET_coll}_{lepton_coll}"] = ak.with_field(
-                self.events[f"{MET_coll}_{lepton_coll}"], response, "response"
-            )
-
     def subtract_leptons_from_MET(self, lepton_coll, MET_coll):
         met = self.events[MET_coll]
         leptons_px = ak.sum(
@@ -428,7 +389,43 @@ class METProcessor(BaseProcessorABC):
         # print("response_np",response_np)
 
     def process_extra_after_presel(self, variation) -> ak.Array:
-        pass
+        self.events["qT"] = ak.zip(
+            {"x": self.events["ll"].px, "y": self.events["ll"].py},
+            with_name="Vector2D",
+        )
+        # substract leptons from MET
+        for MET_coll in [
+            "PuppiMET",
+            "PuppiMETPNet",
+            "PuppiMETPNetPlusNeutrino",
+            # "GenMET",
+            # "GenMETPlusNeutrino",
+        ]:
+            lepton_coll = "MuonGood"
+            self.events[f"{MET_coll}_{lepton_coll}"] = self.subtract_leptons_from_MET(
+                lepton_coll, MET_coll
+            )
+            # print(f"{MET_coll}", self.events[f"{MET_coll}"].pt)
+            # print(
+            #     f"{MET_coll}_{lepton_coll}", self.events[f"{MET_coll}_{lepton_coll}"].pt
+            # )
+
+            u_perp_predict, u_paral_predict, response = self.compute_projections_qT(
+                f"{MET_coll}_{lepton_coll}"
+            )
+            self.events[f"{MET_coll}_{lepton_coll}"] = ak.with_field(
+                self.events[f"{MET_coll}_{lepton_coll}"],
+                u_perp_predict,
+                "u_perp_predict",
+            )
+            self.events[f"{MET_coll}_{lepton_coll}"] = ak.with_field(
+                self.events[f"{MET_coll}_{lepton_coll}"],
+                u_paral_predict,
+                "u_paral_predict",
+            )
+            self.events[f"{MET_coll}_{lepton_coll}"] = ak.with_field(
+                self.events[f"{MET_coll}_{lepton_coll}"], response, "response"
+            )
 
     def count_objects(self, variation):
         self.events["nMuonGood"] = ak.num(self.events.MuonGood)
