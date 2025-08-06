@@ -8,7 +8,7 @@ Repository to compute MC Truth corrections for PNet regressed pT jets, structure
 To setup a local installation on `lxplus`:
 ```bash
 # Clone the fork and checkout the desired branch
-git clone --branch met-rescaling-jec https://github.com/matteomalucchi/PocketCoffea.git
+git clone --branch jme-pnet-reg https://github.com/matteomalucchi/PocketCoffea.git
 cd PocketCoffea
 
 #Enter the Singularity image
@@ -55,7 +55,7 @@ micromamba activate pocket-coffea
 pip install coffea==0.7.20
 
 # Clone the fork and checkout the desired branch
-git clone --branch met-rescaling-jec https://github.com/matteomalucchi/PocketCoffea.git
+git clone --branch jme-pnet-reg https://github.com/matteomalucchi/PocketCoffea.git
 cd PocketCoffea
 # For developers
 pip install -e .[dev,docs]
