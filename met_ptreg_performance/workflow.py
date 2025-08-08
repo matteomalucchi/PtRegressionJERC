@@ -68,7 +68,7 @@ class METProcessor(BaseProcessorABC):
         self.events["JetPuppiMET"] = self.events["Jet"]
         # print("jet pt raw", self.events["Jet"].pt_raw)
         if "pt_raw" not in self.events["JetPuppiMET"].fields:
-            print("Compute raw pt and mass for JetPuppiMET")
+            # print("Compute raw pt and mass for JetPuppiMET")
             self.events["JetPuppiMET"] = ak.with_field(
                 self.events["JetPuppiMET"],
                 self.events["JetPuppiMET"].pt
@@ -343,7 +343,6 @@ class METProcessor(BaseProcessorABC):
     def compute_projections_qT(self, MET_coll):
         # print("MET_coll", MET_coll)
         v_qT = self.events["qT"]
-        breakpoint()
         # print("v_qT", v_qT.px, v_qT.py, v_qT.rho)
         # print("MET", self.events[MET_coll].px, self.events[MET_coll].py)
         
@@ -360,7 +359,7 @@ class METProcessor(BaseProcessorABC):
         
         # subtract the module of qT because the projection 
         # of u is in the direction opposite of qT
-        u_paral_predict = v_paral_predict - v_qT.rho
+        u_paral_predict = v_paral_predict + v_qT.rho
         
         # vector 90 degrees to the left of v_qT
         v_qT_perp = ak.zip(
@@ -373,12 +372,9 @@ class METProcessor(BaseProcessorABC):
         
         u_perp_predict=v_qT_perp.dot(self.events[MET_coll]) / v_qT_perp.rho
         
-        
         # print("u_paral_predict", u_paral_predict)
-        # v_perp_predict = self.events[MET_coll] - v_paral_predict
-        # # print("v_perp_predict", v_perp_predict.px, v_perp_predict.py)
-        # u_perp_predict = v_perp_predict.rho
         # print("u_perp_predict", u_perp_predict)
+        
         breakpoint()
         return u_perp_predict, u_paral_predict, response
 
@@ -430,3 +426,4 @@ class METProcessor(BaseProcessorABC):
     def count_objects(self, variation):
         self.events["nMuonGood"] = ak.num(self.events.MuonGood)
         self.events["nElectronGood"] = ak.num(self.events.ElectronGood)
+        self.events["nJetPuppiMET"] = ak.num(self.events.JetPuppiMET)

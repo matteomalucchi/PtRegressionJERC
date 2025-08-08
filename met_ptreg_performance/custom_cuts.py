@@ -21,7 +21,13 @@ dimuon_presel = Cut(
     name="dilepton",
     params={
         "pt_leading_muon": 20,
-        "mll": {'low': 25, 'high': 2000},
+        "mll": {'low': 80, 'high': 100},
     },
     function=dimuon,
+)
+
+at_least_one_jet = Cut(
+    name="at_least_one_jet",
+    params={},
+    function=lambda events, params, year, sample, **kwargs: events.nJetPuppiMET > 0,
 )

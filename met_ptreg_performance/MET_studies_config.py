@@ -16,7 +16,7 @@ from pocket_coffea.parameters import defaults
 
 from workflow import METProcessor
 from configs.jme.cuts import PV_presel
-from custom_cuts import dimuon_presel
+from custom_cuts import dimuon_presel, at_least_one_jet
 
 localdir = os.path.dirname(os.path.abspath(__file__))
 
@@ -71,13 +71,15 @@ cfg = Configurator(
     workflow=METProcessor,
     workflow_options={
         # "donotscale_sumgenweights": True,
-        "only_physisical_jet": False,
+        "only_physical_jet": True,
         "rescale_MET_with_regressed_pT": True,
+        "jec_pt_threshold": 15.0,
     },
     skim=[],
     preselections=[
-        # PV_presel, get_nObj_min(2, coll="MuonGood")
-        dimuon_presel
+        PV_presel, 
+        dimuon_presel, at_least_one_jet
+        #get_nObj_min(2, coll="MuonGood")
     ],
     categories={
         **common_cats,
@@ -103,40 +105,40 @@ cfg = Configurator(
         }
     },
     variables={
-        **met_hists("PuppiMET"),
-        **met_hists("PuppiMETPNet"),
-        **met_hists("PuppiMETPNetPlusNeutrino"),
-        **met_hists("GenMET"),
-        # **met_hists("GenMETPlusNeutrino"),
-        **muon_hists(coll="MuonGood", pos=0),
-        **count_hist(
-            name="nElectronGood", coll="ElectronGood", bins=3, start=0, stop=3
-        ),
-        **count_hist(name="nMuonGood", coll="MuonGood", bins=3, start=0, stop=3),
-        "mll": HistConf(
-            [
-                Axis(
-                    coll="ll",
-                    field="mass",
-                    bins=100,
-                    start=0,
-                    stop=200,
-                    label=r"$M_{\ell\ell}$ [GeV]",
-                )
-            ]
-        ),
-        "ll_pt": HistConf(
-            [
-                Axis(
-                    coll="ll",
-                    field="pt",
-                    bins=100,
-                    start=0,
-                    stop=200,
-                    label=r"$p_{T}^{\ell\ell}$ [GeV]",
-                )
-            ]
-        ),
+        # **met_hists("PuppiMET"),
+        # **met_hists("PuppiMETPNet"),
+        # **met_hists("PuppiMETPNetPlusNeutrino"),
+        # **met_hists("GenMET"),
+        # # **met_hists("GenMETPlusNeutrino"),
+        # **muon_hists(coll="MuonGood", pos=0),
+        # **count_hist(
+        #     name="nElectronGood", coll="ElectronGood", bins=3, start=0, stop=3
+        # ),
+        # **count_hist(name="nMuonGood", coll="MuonGood", bins=3, start=0, stop=3),
+        # "mll": HistConf(
+        #     [
+        #         Axis(
+        #             coll="ll",
+        #             field="mass",
+        #             bins=100,
+        #             start=0,
+        #             stop=200,
+        #             label=r"$M_{\ell\ell}$ [GeV]",
+        #         )
+        #     ]
+        # ),
+        # "ll_pt": HistConf(
+        #     [
+        #         Axis(
+        #             coll="ll",
+        #             field="pt",
+        #             bins=100,
+        #             start=0,
+        #             stop=200,
+        #             label=r"$p_{T}^{\ell\ell}$ [GeV]",
+        #         )
+        #     ]
+        # ),
     },
     columns={
         "common": {
