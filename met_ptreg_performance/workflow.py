@@ -65,30 +65,28 @@ class METProcessor(BaseProcessorABC):
 
     def apply_object_preselection(self, variation):
         # super().apply_object_preselection(variation)
-        self.events["JetPuppiMET"] = self.events["Jet"]
         # print("jet pt raw", self.events["Jet"].pt_raw)
-        if "pt_raw" not in self.events["JetPuppiMET"].fields:
-            # print("Compute raw pt and mass for JetPuppiMET")
-            self.events["JetPuppiMET"] = ak.with_field(
-                self.events["JetPuppiMET"],
-                self.events["JetPuppiMET"].pt
-                * (1 - self.events["JetPuppiMET"].rawFactor),
+        if "pt_raw" not in self.events["Jet"].fields:
+            # print("Compute raw pt and mass for Jet")
+            self.events["Jet"] = ak.with_field(
+                self.events["Jet"],
+                self.events["Jet"].pt
+                * (1 - self.events["Jet"].rawFactor),
                 "pt_raw",
             )
-            self.events["JetPuppiMET"] = ak.with_field(
-                self.events["JetPuppiMET"],
-                self.events["JetPuppiMET"].mass
-                * (1 - self.events["JetPuppiMET"].rawFactor),
+            self.events["Jet"] = ak.with_field(
+                self.events["Jet"],
+                self.events["Jet"].mass
+                * (1 - self.events["Jet"].rawFactor),
                 "mass_raw",
             )
-        # print("JetPuppiMET pt raw", self.events["JetPuppiMET"].pt_raw)
-        
-        
+        # print("Jet pt raw", self.events["Jet"].pt_raw)
+
         # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
         self.events["JetPuppiMET"] = jet_selection_nopu(
-            self.events, "JetPuppiMET", self.params, "pt_raw"
+            self.events, "Jet", self.params, "pt_raw"
         )
-        
+
         self.events["GenJetGood"] = self.events.GenJet[
             self.events.GenJet.pt > self.params.object_preselection["GenJet"]["pt"]
         ]
@@ -100,74 +98,90 @@ class METProcessor(BaseProcessorABC):
             )
             self.events["JetPuppiMET"] = self.events.JetPuppiMET[physisical_jet_mask]
 
+        jets_raw = ak.zip(
+            {
+                "pt": self.events.JetPuppiMET.pt_raw,
+                "eta": self.events.JetPuppiMET.eta,
+                "phi": self.events.JetPuppiMET.phi,
+                "mass": self.events.JetPuppiMET.mass_raw,
+            },
+            with_name="Momentum4D",
+        )
+
         cache = cachetools.Cache(np.inf)
         jets_dict = {}
 
         jet_calib_params = self.params.jets_calibration
         for jet_type, jet_coll_name in jet_calib_params.collection[self._year].items():
-            if "chs" in jet_type or "Puppi" in jet_type:
-                continue
-            # define the pnet reg jet colleciton
-            jets_dict[jet_coll_name] = ak.with_field(
-                self.events["JetPuppiMET"],
-                self.events.JetPuppiMET.pt_raw
-                * self.events.JetPuppiMET.PNetRegPtRawCorr
-                * (
-                    self.events.JetPuppiMET.PNetRegPtRawCorrNeutrino
-                    if "Neutrino" in jet_coll_name
-                    else 1
-                ),
-                # ak.where(
-                #     self.events.JetPuppiMET.PNetRegPtRawCorr > 0,
-                #     self.events.JetPuppiMET.pt_raw
-                #     * self.events.JetPuppiMET.PNetRegPtRawCorr
-                #     * (
-                #         self.events.JetPuppiMET.PNetRegPtRawCorrNeutrino
-                #         if "Neutrino" in jet_coll_name
-                #         else 1
-                #     ),
-                #     self.events.JetPuppiMET.pt,
-                # ),
-                "pt",
-            )
-            jets_dict[jet_coll_name] = ak.with_field(
-                jets_dict[jet_coll_name],
-                jets_dict[jet_coll_name].pt,
-                "pt_raw",
-            )
-            jets_dict[jet_coll_name] = ak.with_field(
-                jets_dict[jet_coll_name],
-                ak.zeros_like(jets_dict[jet_coll_name].pt),
-                "rawFactor",
-            )
+            # if "chs" in jet_type or "Puppi" in jet_type:
+            #     continue
+            
+            if "PNet" in jet_coll_name:
+                # For regression
+                # define the pnet reg jet colleciton
+                jets_dict[jet_coll_name] = ak.with_field(
+                    self.events["JetPuppiMET"],
+                    self.events.JetPuppiMET.pt_raw
+                    * self.events.JetPuppiMET.PNetRegPtRawCorr
+                    * (
+                        self.events.JetPuppiMET.PNetRegPtRawCorrNeutrino
+                        if "Neutrino" in jet_coll_name
+                        else 1
+                    ),
+                    # ak.where(
+                    #     self.events.JetPuppiMET.PNetRegPtRawCorr > 0,
+                    #     self.events.JetPuppiMET.pt_raw
+                    #     * self.events.JetPuppiMET.PNetRegPtRawCorr
+                    #     * (
+                    #         self.events.JetPuppiMET.PNetRegPtRawCorrNeutrino
+                    #         if "Neutrino" in jet_coll_name
+                    #         else 1
+                    #     ),
+                    #     self.events.JetPuppiMET.pt,
+                    # ),
+                    "pt",
+                )
+                jets_dict[jet_coll_name] = ak.with_field(
+                    jets_dict[jet_coll_name],
+                    jets_dict[jet_coll_name].pt,
+                    "pt_raw",
+                )
+                jets_dict[jet_coll_name] = ak.with_field(
+                    jets_dict[jet_coll_name],
+                    ak.zeros_like(jets_dict[jet_coll_name].pt),
+                    "rawFactor",
+                )
 
-            jets_dict[jet_coll_name] = ak.with_field(
-                jets_dict[jet_coll_name],
-                jets_dict[jet_coll_name].mass_raw
-                * jets_dict[jet_coll_name].PNetRegPtRawCorr
-                * (
-                    jets_dict[jet_coll_name].PNetRegPtRawCorrNeutrino
-                    if "Neutrino" in jet_coll_name
-                    else 1
-                ),
-                # ak.where(
-                #     jets_dict[jet_coll_name].PNetRegPtRawCorr > 0,
-                #     jets_dict[jet_coll_name].mass_raw
-                #     * jets_dict[jet_coll_name].PNetRegPtRawCorr
-                #     * (
-                #         jets_dict[jet_coll_name].PNetRegPtRawCorrNeutrino
-                #         if "Neutrino" in jet_coll_name
-                #         else 1
-                #     ),
-                #     jets_dict[jet_coll_name].mass,
-                # ),
-                "mass",
-            )
-            jets_dict[jet_coll_name] = ak.with_field(
-                jets_dict[jet_coll_name],
-                jets_dict[jet_coll_name].mass,
-                "mass_raw",
-            )
+                jets_dict[jet_coll_name] = ak.with_field(
+                    jets_dict[jet_coll_name],
+                    jets_dict[jet_coll_name].mass_raw
+                    * jets_dict[jet_coll_name].PNetRegPtRawCorr
+                    * (
+                        jets_dict[jet_coll_name].PNetRegPtRawCorrNeutrino
+                        if "Neutrino" in jet_coll_name
+                        else 1
+                    ),
+                    # ak.where(
+                    #     jets_dict[jet_coll_name].PNetRegPtRawCorr > 0,
+                    #     jets_dict[jet_coll_name].mass_raw
+                    #     * jets_dict[jet_coll_name].PNetRegPtRawCorr
+                    #     * (
+                    #         jets_dict[jet_coll_name].PNetRegPtRawCorrNeutrino
+                    #         if "Neutrino" in jet_coll_name
+                    #         else 1
+                    #     ),
+                    #     jets_dict[jet_coll_name].mass,
+                    # ),
+                    "mass",
+                )
+                jets_dict[jet_coll_name] = ak.with_field(
+                    jets_dict[jet_coll_name],
+                    jets_dict[jet_coll_name].mass,
+                    "mass_raw",
+                )
+            else:
+                # For nominal jets
+                jets_dict[jet_coll_name] = ak.copy(self.events["JetPuppiMET"])
 
             # Calibrate the jets
             jets_calib_dict = {}
@@ -207,34 +221,33 @@ class METProcessor(BaseProcessorABC):
             # print("jet_coll_suffix", jet_coll_suffix)
 
             # Correct MET with MC Truth only jets with pt reg > 15
-            reg_pt_mask = jets_dict[jet_coll_name].pt > self.jec_pt_threshold
+            corr_reg_pt_mask = jets_calib_dict[jet_coll_name].pt_raw > self.jec_pt_threshold
             # compute pt
             self.events[f"JetPuppiMET{jet_coll_suffix}"] = ak.with_field(
                 jets_calib_dict[jet_coll_name],
                 ak.where(
-                    reg_pt_mask,
+                    corr_reg_pt_mask,
                     jets_calib_dict[jet_coll_name].pt,
-                    jets_dict[jet_coll_name].pt,
+                    jets_calib_dict[jet_coll_name].pt_raw,
                 ),
                 "pt",
             )
-            
-            
+
             # print("jets_dict[jet_coll_name] pt", jets_dict[jet_coll_name].pt)
             # print(f"JetPuppiMET{jet_coll_suffix} pt ", self.events[f"JetPuppiMET{jet_coll_suffix}"].pt)
-            
-            # reg_pt_mask_flat = ak.flatten(reg_pt_mask, axis=1)
-            # jets_flat=ak.flatten(self.events.JetPuppiMET, axis=1)[~reg_pt_mask_flat]
-            # jets_reg_flat = ak.flatten(jets_dict[jet_coll_name], axis=1)[~reg_pt_mask_flat]
+
+            # corr_reg_pt_mask_flat = ak.flatten(corr_reg_pt_mask, axis=1)
+            # jets_flat=ak.flatten(self.events.JetPuppiMET, axis=1)[~corr_reg_pt_mask_flat]
+            # jets_reg_flat = ak.flatten(jets_dict[jet_coll_name], axis=1)[~corr_reg_pt_mask_flat]
             # jets_reg_corr_flat = ak.flatten(
             #     self.events[f"JetPuppiMET{jet_coll_suffix}"], axis=1
-            # )[~reg_pt_mask_flat]
+            # )[~corr_reg_pt_mask_flat]
             # print("jets_flat", jets_flat.pt, jets_flat.eta)
             # print("jets_reg_flat", jets_reg_flat.pt, jets_reg_flat.eta)
             # print(
             #     f"jets_reg_corr_flat", jets_reg_corr_flat.pt, jets_reg_corr_flat.eta
             # )
-            
+
             # compute px and py
             self.events[f"JetPuppiMET{jet_coll_suffix}"] = ak.with_field(
                 self.events[f"JetPuppiMET{jet_coll_suffix}"],
@@ -252,9 +265,9 @@ class METProcessor(BaseProcessorABC):
             self.events[f"JetPuppiMET{jet_coll_suffix}"] = ak.with_field(
                 self.events[f"JetPuppiMET{jet_coll_suffix}"],
                 ak.where(
-                    reg_pt_mask,
-                    jets_calib_dict[jet_coll_name].mass,
-                    jets_dict[jet_coll_name].mass,
+                    corr_reg_pt_mask,
+                    self.events[f"JetPuppiMET{jet_coll_suffix}"][jet_coll_name].mass,
+                    self.events[f"JetPuppiMET{jet_coll_suffix}"][jet_coll_name].mass_raw,
                 ),
                 "mass",
             )
@@ -272,7 +285,9 @@ class METProcessor(BaseProcessorABC):
             # print("jetpuppimetPNet mass", self.events[f"JetPuppiMET{jet_coll_suffix}"].mass)
 
             if self.rescale_MET_with_regressed_pT:
-                met_branch = jet_calib_params.rescale_MET_branch[self._year]
+                # met_branch = jet_calib_params.rescale_MET_branch[self._year]
+
+                raw_met_branch = "RawPuppiMET"
                 # print(
                 #     met_branch, self.events[met_branch].pt, self.events[met_branch].phi
                 # )
@@ -291,22 +306,25 @@ class METProcessor(BaseProcessorABC):
 
                 new_MET = met_correction_after_jec(
                     self.events,
-                    met_branch,
-                    self.events.JetPuppiMET,
+                    raw_met_branch,
+                    jets_raw,
                     self.events[f"JetPuppiMET{jet_coll_suffix}"],
                 )
+                
+                met_branch=raw_met_branch.replace("Raw", "")
                 self.events[f"{met_branch}{jet_coll_suffix}"] = ak.zip(
                     {
                         "pt": new_MET["pt"],
                         "phi": new_MET["phi"],
                     },
                 )
-                
+
                 # print(
                 #     f"{met_branch}{jet_coll_suffix}",
                 #     self.events[f"{met_branch}{jet_coll_suffix}"].pt,
                 #     self.events[f"{met_branch}{jet_coll_suffix}"].phi,
                 # )
+            # breakpoint()
 
         # self.add_GenMET_plus_neutrino()
 
@@ -345,22 +363,22 @@ class METProcessor(BaseProcessorABC):
         v_qT = self.events["qT"]
         # print("v_qT", v_qT.px, v_qT.py, v_qT.rho)
         # print("MET", self.events[MET_coll].px, self.events[MET_coll].py)
-        
+
         # hadronic recoil
-        u_vec=-self.events[MET_coll]
+        u_vec = -self.events[MET_coll]
         # compute dot product of v_qT and MET
         response = v_qT.dot(-u_vec) / v_qT.dot(v_qT)
 
         # print("response", response)
 
-        v_paral_predict = v_qT.dot(u_vec)/ v_qT.rho
-        
+        v_paral_predict = v_qT.dot(u_vec) / v_qT.rho
+
         # print("v_paral_predict", v_paral_predict.px, v_paral_predict.py)
-        
-        # subtract the module of qT because the projection 
+
+        # subtract the module of qT because the projection
         # of u is in the direction opposite of qT
         u_paral_predict = v_paral_predict + v_qT.rho
-        
+
         # vector 90 degrees to the left of v_qT
         v_qT_perp = ak.zip(
             {
@@ -369,13 +387,12 @@ class METProcessor(BaseProcessorABC):
             },
             with_name="Vector2D",
         )
-        
-        u_perp_predict=v_qT_perp.dot(self.events[MET_coll]) / v_qT_perp.rho
-        
+
+        u_perp_predict = v_qT_perp.dot(u_vec) / v_qT_perp.rho
+
         # print("u_paral_predict", u_paral_predict)
         # print("u_perp_predict", u_perp_predict)
-        
-        breakpoint()
+
         return u_perp_predict, u_paral_predict, response
 
         # response_np = getdot(
@@ -392,6 +409,8 @@ class METProcessor(BaseProcessorABC):
         # substract leptons from MET
         for MET_coll in [
             "PuppiMET",
+            "RawPuppiMET",
+            "PuppiMETType1",
             "PuppiMETPNet",
             "PuppiMETPNetPlusNeutrino",
             # "GenMET",
