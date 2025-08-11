@@ -1,7 +1,7 @@
 object_preselection:
-  JetPuppiMET:
+  Jet:
     pt_raw: 15
-    eta: 10 #4.7 
+    eta: 4.7 
     jetId: 0
 
   GenJet:
