@@ -16,7 +16,7 @@ from hist import Hist
 
 
 from utils.plot.get_columns_from_files import get_columns_from_files
-from plot_config import total_var_dict,color_list  #  var_dict, color_list, ranges, log_dict
+from plot_config import total_var_dict,color_list  
 
 
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
