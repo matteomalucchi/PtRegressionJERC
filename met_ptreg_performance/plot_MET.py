@@ -3,8 +3,6 @@ import sys
 import re
 from matplotlib import pyplot as plt
 import matplotlib
-from coffea.util import load
-from omegaconf import OmegaConf
 import numpy as np
 import awkward as ak
 import argparse
@@ -20,10 +18,6 @@ from hist import Hist
 from utils.plot.get_columns_from_files import get_columns_from_files
 from plot_config import total_var_dict,color_list  #  var_dict, color_list, ranges, log_dict
 
-
-# hep.style.use("CMS")
-# color_dict=list(hep.style.CMS['axes.prop_cycle'])
-# color_list=[cycle['color'] for cycle in color_dict]+["black", "green", "blue"]
 
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
 parser.add_argument(
@@ -77,20 +71,6 @@ def plot_from_columns(cat_col):
                 col_den = col_den[mask_range]
                 weight= col_var["weight"][mask_range]
                 
-                
-                # bins = np.linspace(range_plot[0], range_plot[1], 30)
-                # bins_center = (bins[1:] + bins[:-1]) / 2
-
-                # h_den, bins = np.histogram(col_den, bins=30, range=range_plot)
-
-                # # draw the ratio
-                # h_num, bins = np.histogram(col_num, bins=30, range=range_plot)
-
-                # ratio = h_num / h_den
-                # print("ratio", ratio)
-                # err_num = np.sqrt(h_num)
-                # err_den = np.sqrt(h_den)
-                
                 hist_den = Hist.new.Reg(30, range_plot[0], range_plot[1], name=var_name, flow=False).Weight()
                 hist_num = Hist.new.Reg(30, range_plot[0], range_plot[1], name=var_name, flow=False).Weight()
                 hist_den.fill(col_den, weight=weight)
@@ -104,9 +84,6 @@ def plot_from_columns(cat_col):
                 )
                 hep.histplot(
                     hist_num,
-                    # bins=bins,
-                    # yerr=True,
-                    # w2=hist_num.variances(),
                     w2method="sqrt",
                     histtype="step",
                     label=var_name,
@@ -114,44 +91,8 @@ def plot_from_columns(cat_col):
                     color=color_list[i],
                 )
                 ax.set_xlabel("")
-                # breakpoint()
 
                 if i == 0:
-                    # ratio_err = err_num/h_num
-                    # print("ratio_err", ratio_err)
-                    # ratio_err_new=intervals.ratio_uncertainty(h_num, h_den, "poisson")
-                    # print("ratio_err_new", ratio_err_new)
-                    # print("values", values, "high_uncertainty", high_uncertainty, "low_uncertainty", low_uncertainty)
-                    # breakpoint() 
-                    # ax.errorbar(
-                    #     bins_center,
-                    #     h_den,
-                    #     yerr=np.sqrt(h_den),
-                    #     label=var_name,
-                    #     color=color_list[i],
-                    #     fmt=".",
-                    # )
-                    # ax_ratio.axhline(y=1, linestyle="--", color="black")
-                    # ax_ratio.fill_between(
-                    #     bins_center,
-                    #     1 - ratio_err,
-                    #     1 + ratio_err,
-                    #     color="grey",
-                    #     alpha=0.5,
-                    # )
-
-                    # hep.histplot(
-                    #     hist_den,
-                    #     # bins=bins,
-                    #     # yerr=True,
-                    #     w2=hist_den.variances(),
-                    #     w2method="sqrt",
-                    #     histtype="step",
-                    #     color=color_list[i],
-                    #     label=var_name,
-                    #     ax=ax,
-                    # )
-                        
                     ax_ratio.axhline(y=1, linestyle="--",color=color_list[i],)
                     ax_ratio.fill_between(
                         bins_center,
@@ -162,38 +103,6 @@ def plot_from_columns(cat_col):
                         color=color_list[i],
                     )
                 else:
-                    # ratio_err = np.sqrt(
-                    #     (err_num / h_den) ** 2 + (h_num * err_den / h_den**2) ** 2
-                    # )
-                    # print("ratio_err", ratio_err)
-                    # ratio_err_new=intervals.ratio_uncertainty(h_num, h_den, "poisson-ratio")
-                    # print("ratio_err_new", ratio_err_new)
-                    # values, high_uncertainty, low_uncertainty = hep.get_comparison(
-                    #     hist_num, hist_den, comparison="ratio"
-                    # )
-                    # print("values", values, "high_uncertainty", high_uncertainty, "low_uncertainty", low_uncertainty)
-                    
-                    
-                    
-                    # breakpoint() 
-                    # ax.hist(
-                    #     col_num,
-                    #     bins=30,
-                    #     histtype="step",
-                    #     label=var_name,
-                    #     # color=color_list[i],
-                    #     range=range_plot,
-                    # )
-
-                    
-                    # ax_ratio.errorbar(
-                    #     bins_center,
-                    #     ratio,
-                    #     yerr=ratio_err,
-                    #     fmt=".",
-                    #     label=var_name,
-                    #     # color=color_list[i],
-                    # )
                     hep.histplot(
                         ratio,
                         bins=bins,

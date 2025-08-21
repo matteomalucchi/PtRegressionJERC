@@ -2,8 +2,6 @@ import os
 import sys
 import re
 from matplotlib import pyplot as plt
-from coffea.util import load
-from omegaconf import OmegaConf
 import numpy as np
 import awkward as ak
 import mplhep as hep
@@ -17,10 +15,6 @@ import matplotlib
 from utils.plot.get_columns_from_files import get_columns_from_files
 from plot_config import response_var_name_dict, qT_bins, color_list, met_list
 from utils.plot.plotting import plot_1d_histograms
-
-# hep.style.use("CMS")
-# color_dict = list(hep.style.CMS["axes.prop_cycle"])
-# color_list = [cycle["color"] for cycle in color_dict]
 
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
 parser.add_argument(
@@ -131,10 +125,6 @@ def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges):
 def create_reponses_info(qT_arr, u_dict, weights):
     # compute mean of all metrics in summary
 
-    # max_x=200 # max qT value
-    # x_n=20 #number of bins
-    # bin_edges=np.arange(0, max_x, 10)
-
     bin_edges = qT_bins
 
     inds = np.digitize(qT_arr, bin_edges)
@@ -152,39 +142,6 @@ def create_reponses_info(qT_arr, u_dict, weights):
                 u_par_arr = u_dict[met_type][var_name]
             elif "response" in var_name:
                 R_arr = u_dict[met_type][var_name]
-        # u_perp_arr = u_dict[met_type][0]
-        # u_par_arr = u_dict[met_type][1]
-        # R_arr = u_dict[met_type][2]
-
-        # print(R_arr, len(R_arr))
-        # print(u_perp_arr, len(u_perp_arr))
-        # print(u_par_arr, len(u_par_arr))
-
-        # R_hist = []
-        # u_perp_quantile_hist = []
-        # u_perp_scaled_quantile_hist = []
-        # u_perp_stddev_hist = []
-        # u_perp_stddev_scaled_hist = []
-        # u_par_quantile_hist = []
-        # u_par_scaled_quantile_hist = []
-        # u_par_stddev_hist = []
-        # u_par_stddev_scaled_hist = []
-
-        # err_R_hist = []
-        # err_u_perp_quantile_hist = []
-        # err_u_perp_scaled_quantile_hist = []
-        # err_u_perp_stddev_hist = []
-        # err_u_perp_stddev_scaled_hist = []
-        # err_u_par_quantile_hist = []
-        # err_u_par_scaled_quantile_hist = []
-        # err_u_par_stddev_hist = []
-        # err_u_par_stddev_scaled_hist = []
-
-        # R_hist = defaultdict(list)
-        # u_perp_hist = defaultdict(list)
-        # u_perp_scaled_hist = defaultdict(list)
-        # u_par_hist = defaultdict(list)
-        # u_par_scaled_hist = defaultdict(list)
 
         all_hists[met_type] = {}
         R_bin_edges = np.linspace(-2, 2, 30)
@@ -227,9 +184,8 @@ def create_reponses_info(qT_arr, u_dict, weights):
             R_i = R_arr[np.where(inds == i)[0]]
             av_R_i, _ = weighted_mean(R_i, weights_i)
             compute_u_info(R_i, weights_i, "R", all_responses[met_type])
+
             # compute mean and standard deviation
-            # R_hist.append(av_R_i)
-            # err_R_hist.append(err_R_i)
 
             # U perpendicular
             u_perp_i = u_perp_arr[np.where(inds == i)[0]]
@@ -265,118 +221,6 @@ def create_reponses_info(qT_arr, u_dict, weights):
                 all_responses[met_type],
             )
 
-            # compute_u_hists(
-            #     u_perp_i,
-            #     weights_i,
-            #     u_perp_quantile_hist,
-            #     err_u_perp_quantile_hist,
-            #     u_perp_stddev_hist,
-            #     err_u_perp_stddev_hist,
-            # )
-            # compute_u_hists(
-            #     u_perp_scaled_i,
-            #     weights_i,
-            #     u_perp_scaled_quantile_hist,
-            #     err_u_perp_scaled_quantile_hist,
-            #     u_perp_stddev_scaled_hist,
-            #     err_u_perp_stddev_scaled_hist,
-            # )
-
-            # ## compute quantiles
-            # u_perp_quantile_hist.append(
-            #     (np.quantile(u_perp_i, 0.84) - np.quantile(u_perp_i, 0.16)) / 2.0
-            # )
-            # err_u_perp_quantile_hist.append(0)
-            # u_perp_scaled_quantile_hist.append(
-            #     (
-            #         np.quantile(u_perp_scaled_i, 0.84)
-            #         - np.quantile(u_perp_scaled_i, 0.16)
-            #     )
-            #     / 2.0
-            # )
-            # err_u_perp_scaled_quantile_hist.append(0)
-
-            # ## compute standard deviation
-            # stdev_u_perp_i, err_u_perp_stddev_i = weighted_std_dev(u_perp_i, weights_i)
-            # u_perp_stddev_hist.append(stdev_u_perp_i)
-            # err_u_perp_stddev_hist.append(err_u_perp_stddev_i)
-            # stdev_u_perp_scaled_i, err_u_perp_stddev_scaled_i = weighted_std_dev(
-            #     u_perp_scaled_i, weights_i
-            # )
-            # u_perp_stddev_scaled_hist.append(stdev_u_perp_scaled_i)
-            # err_u_perp_stddev_scaled_hist.append(err_u_perp_stddev_scaled_i)
-
-            # compute_u_hists(
-            #     u_par_i,
-            #     weights_i,
-            #     u_par_quantile_hist,
-            #     err_u_par_quantile_hist,
-            #     u_par_stddev_hist,
-            #     err_u_par_stddev_hist,
-            # )
-            # compute_u_hists(
-            #     u_par_scaled_i,
-            #     weights_i,
-            #     u_par_scaled_quantile_hist,
-            #     err_u_par_scaled_quantile_hist,
-            #     u_par_stddev_scaled_hist,
-            #     err_u_par_stddev_scaled_hist,
-            # )
-
-            # u_par_quantile_hist.append(
-            #     (np.quantile(u_par_i, 0.84) - np.quantile(u_par_i, 0.16)) / 2.0
-            # )
-            # u_par_scaled_quantile_hist.append(
-            #     (np.quantile(u_par_scaled_i, 0.84) - np.quantile(u_par_scaled_i, 0.16))
-            #     / 2.0
-            # )
-            # err_u_par_quantile_hist.append(0)
-            # err_u_par_scaled_quantile_hist.append(0)
-
-        # u_perp_quantile_resolution = np.histogram(qT_bin_centers, bins=bin_edges, weights=u_perp_quantile_hist)
-        # u_perp_scaled_quantile_resolution = np.histogram(
-        #     qT_bin_centers, bins=bin_edges, weights=u_perp_scaled_quantile_hist
-        # )
-        # u_par_quantile_resolution = np.histogram(qT_bin_centers, bins=bin_edges, weights=u_par_quantile_hist)
-        # u_par_scaled_quantile_resolution = np.histogram(
-        #     qT_bin_centers, bins=bin_edges, weights=u_par_scaled_quantile_hist
-        # )
-        # R = np.histogram(qT_bin_centers, bins=bin_edges, weights=R_hist)
-
-        # all_hists[key] = {
-        #     "u_perp_quantile_resolution": u_perp_quantile_resolution,
-        #     "u_perp_scaled_quantile_resolution": u_perp_scaled_quantile_resolution,
-        #     "u_par_quantile_resolution": u_par_quantile_resolution,
-        #     "u_par_scaled_quantile_resolution": u_par_scaled_quantile_resolution,
-        #     "R": R,
-        # }
-
-        # all_hists[key] = {
-        #     "u_perp_quantile_resolution": (
-        #         u_perp_quantile_hist,
-        #         err_u_perp_quantile_hist,
-        #     ),
-        #     "u_perp_scaled_quantile_resolution": (
-        #         u_perp_scaled_quantile_hist,
-        #         err_u_perp_scaled_quantile_hist,
-        #     ),
-        #     "u_perp_stddev_resolution": (u_perp_stddev_hist, err_u_perp_stddev_hist),
-        #     "u_perp_stddev_scaled_resolution": (
-        #         u_perp_stddev_scaled_hist,
-        #         err_u_perp_stddev_scaled_hist,
-        #     ),
-        #     "u_par_quantile_resolution": (u_par_quantile_hist, err_u_par_quantile_hist),
-        #     "u_par_scaled_quantile_resolution": (
-        #         u_par_scaled_quantile_hist,
-        #         err_u_par_scaled_quantile_hist,
-        #     ),
-        #     "u_par_stddev_resolution": (u_par_stddev_hist, err_u_par_stddev_hist),
-        #     "u_par_stddev_scaled_resolution": (
-        #         u_par_stddev_scaled_hist,
-        #         err_u_par_stddev_scaled_hist,
-        #     ),
-        #     "R": (R_hist, err_R_hist),
-        # }
 
     # change the gerarchy of the keys
     reponses_dict = {}
@@ -393,21 +237,12 @@ def create_reponses_info(qT_arr, u_dict, weights):
                 hists_dict[var_name] = {}
             hists_dict[var_name][met_type] = all_hists[met_type][var_name]
 
-    # breakpoint()
-
     return reponses_dict, hists_dict
 
 
 def plot_reponses(reponses_dict, cat):
     for var_name in reponses_dict:
         print(f"Plotting response for {var_name} in category {cat}")
-        # [
-        #     "u_perp_quantile_resolution",
-        #     "u_perp_scaled_quantile_resolution",
-        #     "u_par_quantile_resolution",
-        #     "u_par_scaled_quantile_resolution",
-        #     "R",
-        # ]:
         fig, ax = plt.subplots()
         for i, met_type in enumerate(reponses_dict[var_name]):
             ax.errorbar(
@@ -432,9 +267,6 @@ def plot_reponses(reponses_dict, cat):
         fig.savefig(f"{outputdir}/{cat}_{var_name}.pdf", bbox_inches="tight", dpi=300)
         fig.savefig(f"{outputdir}/{cat}_{var_name}.svg", bbox_inches="tight", dpi=300)
         plt.close(fig)
-
-
-# def plot_2d_histogram
 
 
 def plot_2d_response_histograms(hists_dict, cat):
@@ -478,55 +310,6 @@ def plot_2d_response_histograms(hists_dict, cat):
                 dpi=300,
             )
             plt.close(fig)
-
-
-# def old_plot_1d_histograms(hists_dict, cat):
-#     # for each bin on qT, plot the distribution of the variable
-#     for i in range(len(qT_bins) - 1):
-#         bin_edges_string = f"{qT_bins[i]}_{qT_bins[i+1]}"
-#         for var_name in hists_dict:
-#             fig, ax = plt.subplots()
-#             for met_type in hists_dict[var_name]:
-#                 print(
-#                     f"Plotting 1d histogram for {var_name} in {met_type} for qT bin {bin_edges_string}"
-#                 )
-#                 hist = hists_dict[var_name][met_type]
-#                 # Select the bin corresponding to the current qT bin
-#                 hist_1d_u = hist[{"qT": i}]
-#                 hep.histplot(
-#                     hist_1d_u,
-#                     ax=ax,
-#                     label=met_type,
-#                     # color=hep.style.CMS.colors[key],
-#                     histtype="step",
-#                 )
-#             ax.legend(loc="best")
-#             ax.set_xlabel(
-#                 var_name
-#                 if var_name not in response_var_name_dict
-#                 else response_var_name_dict[var_name]
-#             )
-#             ax.set_ylabel("Events")
-#             ax.set_ylim(top=1.7 * ax.get_ylim()[1])
-#             hep.cms.lumitext(r"(13.6 TeV)", ax=ax)
-#             hep.cms.text(text="Preliminary", ax=ax)
-#             fig.savefig(
-#                 f"{outputdir}/{cat}_{var_name}_{bin_edges_string}.png",
-#                 bbox_inches="tight",
-#                 dpi=300,
-#             )
-#             fig.savefig(
-#                 f"{outputdir}/{cat}_{var_name}_{bin_edges_string}.pdf",
-#                 bbox_inches="tight",
-#                 dpi=300,
-#             )
-#             fig.savefig(
-#                 f"{outputdir}/{cat}_{var_name}_{bin_edges_string}.svg",
-#                 bbox_inches="tight",
-#                 dpi=300,
-#             )
-#             plt.close(fig)
-
 
 def plot_1d_histograms_parallel(plotting_info, log_scale, ratio_label):
     hists_dict, output_name, var_label = plotting_info
@@ -598,7 +381,7 @@ def make_plots(cat_col):
                 u_dict[coll][var] = col_dict[var]
             elif "weight" in var:
                 weights = col_dict[var]
-        # breakpoint()
+        
         reponses_dict, hists_dict = create_reponses_info(v_qT, u_dict, weights)
         plot_reponses(reponses_dict, cat)
         if args.histo:
