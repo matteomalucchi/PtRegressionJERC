@@ -26,7 +26,7 @@ default_parameters = defaults.get_default_parameters()
 defaults.register_configuration_dir("config_dir", localdir + "/params")
 
 year = os.environ.get("YEAR", "2022_preEE")
-default_parameters.lepton_scale_factors.electron_sf["apply_ele_scale_and_smearing"][year] = False
+# default_parameters.lepton_scale_factors.electron_sf["apply_ele_scale_and_smearing"][year] = False
 
 
 # adding object preselection
@@ -152,12 +152,18 @@ cfg = Configurator(
                 # ColOut("GenMETPlusNeutrino", ["pt", "phi"]),
                 
                 ColOut("RawPuppiMET", ["pt", "phi"]),
+                ColOut("RawPuppiMETType1", ["pt", "phi"]),
+                ColOut("RawPuppiMETPNet", ["pt", "phi"]),
+                ColOut("RawPuppiMETPNetPlusNeutrino", ["pt", "phi"]),
                 ColOut("PuppiMET", ["pt", "phi"]),
                 ColOut("PuppiMETType1", ["pt", "phi"]),
                 ColOut("PuppiMETPNet", ["pt", "phi"]),
                 ColOut("PuppiMETPNetPlusNeutrino", ["pt", "phi"]),
                 
                 ColOut("RawPuppiMET_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),
+                ColOut("RawPuppiMETType1_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),
+                ColOut("RawPuppiMETPNet_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),
+                ColOut("RawPuppiMETPNetPlusNeutrino_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),
                 ColOut("PuppiMET_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),
                 ColOut("PuppiMETType1_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),
                 ColOut("PuppiMETPNet_MuonGood", ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]),

@@ -70,14 +70,12 @@ class METProcessor(BaseProcessorABC):
             # print("Compute raw pt and mass for Jet")
             self.events["Jet"] = ak.with_field(
                 self.events["Jet"],
-                self.events["Jet"].pt
-                * (1 - self.events["Jet"].rawFactor),
+                self.events["Jet"].pt * (1 - self.events["Jet"].rawFactor),
                 "pt_raw",
             )
             self.events["Jet"] = ak.with_field(
                 self.events["Jet"],
-                self.events["Jet"].mass
-                * (1 - self.events["Jet"].rawFactor),
+                self.events["Jet"].mass * (1 - self.events["Jet"].rawFactor),
                 "mass_raw",
             )
         # print("Jet pt raw", self.events["Jet"].pt_raw)
@@ -115,7 +113,7 @@ class METProcessor(BaseProcessorABC):
         for jet_type, jet_coll_name in jet_calib_params.collection[self._year].items():
             # if "chs" in jet_type or "Puppi" in jet_type:
             #     continue
-            
+
             if "PNet" in jet_coll_name:
                 # For regression
                 # define the pnet reg jet colleciton
@@ -208,6 +206,7 @@ class METProcessor(BaseProcessorABC):
                     },
                     cache=cache,
                 )
+                # breakpoint()
                 # print(
                 #     "PNETReg after correction",
                 #     jets_calib_dict[jet_coll_name].pt,
@@ -221,7 +220,9 @@ class METProcessor(BaseProcessorABC):
             # print("jet_coll_suffix", jet_coll_suffix)
 
             # Correct MET with MC Truth only jets with pt reg > 15
-            corr_reg_pt_mask = jets_calib_dict[jet_coll_name].pt_raw > self.jec_pt_threshold
+            corr_reg_pt_mask = (
+                jets_calib_dict[jet_coll_name].pt_raw > self.jec_pt_threshold
+            )
             # compute pt
             self.events[f"JetPuppiMET{jet_coll_suffix}"] = ak.with_field(
                 jets_calib_dict[jet_coll_name],
@@ -266,8 +267,8 @@ class METProcessor(BaseProcessorABC):
                 self.events[f"JetPuppiMET{jet_coll_suffix}"],
                 ak.where(
                     corr_reg_pt_mask,
-                    self.events[f"JetPuppiMET{jet_coll_suffix}"][jet_coll_name].mass,
-                    self.events[f"JetPuppiMET{jet_coll_suffix}"][jet_coll_name].mass_raw,
+                    self.events[f"JetPuppiMET{jet_coll_suffix}"].mass,
+                    self.events[f"JetPuppiMET{jet_coll_suffix}"].mass_raw,
                 ),
                 "mass",
             )
@@ -287,46 +288,49 @@ class METProcessor(BaseProcessorABC):
             if self.rescale_MET_with_regressed_pT:
                 # met_branch = jet_calib_params.rescale_MET_branch[self._year]
 
-                raw_met_branch = "RawPuppiMET"
-                # print(
-                #     met_branch, self.events[met_branch].pt, self.events[met_branch].phi
-                # )
-                # print(
-                #     "JetPuppiMET px",
-                #     self.events["JetPuppiMET"].px,
-                #     "py",
-                #     self.events["JetPuppiMET"].py,
-                # )
-                # print(
-                #     "jet_dict px",
-                #     self.events[f"JetPuppiMET{jet_coll_suffix}"].px,
-                #     "py",
-                #     self.events[f"JetPuppiMET{jet_coll_suffix}"].py,
-                # )
+                # TODO: add loop for raw puupi or puppi MET branches
+                for met_branch, jet_coll in zip(
+                    ["RawPuppiMET", "PuppiMET"],
+                    [jets_raw, self.events.JetPuppiMET],
+                ):
 
-                new_MET = met_correction_after_jec(
-                    self.events,
-                    raw_met_branch,
-                    jets_raw,
-                    self.events[f"JetPuppiMET{jet_coll_suffix}"],
-                )
-                
-                met_branch=raw_met_branch.replace("Raw", "")
-                self.events[f"{met_branch}{jet_coll_suffix}"] = ak.zip(
-                    {
-                        "pt": new_MET["pt"],
-                        "phi": new_MET["phi"],
-                    },
-                )
+                    # print(
+                    #     met_branch, self.events[met_branch].pt, self.events[met_branch].phi
+                    # )
+                    # print(
+                    #     "JetPuppiMET px",
+                    #     self.events["JetPuppiMET"].px,
+                    #     "py",
+                    #     self.events["JetPuppiMET"].py,
+                    # )
+                    # print(
+                    #     "jet_dict px",
+                    #     self.events[f"JetPuppiMET{jet_coll_suffix}"].px,
+                    #     "py",
+                    #     self.events[f"JetPuppiMET{jet_coll_suffix}"].py,
+                    # )
+
+                    new_MET = met_correction_after_jec(
+                        self.events,
+                        met_branch,
+                        jet_coll,
+                        self.events[f"JetPuppiMET{jet_coll_suffix}"],
+                    )
+
+                    self.events[f"{met_branch}{jet_coll_suffix}"] = ak.zip(
+                        {
+                            "pt": new_MET["pt"],
+                            "phi": new_MET["phi"],
+                        },
+                    )
+                    # breakpoint()
 
                 # print(
                 #     f"{met_branch}{jet_coll_suffix}",
                 #     self.events[f"{met_branch}{jet_coll_suffix}"].pt,
                 #     self.events[f"{met_branch}{jet_coll_suffix}"].phi,
                 # )
-            # breakpoint()
 
-        # self.add_GenMET_plus_neutrino()
 
         self.events["MuonGood"] = lepton_selection(self.events, "Muon", self.params)
         self.events["ElectronGood"] = lepton_selection(
@@ -408,8 +412,11 @@ class METProcessor(BaseProcessorABC):
         )
         # substract leptons from MET
         for MET_coll in [
-            "PuppiMET",
             "RawPuppiMET",
+            "RawPuppiMETType1",
+            "RawPuppiMETPNet",
+            "RawPuppiMETPNetPlusNeutrino",
+            "PuppiMET",
             "PuppiMETType1",
             "PuppiMETPNet",
             "PuppiMETPNetPlusNeutrino",
