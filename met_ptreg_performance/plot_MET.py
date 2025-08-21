@@ -61,8 +61,8 @@ def plot_from_columns(cat_col):
                 col_den = col_var[variables[0]]
                 var_name = (
                     variable.split("_")[0]
-                    if "MuonGood" not in variable
-                    else f'u {variable.split("_")[0]}'
+                    # if "hadronic_recoil" not in variable
+                    # else f'u {variable.split("_")[0]}'
                 )
 
                 mask_range = (col_den > range_plot[0]) & (col_den < range_plot[1])

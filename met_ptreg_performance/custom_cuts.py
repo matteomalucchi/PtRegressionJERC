@@ -34,7 +34,7 @@ dimuon_presel = Cut(
 at_least_one_jet = Cut(
     name="at_least_one_jet",
     params={},
-    function=lambda events, params, year, sample, **kwargs: events.nJetPuppiMET > 0,
+    function=lambda events, params, year, sample, **kwargs: events.nJetGood > 0,
 )
 
 

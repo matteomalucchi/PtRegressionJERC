@@ -132,6 +132,7 @@ def create_reponses_info(qT_arr, u_dict, weights):
     all_responses = {}
     all_hists = {}
     for met_type in met_list:
+        met_type=f"u{met_type}"
         print(met_type)
         assert met_type in u_dict, f"MET type {met_type} not found in u_dict"
         
@@ -371,7 +372,7 @@ def make_plots(cat_col):
 
         u_dict = {}
         for var in col_dict:
-            if "_MuonGood" in var and any(
+            if any(
                 x in var for x in ["u_perp_predict", "u_paral_predict", "response"]
             ):
                 coll = var.split("_")[0]

@@ -80,14 +80,26 @@ import mplhep as hep
 
 met_list = [
     "RawPuppiMET",
-    "RawPuppiMETType1",
-    "RawPuppiMETPNet",
-    "RawPuppiMETPNetPlusNeutrino",
+    "RawPuppiMET-Type1",
+    "RawPuppiMET-Type1JEC",
+    "RawPuppiMET-Type1PNet",
+    "RawPuppiMET-Type1PNetPlusNeutrino",
     "PuppiMET",
-    "PuppiMETType1",
-    "PuppiMETPNet",
-    "PuppiMETPNetPlusNeutrino",
+    "PuppiMET-Type1",
+    "PuppiMET-Type1JEC",
+    "PuppiMET-Type1PNet",
+    "PuppiMET-Type1PNetPlusNeutrino",
 ]
+
+hadronic_recoil_dict={
+    f"{met}_pt": {
+        "plot_name": met+r" $p_{\mathrm{T}}$ [GeV]",
+        "variables": [f"{met}_pt", f"u{met}_pt"],
+        "range": (0, 200),
+        "log": True,
+        "ratio_label": "u / MET",
+    } for met in met_list
+}
 
 total_var_dict = {
     "MET_comparison_pt": {
@@ -104,104 +116,105 @@ total_var_dict = {
         "log": False,
         "ratio_label": "MET / RawPuppiMET",
     },
-    "MET_MinusMuons_comparison_pt": {
+    "hadronic_recoil_comparison_pt": {
         "plot_name": r"u $p_{\mathrm{T}}$ [GeV]",
-        "variables": [met + "_MuonGood_pt" for met in met_list],
+        "variables": ["u"+met + "_pt" for met in met_list],
         "range": (0, 200),
         "log": True,
         "ratio_label": "MET / RawPuppiMET",
     },
-    "MET_MinusMuons_comparison_phi": {
+    "hadronic_recoil_comparison_phi": {
         "plot_name": r"u $\phi$",
-        "variables": [met + "_MuonGood_phi" for met in met_list],
+        "variables": ["u"+met + "_phi" for met in met_list],
         "range": (-3.14, 3.14),
         "log": False,
         "ratio_label": "MET / RawPuppiMET",
     },
     "response_comparison": {
         "plot_name": r"$-u_{||}/q_{T}$",
-        "variables": [met + "_MuonGood_response" for met in met_list],
+        "variables": ["u"+met + "_response" for met in met_list],
         "range": (-1, 2),
         "log": True,
         "ratio_label": "MET / RawPuppiMET",
     },
     "u_paral_predict_comparison": {
         "plot_name": r"$u_{||}+q_{T}$ [GeV]",
-        "variables": [met + "_MuonGood_u_paral_predict" for met in met_list],
+        "variables": ["u"+met + "_u_paral_predict" for met in met_list],
         "range": (-200, 200),
         "log": True,
         "ratio_label": "MET / RawPuppiMET",
     },
     "u_perp_predict_comparison": {
         "plot_name": r"$u_{\perp}$ [GeV]",
-        "variables": [met + "_MuonGood_u_perp_predict" for met in met_list],
+        "variables": ["u"+met + "_u_perp_predict" for met in met_list],
         "range": (-200, 200),
         "log": True,
         "ratio_label": "MET / RawPuppiMET",
     },
-    "RawPuppiMET_pt": {
-        "plot_name": r"RawPuppiMET $p_{\mathrm{T}}$ [GeV]",
-        "variables": ["RawPuppiMET_pt", "RawPuppiMET_MuonGood_pt"],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "RawPuppiMETType1_pt": {
-        "plot_name": r"RawPuppiMETType1 $p_{\mathrm{T}}$ [GeV]",
-        "variables": ["RawPuppiMETType1_pt", "RawPuppiMETType1_MuonGood_pt"],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "RawPuppiMET_PNet_pt": {
-        "plot_name": r"RawPuppiMET PNet $p_{\mathrm{T}}$ [GeV]",
-        "variables": ["RawPuppiMETPNet_pt", "RawPuppiMETPNet_MuonGood_pt"],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "RawPuppiMET_PNetPlusNeutrino_pt": {
-        "plot_name": r"RawPuppiMET PNetPlusNeutrino $p_{\mathrm{T}}$ [GeV]",
-        "variables": [
-            "RawPuppiMETPNetPlusNeutrino_pt",
-            "RawPuppiMETPNetPlusNeutrino_MuonGood_pt",
-        ],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "PuppiMET_pt": {
-        "plot_name": r"PuppiMET $p_{\mathrm{T}}$ [GeV]",
-        "variables": ["PuppiMET_pt", "PuppiMET_MuonGood_pt"],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "PuppiMETType1_pt": {
-        "plot_name": r"PuppiMETType1 $p_{\mathrm{T}}$ [GeV]",
-        "variables": ["PuppiMETType1_pt", "PuppiMETType1_MuonGood_pt"],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "PuppiMET_PNet_pt": {
-        "plot_name": r"PuppiMET PNet $p_{\mathrm{T}}$ [GeV]",
-        "variables": ["PuppiMETPNet_pt", "PuppiMETPNet_MuonGood_pt"],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
-    "PuppiMET_PNetPlusNeutrino_pt": {
-        "plot_name": r"PuppiMET PNetPlusNeutrino $p_{\mathrm{T}}$ [GeV]",
-        "variables": [
-            "PuppiMETPNetPlusNeutrino_pt",
-            "PuppiMETPNetPlusNeutrino_MuonGood_pt",
-        ],
-        "range": (0, 200),
-        "log": True,
-        "ratio_label": "u / MET",
-    },
+    # "RawPuppiMET_pt": {
+    #     "plot_name": r"RawPuppiMET $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": ["RawPuppiMET_pt", "hadronic_recoil_RawPuppiMET_pt"],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "RawPuppiMETType1_pt": {
+    #     "plot_name": r"RawPuppiMETType1 $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": ["RawPuppiMETType1_pt", "hadronic_recoil_RawPuppiMETType1_pt"],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "RawPuppiMET_PNet_pt": {
+    #     "plot_name": r"RawPuppiMET PNet $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": ["RawPuppiMETPNet_pt", "hadronic_recoil_RawPuppiMETPNet_pt"],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "RawPuppiMET_PNetPlusNeutrino_pt": {
+    #     "plot_name": r"RawPuppiMET PNetPlusNeutrino $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": [
+    #         "RawPuppiMETPNetPlusNeutrino_pt",
+    #         "hadronic_recoil_RawPuppiMETPNetPlusNeutrino_pt",
+    #     ],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "PuppiMET_pt": {
+    #     "plot_name": r"PuppiMET $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": ["PuppiMET_pt", "hadronic_recoil_PuppiMET_pt"],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "PuppiMETType1_pt": {
+    #     "plot_name": r"PuppiMETType1 $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": ["PuppiMETType1_pt", "hadronic_recoil_PuppiMETType1_pt"],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "PuppiMET_PNet_pt": {
+    #     "plot_name": r"PuppiMET PNet $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": ["PuppiMETPNet_pt", "hadronic_recoil_PuppiMETPNet_pt"],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
+    # "PuppiMET_PNetPlusNeutrino_pt": {
+    #     "plot_name": r"PuppiMET PNetPlusNeutrino $p_{\mathrm{T}}$ [GeV]",
+    #     "variables": [
+    #         "PuppiMETPNetPlusNeutrino_pt",
+    #         "hadronic_recoil_PuppiMETPNetPlusNeutrino_pt",
+    #     ],
+    #     "range": (0, 200),
+    #     "log": True,
+    #     "ratio_label": "u / MET",
+    # },
 }
+total_var_dict.update(hadronic_recoil_dict)
 
 response_var_name_dict = {
     "R": r"$-u_{\parallel}/q_{T}$",
@@ -259,4 +272,4 @@ qT_bins = np.array(
 
 hep.style.use("CMS")
 color_dict = list(hep.style.CMS["axes.prop_cycle"])
-color_list = [cycle["color"] for cycle in color_dict] + ["black", "green", "blue"]
+color_list = [cycle["color"] for cycle in color_dict] + ["black", "darkgreen", "blue", "lightgreen"]

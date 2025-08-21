@@ -47,6 +47,22 @@ common_cats = {
     "baseline": [passthrough],
 }
 
+met_vars = ["pt", "phi"]
+recoil_vars = ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]
+
+tot_cols = []
+for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
+    for raw in ["Raw", ""]:
+        for type1 in [
+            "",
+            "-Type1",
+            "-Type1JEC",
+            "-Type1PNet",
+            "-Type1PNetPlusNeutrino",
+        ]:
+
+            tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
+
 cfg = Configurator(
     parameters=parameters,
     datasets={
@@ -58,8 +74,8 @@ cfg = Configurator(
         "filter": {
             "samples": [
                 (
-                    "DYJetsToLL_M-50"
-                    # "DYJetsToLL_M-50_local"
+                    # "DYJetsToLL_M-50"
+                    "DYJetsToLL_M-50_local"
                 )
             ],
             "samples_exclude": [],
@@ -113,48 +129,49 @@ cfg = Configurator(
             "inclusive": [
                 ColOut("ll", ["mass", "pt", "eta", "phi"]),
                 ColOut("GenMET", ["pt", "phi"]),
-                # ColOut("GenMETPlusNeutrino", ["pt", "phi"]),
-                ColOut("RawPuppiMET", ["pt", "phi"]),
-                ColOut("RawPuppiMETType1", ["pt", "phi"]),
-                ColOut("RawPuppiMETPNet", ["pt", "phi"]),
-                ColOut("RawPuppiMETPNetPlusNeutrino", ["pt", "phi"]),
-                ColOut("PuppiMET", ["pt", "phi"]),
-                ColOut("PuppiMETType1", ["pt", "phi"]),
-                ColOut("PuppiMETPNet", ["pt", "phi"]),
-                ColOut("PuppiMETPNetPlusNeutrino", ["pt", "phi"]),
-                ColOut(
-                    "RawPuppiMET_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "RawPuppiMETType1_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "RawPuppiMETPNet_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "RawPuppiMETPNetPlusNeutrino_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "PuppiMET_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "PuppiMETType1_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "PuppiMETPNet_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
-                ColOut(
-                    "PuppiMETPNetPlusNeutrino_MuonGood",
-                    ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
-                ),
             ]
+            + tot_cols
+            #     ColOut("RawPuppiMET", ["pt", "phi"]),
+            #     ColOut("RawPuppiMETType1", ["pt", "phi"]),
+            #     ColOut("RawPuppiMETPNet", ["pt", "phi"]),
+            #     ColOut("RawPuppiMETPNetPlusNeutrino", ["pt", "phi"]),
+            #     ColOut("PuppiMET", ["pt", "phi"]),
+            #     ColOut("PuppiMETType1", ["pt", "phi"]),
+            #     ColOut("PuppiMETPNet", ["pt", "phi"]),
+            #     ColOut("PuppiMETPNetPlusNeutrino", ["pt", "phi"]),
+            #     ColOut(
+            #         "hadronic_recoil_RawPuppiMET",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_RawPuppiMETType1",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_RawPuppiMETPNet",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_RawPuppiMETPNetPlusNeutrino",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_PuppiMET",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_PuppiMETType1",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_PuppiMETPNet",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            #     ColOut(
+            #         "hadronic_recoil_PuppiMETPNetPlusNeutrino",
+            #         ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"],
+            #     ),
+            # ]
         },
         "bysample": {},
     },
