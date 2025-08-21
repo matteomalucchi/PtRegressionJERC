@@ -1,7 +1,7 @@
 import awkward as ak
 import numpy as np
 
-from configs.jme.params.binning import *
+# from configs.jme.params.binning import *
 
 
 
