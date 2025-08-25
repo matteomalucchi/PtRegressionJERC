@@ -73,6 +73,9 @@ class METProcessor(BaseProcessorABC):
                 < (13.6 * 1000) / 2
             )
             self.events["JetGood"] = self.events["JetGood"][physisical_jet_mask]
+        
+        reg_mask= self.events["JetGood"].PNetRegPtRawCorr>0
+        self.events["JetGood"] = self.events["JetGood"][reg_mask]
 
         # Create extra Jet collections for calibration
         self.events["JetGoodJEC"] = ak.copy(self.events["JetGood"])
