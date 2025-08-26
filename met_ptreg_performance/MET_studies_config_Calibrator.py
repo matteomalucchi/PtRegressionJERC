@@ -74,8 +74,8 @@ cfg = Configurator(
         "filter": {
             "samples": [
                 (
-                    # "DYJetsToLL_M-50"
-                    "DYJetsToLL_M-50_local"
+                    "DYJetsToLL_M-50"
+                    # "DYJetsToLL_M-50_local"
                 )
             ],
             "samples_exclude": [],

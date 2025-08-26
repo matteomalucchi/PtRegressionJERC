@@ -13,8 +13,9 @@ from multiprocessing import Pool
 import matplotlib
 
 from utils.plot.get_columns_from_files import get_columns_from_files
-from plot_config import response_var_name_dict, qT_bins, color_list, met_list
+from plot_config import response_var_name_dict, qT_bins, met_dict_names
 from utils.plot.plotting import plot_1d_histograms
+from utils.plot.HEPPlotter import HEPPlotter
 
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
 parser.add_argument(
@@ -41,6 +42,9 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 args = parser.parse_args()
 
 
+cms_plotter = HEPPlotter(figsize=[13, 13])
+
+
 qT_bin_centers = []
 for i in range(1, len(qT_bins)):
     qT_bin_centers.append((qT_bins[i] + qT_bins[i - 1]) / 2.0)
@@ -52,10 +56,14 @@ outputdir = args.output if args.output else "plots_MET_response"
 if not os.path.exists(outputdir):
     os.makedirs(outputdir)
 
-histograms_dir = os.path.join(outputdir, "1d_histograms")
+response_dir = os.path.join(outputdir, "response_curves")
+if not os.path.exists(response_dir):
+    os.makedirs(response_dir)
+
+histograms_dir = os.path.join(outputdir, "1d_response_histograms")
 if not os.path.exists(histograms_dir):
     os.makedirs(histograms_dir)
-histograms_2d_dir = os.path.join(outputdir, "2d_histograms")
+histograms_2d_dir = os.path.join(outputdir, "2d_response_histograms")
 if not os.path.exists(histograms_2d_dir):
     os.makedirs(histograms_2d_dir)
 
@@ -90,35 +98,38 @@ def compute_u_info(u_i, weights_i, distribution_name, hists_dict):
     # compute mean
     mean_u_i, err_mean_u_i = weighted_mean(u_i, weights_i)
 
-    hists_dict[f"{distribution_name}_mean"][0].append(mean_u_i)
-    hists_dict[f"{distribution_name}_mean"][1].append(err_mean_u_i)
+    hists_dict[f"{distribution_name}_mean"]["values"].append(mean_u_i)
+    hists_dict[f"{distribution_name}_mean"]["errors"].append(err_mean_u_i)
 
     # compute quantiles
-    hists_dict[f"{distribution_name}_quantile_resolution"][0].append(
+    hists_dict[f"{distribution_name}_quantile_resolution"]["values"].append(
         (np.quantile(u_i, 0.84) - np.quantile(u_i, 0.16)) / 2.0,
     )
     # TODO: compute error on quantile
-    hists_dict[f"{distribution_name}_quantile_resolution"][1].append(0)
+    hists_dict[f"{distribution_name}_quantile_resolution"]["errors"].append(0)
 
     # compute standard deviation
     stddev_u_i, err_stddev_u_i = weighted_std_dev(u_i, weights_i)
-    hists_dict[f"{distribution_name}_stddev_resolution"][0].append(stddev_u_i)
-    hists_dict[f"{distribution_name}_stddev_resolution"][1].append(err_stddev_u_i)
+    hists_dict[f"{distribution_name}_stddev_resolution"]["values"].append(stddev_u_i)
+    hists_dict[f"{distribution_name}_stddev_resolution"]["errors"].append(
+        err_stddev_u_i
+    )
 
 
-def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges):
+def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges, style):
 
     h = (
         Hist.new.Var(qT_bins, name="qT", label=r"Z q$_{\mathrm{T}}$ [GeV]", flow=False)
         .Var(bin_edges, name=distribution_name, label=distribution_name, flow=False)
         .Weight()
     )
-
+    h.style = style
     h.fill(
         qT_arr,
         u,
         weight=weights,
     )
+
     hists_dict[f"{distribution_name}"] = h
 
 
@@ -131,11 +142,11 @@ def create_reponses_info(qT_arr, u_dict, weights):
 
     all_responses = {}
     all_hists = {}
-    for met_type in met_list:
-        met_type=f"u{met_type}"
+    for met_type, style in met_dict_names.items():
+        met_type = f"u{met_type}"
         print(met_type)
         assert met_type in u_dict, f"MET type {met_type} not found in u_dict"
-        
+
         for var_name in u_dict[met_type]:
             if "u_perp" in var_name:
                 u_perp_arr = u_dict[met_type][var_name]
@@ -148,9 +159,23 @@ def create_reponses_info(qT_arr, u_dict, weights):
         R_bin_edges = np.linspace(-2, 2, 30)
         u_bin_edges = np.linspace(-200, 200, 30)
 
-        create_hist(all_hists[met_type], qT_arr, R_arr, weights, "R", R_bin_edges)
         create_hist(
-            all_hists[met_type], qT_arr, u_perp_arr, weights, "u_perp", u_bin_edges
+            all_hists[met_type],
+            qT_arr,
+            R_arr,
+            weights,
+            "R",
+            R_bin_edges,
+            style,
+        )
+        create_hist(
+            all_hists[met_type],
+            qT_arr,
+            u_perp_arr,
+            weights,
+            "u_perp",
+            u_bin_edges,
+            style,
         )
         # TODO: fix the scaling
         create_hist(
@@ -160,9 +185,16 @@ def create_reponses_info(qT_arr, u_dict, weights):
             weights,
             "u_perp_scaled",
             u_bin_edges,
+            style,
         )
         create_hist(
-            all_hists[met_type], qT_arr, u_par_arr, weights, "u_paral", u_bin_edges
+            all_hists[met_type],
+            qT_arr,
+            u_par_arr,
+            weights,
+            "u_paral",
+            u_bin_edges,
+            style,
         )
         # TODO: fix the scaling
         create_hist(
@@ -172,57 +204,86 @@ def create_reponses_info(qT_arr, u_dict, weights):
             weights,
             "u_paral_scaled",
             u_bin_edges,
+            style,
         )
         # breakpoint()
 
-        all_responses[met_type] = defaultdict(lambda: [[], []])
-        # continue
+        all_responses[met_type] = defaultdict(defaultdict)
 
         for i in range(1, len(bin_edges)):
             weights_i = weights[np.where(inds == i)[0]]
 
-            # Response
+            # Define quantities for this qT bin
             R_i = R_arr[np.where(inds == i)[0]]
             av_R_i, _ = weighted_mean(R_i, weights_i)
-            compute_u_info(R_i, weights_i, "R", all_responses[met_type])
-
-            # compute mean and standard deviation
-
-            # U perpendicular
             u_perp_i = u_perp_arr[np.where(inds == i)[0]]
-            compute_u_info(
-                u_perp_i,
-                weights_i,
-                "u_perp",
-                all_responses[met_type],
-            )
-
             u_perp_scaled_i = u_perp_i / av_R_i
-            compute_u_info(
-                u_perp_scaled_i,
-                weights_i,
-                "u_perp_scaled",
-                all_responses[met_type],
-            )
-
-            # U parallel
             u_par_i = u_par_arr[np.where(inds == i)[0]]
-            compute_u_info(
-                u_par_i,
-                weights_i,
-                "u_par",
-                all_responses[met_type],
-            )
-
             u_par_scaled_i = u_par_i / av_R_i
-            compute_u_info(
-                u_par_scaled_i,
-                weights_i,
-                "u_par_scaled",
-                all_responses[met_type],
-            )
 
+            u_info_dict = {
+                "R": R_i,
+                "u_perp": u_perp_i,
+                "u_perp_scaled": u_perp_scaled_i,
+                "u_par": u_par_i,
+                "u_par_scaled": u_par_scaled_i,
+            }
 
+            if i == 1:
+                # initialize the dicts and add style info
+                for var in u_info_dict:
+                    all_responses[met_type][f"{var}_mean"] = {
+                        "values": [],
+                        "errors": [],
+                        "style": style,
+                    }
+                    all_responses[met_type][f"{var}_quantile_resolution"] = {
+                        "values": [],
+                        "errors": [],
+                        "style": style,
+                    }
+                    all_responses[met_type][f"{var}_stddev_resolution"] = {
+                        "values": [],
+                        "errors": [],
+                        "style": style,
+                    }
+
+            for var, u_arr in u_info_dict.items():
+                compute_u_info(u_arr, weights_i, var, all_responses[met_type])
+
+            # compute_u_info(R_i, weights_i, "R", all_responses[met_type])
+
+            # # U perpendicular
+            # compute_u_info(
+            #     u_perp_i,
+            #     weights_i,
+            #     "u_perp",
+            #     all_responses[met_type],
+            # )
+
+            # compute_u_info(
+            #     u_perp_scaled_i,
+            #     weights_i,
+            #     "u_perp_scaled",
+            #     all_responses[met_type],
+            # )
+
+            # # U parallel
+            # compute_u_info(
+            #     u_par_i,
+            #     weights_i,
+            #     "u_par",
+            #     all_responses[met_type],
+            # )
+
+            # compute_u_info(
+            #     u_par_scaled_i,
+            #     weights_i,
+            #     "u_par_scaled",
+            #     all_responses[met_type],
+            # )
+
+    # breakpoint()
     # change the gerarchy of the keys
     reponses_dict = {}
     for met_type in all_responses:
@@ -238,90 +299,275 @@ def create_reponses_info(qT_arr, u_dict, weights):
                 hists_dict[var_name] = {}
             hists_dict[var_name][met_type] = all_hists[met_type][var_name]
 
+    # breakpoint()
     return reponses_dict, hists_dict
 
 
+# def old_plot_reponses(reponses_dict, cat):
+#     for var_name in reponses_dict:
+#         print(f"Plotting response for {var_name} in category {cat}")
+#         fig, ax = plt.subplots()
+#         for i, met_type in enumerate(reponses_dict[var_name]):
+#             ax.errorbar(
+#                 qT_bin_centers,
+#                 reponses_dict[var_name][met_type][0],
+#                 xerr=(qT_bins[1:] - qT_bins[:-1]) / 2.0,
+#                 yerr=reponses_dict[var_name][met_type][1],
+#                 label=met_type,
+#                 color=color_list[i],
+#                 fmt=".",
+#             )
+#         ax.legend(loc="best")
+#         ax.set_xlabel(r"Z q$_{\mathrm{T}}$ [GeV]")
+#         ax.set_ylabel(
+#             var_name
+#             if var_name not in response_var_name_dict
+#             else response_var_name_dict[var_name]
+#         )
+#         hep.cms.lumitext(r"(13.6 TeV)", ax=ax)
+#         hep.cms.text(text="Preliminary", ax=ax)
+#         fig.savefig(f"{outputdir}/{cat}_{var_name}.png", bbox_inches="tight", dpi=300)
+#         fig.savefig(f"{outputdir}/{cat}_{var_name}.pdf", bbox_inches="tight", dpi=300)
+#         fig.savefig(f"{outputdir}/{cat}_{var_name}.svg", bbox_inches="tight", dpi=300)
+#         plt.close(fig)
+
+
+# def plot_reponses(reponses_dict, cat):
+#     for var_name in reponses_dict:
+#         print(f"Plotting response for {var_name} in category {cat}")
+#         y_label = (
+#             var_name
+#             if var_name not in response_var_name_dict
+#             else response_var_name_dict[var_name]
+#         )
+#         cms_plotter.plot_curves(
+#             reponses_dict[var_name],
+#             f"{outputdir}/{cat}_{var_name}",
+#             qT_bins,
+#             xlabel=r"Z q$_{\mathrm{T}}$ [GeV]",
+#             ylabel=y_label,
+#         )
+
+
+
+
+# def plot_2d_response_histograms(hists_dict, cat):
+#     plotting_info_list = []
+#     for var_name in hists_dict:
+#         print(f"Plotting 2d histogram for {var_name} in category {cat}")
+#         ylabel = (
+#             var_name
+#             if var_name not in response_var_name_dict
+#             else response_var_name_dict[var_name]
+#         )
+#         for met_type in hists_dict[var_name]:
+#             if args.workers > 1:
+#                 plotting_info_list.append(
+#                     **{
+#                         "hist2d": hists_dict[var_name][met_type],
+#                         "output_base": f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}",
+#                         "xlabel": r"Z q$_{\mathrm{T}}$ [GeV]",
+#                         "ylabel": ylabel,
+#                         "log_scale": True,
+#                         "label": f"{var_name} {met_type}",
+#                     }
+#                 )
+#             else:
+#                 cms_plotter.plot_2d_histogram(
+#                     hist2d=hists_dict[var_name][met_type],
+#                     output_base=f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}",
+#                     xlabel=r"Z q$_{\mathrm{T}}$ [GeV]",
+#                     ylabel=ylabel,
+#                     log_scale=True,
+#                     label=f"{var_name} {met_type}",
+#                 )
+#     if args.workers > 1:
+#         with Pool(args.workers) as pool:
+#             pool.starmap(
+#                 functools.partial(
+#                     cms_plotter.plot_2d_histogram,
+#                 ),
+#                 plotting_info_list,
+#             )
+
+
+# top-level helper (picklable)
+def _plot_curves_wrapper(kwargs):
+    return cms_plotter.plot_curves(**kwargs)
+
+
 def plot_reponses(reponses_dict, cat):
+    plotting_info_list = []
     for var_name in reponses_dict:
         print(f"Plotting response for {var_name} in category {cat}")
-        fig, ax = plt.subplots()
-        for i, met_type in enumerate(reponses_dict[var_name]):
-            ax.errorbar(
-                qT_bin_centers,
-                reponses_dict[var_name][met_type][0],
-                xerr=(qT_bins[1:] - qT_bins[:-1]) / 2.0,
-                yerr=reponses_dict[var_name][met_type][1],
-                label=met_type,
-                color=color_list[i],
-                fmt=".",
-            )
-        ax.legend(loc="best")
-        ax.set_xlabel(r"Z q$_{\mathrm{T}}$ [GeV]")
-        ax.set_ylabel(
+        y_label = (
             var_name
             if var_name not in response_var_name_dict
             else response_var_name_dict[var_name]
         )
-        hep.cms.lumitext(r"(13.6 TeV)", ax=ax)
-        hep.cms.text(text="Preliminary", ax=ax)
-        fig.savefig(f"{outputdir}/{cat}_{var_name}.png", bbox_inches="tight", dpi=300)
-        fig.savefig(f"{outputdir}/{cat}_{var_name}.pdf", bbox_inches="tight", dpi=300)
-        fig.savefig(f"{outputdir}/{cat}_{var_name}.svg", bbox_inches="tight", dpi=300)
-        plt.close(fig)
+
+        info = {
+            "series_dict": reponses_dict[var_name],
+            "output_base": f"{response_dir}/{cat}_{var_name}",
+            "x_bins": qT_bins,
+            "xlabel": r"Z q$_{\mathrm{T}}$ [GeV]",
+            "ylabel": y_label,
+        }
+
+        if args.workers > 1:
+            plotting_info_list.append(info)
+        else:
+            cms_plotter.plot_curves(**info)
+
+    if args.workers > 1:
+        with Pool(args.workers) as pool:
+            pool.map(_plot_curves_wrapper, plotting_info_list)
+
+
+# put this at top-level (outside your function)
+def _plot_2d_wrapper(kwargs):
+    return cms_plotter.plot_2d_histogram(**kwargs)
 
 
 def plot_2d_response_histograms(hists_dict, cat):
+    plotting_info_list = []
     for var_name in hists_dict:
         print(f"Plotting 2d histogram for {var_name} in category {cat}")
+        ylabel = (
+            var_name
+            if var_name not in response_var_name_dict
+            else response_var_name_dict[var_name]
+        )
         for met_type in hists_dict[var_name]:
-            fig, ax = plt.subplots()
-            hist = hists_dict[var_name][met_type]
+            info = {
+                "hist2d": hists_dict[var_name][met_type],
+                "output_base": f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}",
+                "xlabel": r"Z q$_{\mathrm{T}}$ [GeV]",
+                "ylabel": ylabel,
+                "log_scale": True,
+                "label": f"{var_name} {met_type}",
+            }
+            if args.workers > 1:
+                plotting_info_list.append(info)
+            else:
+                cms_plotter.plot_2d_histogram(**info)
 
-            hep.hist2dplot(
-                hist,
-                ax=ax,
-                # xaxis="qT",
-                # yaxis=var_name,
-                label=met_type,
-                cmap="viridis",
-                norm=matplotlib.colors.LogNorm(),
-            )
-            ax.set_xlabel(r"Z q$_{\mathrm{T}}$ [GeV]")
-            ax.set_ylabel(
-                var_name
-                if var_name not in response_var_name_dict
-                else response_var_name_dict[var_name]
-            )
-            ax.legend(loc="best")
-            hep.cms.lumitext(r"(13.6 TeV)", ax=ax)
-            hep.cms.text(text="Preliminary", ax=ax)
-            fig.savefig(
-                f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}.png",
-                bbox_inches="tight",
-                dpi=300,
-            )
-            fig.savefig(
-                f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}.pdf",
-                bbox_inches="tight",
-                dpi=300,
-            )
-            fig.savefig(
-                f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}.svg",
-                bbox_inches="tight",
-                dpi=300,
-            )
-            plt.close(fig)
+    if args.workers > 1:
+        with Pool(args.workers) as pool:
+            pool.map(_plot_2d_wrapper, plotting_info_list)
 
-def plot_1d_histograms_parallel(plotting_info, log_scale, ratio_label):
-    hists_dict, output_name, var_label = plotting_info
-    print(f"Plotting 1d histogram in parallel for {output_name} with label {var_label}")
-    plot_1d_histograms(
-        hists_dict=hists_dict,
-        output_name=output_name,
-        var_label=var_label,
-        log_scale=log_scale,
-        ratio_label=ratio_label,
-    )
+
+# def old_plot_2d_response_histograms(hists_dict, cat):
+#     for var_name in hists_dict:
+#         print(f"Plotting 2d histogram for {var_name} in category {cat}")
+#         for met_type in hists_dict[var_name]:
+#             fig, ax = plt.subplots()
+#             hist = hists_dict[var_name][met_type]
+
+#             hep.hist2dplot(
+#                 hist,
+#                 ax=ax,
+#                 # xaxis="qT",
+#                 # yaxis=var_name,
+#                 label=met_type,
+#                 cmap="viridis",
+#                 norm=matplotlib.colors.LogNorm(),
+#             )
+#             ax.set_xlabel(r"Z q$_{\mathrm{T}}$ [GeV]")
+#             ax.set_ylabel(
+#                 var_name
+#                 if var_name not in response_var_name_dict
+#                 else response_var_name_dict[var_name]
+#             )
+#             ax.legend(loc="best")
+#             hep.cms.lumitext(r"(13.6 TeV)", ax=ax)
+#             hep.cms.text(text="Preliminary", ax=ax)
+#             fig.savefig(
+#                 f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}.png",
+#                 bbox_inches="tight",
+#                 dpi=300,
+#             )
+#             fig.savefig(
+#                 f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}.pdf",
+#                 bbox_inches="tight",
+#                 dpi=300,
+#             )
+#             fig.savefig(
+#                 f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}.svg",
+#                 bbox_inches="tight",
+#                 dpi=300,
+#             )
+#             plt.close(fig)
+
+
+# def plot_1d_histograms_parallel(plotting_info, log_scale, ratio_label):
+#     hists_dict, output_name, var_label = plotting_info
+#     print(f"Plotting 1d histogram in parallel for {output_name} with label {var_label}")
+#     plot_1d_histograms(
+#         hists_dict=hists_dict,
+#         output_name=output_name,
+#         var_label=var_label,
+#         log_scale=log_scale,
+#         ratio_label=ratio_label,
+#     )
+
+
+# def plot_1d_response_histograms(hists_dict, cat):
+#     # for each bin on qT, plot the distribution of the variable
+#     plotting_info_list = []
+#     for i in range(len(qT_bins) - 1):
+#         bin_edges_string = f"{qT_bins[i]}_{qT_bins[i+1]}"
+#         for var_name in hists_dict:
+#             hist_1d_dict = {}
+#             for met_type in hists_dict[var_name]:
+#                 hist = hists_dict[var_name][met_type]
+#                 # Select the bin corresponding to the current qT bin
+#                 hist_1d_u = hist[{"qT": i}]
+#                 # ratio_hist_den = True if met_type == "RawPuppiMET" else False
+#                 hist_1d_dict[met_type] = {
+#                     "data": hist_1d_u,
+#                     # "is_reference": ratio_hist_den,
+#                     "style": hist.style,
+#                 }
+#             output_name = f"{histograms_dir}/{cat}_{var_name}_{bin_edges_string}"
+#             var_label = (
+#                 var_name
+#                 if var_name not in response_var_name_dict
+#                 else response_var_name_dict[var_name]
+#             )
+#             if args.workers > 1:
+#                 plotting_info_list.append(
+#                     {
+#                         "series_dict": hist_1d_dict,
+#                         "output_base": output_name,
+#                         "xlabel": var_label,
+#                         "ylabel": "Events",
+#                         "log_scale": False,
+#                         "ratio_label": None,
+#                     }
+#                 )
+#             else:
+#                 cms_plotter.plot_1d_histograms(
+#                     series_dict=hist_1d_dict,
+#                     output_base=output_name,
+#                     xlabel=var_label,
+#                     ylabel="Events",
+#                     log_scale=False,
+#                     ratio_label=None,
+#                 )
+
+#     if args.workers > 1:
+#         with Pool(args.workers) as pool:
+#             pool.starmap(
+#                 functools.partial(
+#                     cms_plotter.plot_1d_histograms
+#                 ),
+#                 plotting_info_list,
+#             )
+
+# top-level helper (outside the function, so it's picklable)
+def _plot_1d_wrapper(kwargs):
+    return cms_plotter.plot_1d_histograms(**kwargs)
 
 
 def plot_1d_response_histograms(hists_dict, cat):
@@ -331,37 +577,39 @@ def plot_1d_response_histograms(hists_dict, cat):
         bin_edges_string = f"{qT_bins[i]}_{qT_bins[i+1]}"
         for var_name in hists_dict:
             hist_1d_dict = {}
-            for j, met_type in enumerate(hists_dict[var_name]):
+            for met_type in hists_dict[var_name]:
                 hist = hists_dict[var_name][met_type]
                 # Select the bin corresponding to the current qT bin
                 hist_1d_u = hist[{"qT": i}]
-                ratio_hist_den = True if met_type == "RawPuppiMET" else False
-                hist_1d_dict[met_type] = (hist_1d_u, ratio_hist_den, color_list[j])
-                output_name = f"{histograms_dir}/{cat}_{var_name}_{bin_edges_string}"
-                var_label = (
-                    var_name
-                    if var_name not in response_var_name_dict
-                    else response_var_name_dict[var_name]
-                )
-                if args.workers > 1:
-                    plotting_info_list.append((hist_1d_dict, output_name, var_label))
-                else:
-                    plot_1d_histograms(
-                        hists_dict=hist_1d_dict,
-                        output_name=output_name,
-                        var_label=var_label,
-                        log_scale=False,
-                        ratio_label=None,
-                    )
+                hist_1d_dict[met_type] = {
+                    "data": hist_1d_u,
+                    "style": hist.style,
+                }
+
+            output_name = f"{histograms_dir}/{cat}_{var_name}_{bin_edges_string}"
+            var_label = (
+                var_name
+                if var_name not in response_var_name_dict
+                else response_var_name_dict[var_name]
+            )
+
+            info = {
+                "series_dict": hist_1d_dict,
+                "output_base": output_name,
+                "xlabel": var_label,
+                "ylabel": "Events",
+                "log_scale": False,
+                "ratio_label": None,
+            }
+
+            if args.workers > 1:
+                plotting_info_list.append(info)
+            else:
+                cms_plotter.plot_1d_histograms(**info)
 
     if args.workers > 1:
         with Pool(args.workers) as pool:
-            pool.starmap(
-                functools.partial(
-                    plot_1d_histograms, log_scale=False, ratio_label=None
-                ),
-                plotting_info_list,
-            )
+            pool.map(_plot_1d_wrapper, plotting_info_list)
 
 
 def make_plots(cat_col):
@@ -372,9 +620,7 @@ def make_plots(cat_col):
 
         u_dict = {}
         for var in col_dict:
-            if any(
-                x in var for x in ["u_perp_predict", "u_paral_predict", "response"]
-            ):
+            if any(x in var for x in ["u_perp_predict", "u_paral_predict", "response"]):
                 coll = var.split("_")[0]
                 if coll not in u_dict:
                     u_dict[coll] = {}
@@ -382,7 +628,7 @@ def make_plots(cat_col):
                 u_dict[coll][var] = col_dict[var]
             elif "weight" in var:
                 weights = col_dict[var]
-        
+
         reponses_dict, hists_dict = create_reponses_info(v_qT, u_dict, weights)
         plot_reponses(reponses_dict, cat)
         if args.histo:
@@ -400,6 +646,5 @@ if __name__ == "__main__":
 
     cat_col, total_datasets_list = get_columns_from_files(inputfiles_data)
     print(f"Total datasets found: {total_datasets_list}")
-    print(cat_col)
 
     make_plots(cat_col)
