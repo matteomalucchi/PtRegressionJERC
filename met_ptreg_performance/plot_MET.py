@@ -150,7 +150,9 @@ def compute_u_info(u_i, weights_i, distribution_name, hists_dict):
 
     stddev_u_i, err_stddev_u_i = weighted_std_dev(u_i, weights_i)
     hists_dict[f"{distribution_name}_stddev_resolution"]["values"].append(stddev_u_i)
-    hists_dict[f"{distribution_name}_stddev_resolution"]["errors"].append(err_stddev_u_i)
+    hists_dict[f"{distribution_name}_stddev_resolution"]["errors"].append(
+        err_stddev_u_i
+    )
 
 
 def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges, style):
@@ -203,7 +205,7 @@ def create_reponses_info(qT_arr, u_dict, weights):
         Nested dictionary with response summaries (mean, stddev, quantiles).
     hists_dict : dict
         Nested dictionary with histograms for each variable and MET type.
-    """    # compute mean of all metrics in summary
+    """  # compute mean of all metrics in summary
 
     bin_edges = qT_bins
 
@@ -323,14 +325,14 @@ def create_met_histos(col_var, category, plotting_info_list):
     plotting_info_list : list
         List to be filled with histogram plotting configurations.
     """
-    
+
     for quantity_name, var_dict in total_var_dict.items():
 
         hist_1d_dict = {}
         ref_var = var_dict["reference"]
 
         for i, variable in enumerate(var_dict["variables"]):
-            print(f"Preparing {category} - {quantity_name} - {variable}")
+            # print(f"Preparing {category} - {quantity_name} - {variable}")
             col_num = col_var[variable]
             col_den = col_var[ref_var]  # only used for masking
             var_name = variable.split("_")[0]
@@ -386,8 +388,8 @@ def plot_reponses(reponses_dict, cat):
         Response summary information from `create_reponses_info`.
     cat : str
         Category name.
-    """ 
-       
+    """
+
     plotting_info_list = []
     for var_name in reponses_dict:
         print(f"Plotting response for {var_name} in category {cat}")
@@ -415,7 +417,6 @@ def plot_reponses(reponses_dict, cat):
             pool.map(cms_plotter.plot_curves_pool_map, plotting_info_list)
 
 
-
 def plot_2d_response_histograms(hists_dict, cat):
     """
     Plot 2D histograms (qT vs variable) for each MET type.
@@ -427,7 +428,7 @@ def plot_2d_response_histograms(hists_dict, cat):
     cat : str
         Category name.
     """
-    
+
     plotting_info_list = []
     for var_name in hists_dict:
         print(f"Plotting 2d histogram for {var_name} in category {cat}")
@@ -455,7 +456,6 @@ def plot_2d_response_histograms(hists_dict, cat):
             pool.map(cms_plotter.plot_2d_histograms_pool_map, plotting_info_list)
 
 
-
 def plot_1d_response_histograms(hists_dict, cat):
     """
     Plot 1D histograms of variables in each qT bin.
@@ -467,7 +467,7 @@ def plot_1d_response_histograms(hists_dict, cat):
     cat : str
         Category name.
     """
-    
+
     # for each bin on qT, plot the distribution of the variable
     plotting_info_list = []
     for i in range(len(qT_bins) - 1):
@@ -489,6 +489,14 @@ def plot_1d_response_histograms(hists_dict, cat):
                 if var_name not in response_var_name_dict
                 else response_var_name_dict[var_name]
             )
+            annotations = [
+                {
+                    "x": 0.05,
+                    "y": 0.9,
+                    "text": f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ < {qT_bins[i+1]} GeV",
+                    "fontsize":20
+                }
+            ]
 
             info = {
                 "series_dict": hist_1d_dict,
@@ -497,6 +505,7 @@ def plot_1d_response_histograms(hists_dict, cat):
                 "ylabel": "Events",
                 "log_scale": False,
                 "ratio_label": None,
+                "annotations": annotations,
             }
 
             if args.workers > 1:
@@ -518,7 +527,7 @@ def plot_histo_met(plotting_info_list):
     plotting_info_list : list
         List of histogram plotting configurations.
     """
-    
+
     if args.workers > 1:
         with Pool(args.workers) as pool:
             pool.map(cms_plotter.plot_1d_histograms_pool_map, plotting_info_list)

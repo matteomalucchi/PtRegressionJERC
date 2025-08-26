@@ -17,14 +17,14 @@ marker_list = ["o", "s", "^", "D", "v", "P", "*", "X", "<", ">"]
 met_list = [
     "RawPuppiMET",
     "RawPuppiMET-Type1",
-    # "RawPuppiMET-Type1JEC",
-    # "RawPuppiMET-Type1PNet",
-    # "RawPuppiMET-Type1PNetPlusNeutrino",
-    # "PuppiMET",
-    # "PuppiMET-Type1",
-    # "PuppiMET-Type1JEC",
-    # "PuppiMET-Type1PNet",
-    # "PuppiMET-Type1PNetPlusNeutrino",
+    "RawPuppiMET-Type1JEC",
+    "RawPuppiMET-Type1PNet",
+    "RawPuppiMET-Type1PNetPlusNeutrino",
+    "PuppiMET",
+    "PuppiMET-Type1",
+    "PuppiMET-Type1JEC",
+    "PuppiMET-Type1PNet",
+    "PuppiMET-Type1PNetPlusNeutrino",
 ]
 met_dict_names = {
     met: {
