@@ -42,7 +42,6 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 
 args = parser.parse_args()
 
-# cms_plotter = HEPPlotter(figsize=[17, 13], data_formats=["png"])
 
 outputdir = args.output if args.output else "plots_MET"
 # Create output directory if it does not exist
@@ -285,41 +284,6 @@ def create_reponses_info(qT_arr, u_dict, weights):
                             (bin_edges[1:] - bin_edges[:-1]) / 2.0
                         ).tolist()
                         
-                    # all_responses[met_type][f"{var}_mean"] = {
-                    #     "data": {"x": ([], []), "y": ([], [])},
-                    #     "style": style,
-                    # }
-                    # all_responses[met_type][f"{var}_quantile_resolution"] = {
-                    #     "data": {"x": ([], []), "y": ([], [])},
-                    #     "style": style,
-                    # }
-                    # all_responses[met_type][f"{var}_stddev_resolution"] = {
-                    #     "data": {"x": ([], []), "y": ([], [])},
-                    #     "style": style,
-                    # }
-                    
-                    # add x values (bin centers) and x errors (half bin width)
-                    
-                    
-                    # all_responses[met_type][f"{var}_mean"]["data"]["x"][0].append(
-                    #     (bin_edges[i] + bin_edges[i - 1]) / 2.0
-                    # )
-                    # all_responses[met_type][f"{var}_mean"]["data"]["x"][1].append(
-                    #     (bin_edges[i] - bin_edges[i - 1]) / 2.0
-                    # )
-                    # all_responses[met_type][f"{var}_quantile_resolution"]["data"][
-                    #     "x"
-                    # ][0].append((bin_edges[i] + bin_edges[i - 1]) / 2.0)
-                    # all_responses[met_type][f"{var}_quantile_resolution"]["data"][
-                    #     "x"
-                    # ][1].append((bin_edges[i] - bin_edges[i - 1]) / 2.0)
-                    # all_responses[met_type][f"{var}_stddev_resolution"]["data"][
-                    #     "x"
-                    # ][0].append((bin_edges[i] + bin_edges[i - 1]) / 2.0)
-                    # all_responses[met_type][f"{var}_stddev_resolution"]["data"][
-                    #     "x"
-                    # ][1].append((bin_edges[i] - bin_edges[i - 1]) / 2.0)
-                    
 
             for var, u_arr in u_info_dict.items():
                 compute_u_info(u_arr, weights_i, var, all_responses[met_type])
@@ -339,7 +303,6 @@ def create_reponses_info(qT_arr, u_dict, weights):
                 hists_dict[var_name] = {}
             hists_dict[var_name][met_type] = all_hists[met_type][var_name]
 
-    # breakpoint()
     return reponses_dict, hists_dict
 
 
@@ -409,45 +372,6 @@ def create_met_histos(col_var, category, plotting_info_list):
         plotting_info_list.append(info)
 
 
-# def plot_reponses(reponses_dict, cat):
-#     """
-#     Plot response curves (mean, stddev, quantile resolutions) vs qT.
-
-#     Parameters
-#     ----------
-#     reponses_dict : dict
-#         Response summary information from `create_reponses_info`.
-#     cat : str
-#         Category name.
-#     """
-
-#     plotting_info_list = []
-    
-#     for var_name in reponses_dict:
-#         print(f"Plotting response for {var_name} in category {cat}")
-#         y_label = (
-#             var_name
-#             if var_name not in response_var_name_dict
-#             else response_var_name_dict[var_name]
-#         )
-
-#         info = {
-#             "series_dict": reponses_dict[var_name],
-#             "output_base": f"{response_dir}/{cat}_{var_name}",
-#             "x_bins": qT_bins,
-#             "xlabel": r"Z q$_{\mathrm{T}}$ [GeV]",
-#             "ylabel": y_label,
-#         }
-
-#         if args.workers > 1:
-#             plotting_info_list.append(info)
-#         else:
-#             cms_plotter.plot_curves(**info)
-
-#     if args.workers > 1:
-#         with Pool(args.workers) as pool:
-#             pool.map(cms_plotter.plot_curves_pool_map, plotting_info_list)
-
 def plot_reponses(reponses_dict, cat):
     """
     Plot response curves (mean, stddev, quantile resolutions) vs qT.
@@ -506,18 +430,6 @@ def plot_2d_response_histograms(hists_dict, cat):
             else response_var_name_dict[var_name]
         )
         for met_type in hists_dict[var_name]:
-            # info = {
-            #     "data": hists_dict[var_name][met_type],
-            #     "output_base": f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}",
-            #     "xlabel": r"Z q$_{\mathrm{T}}$ [GeV]",
-            #     "ylabel": ylabel,
-            #     "log_scale": True,
-            #     "label": f"{var_name} {met_type}", # TODO:put it the style dict
-            # }
-            # if args.workers > 1:
-            #     plotting_info_list.append(info)
-            # else:
-            #     cms_plotter.plot_2d_histogram(**info)
             series_dict = {
                 f"{var_name} {met_type}": {
                     "data": hists_dict[var_name][met_type],
@@ -537,10 +449,6 @@ def plot_2d_response_histograms(hists_dict, cat):
                 .set_options(log_scale=True)
             )
             plotters.append(p)
-
-    # if args.workers > 1:
-    #     with Pool(args.workers) as pool:
-    #         pool.map(cms_plotter.plot_2d_histograms_pool_map, plotting_info_list)
 
     if args.workers > 1:
         with Pool(args.workers) as pool:
@@ -584,31 +492,6 @@ def plot_1d_response_histograms(hists_dict, cat):
                 if var_name not in response_var_name_dict
                 else response_var_name_dict[var_name]
             )
-            # cms_plotter = HEPPlotter(figsize=[17, 13], data_formats=["png"])
-            # cms_plotter.add_annotation(
-            #     f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}",
-            #     x=0.05,
-            #     y=0.9,
-            #     fontsize=25,
-            # )
-
-            # info = {
-            #     "series_dict": hist_1d_dict,
-            #     "output_base": output_name,
-            #     "xlabel": var_label,
-            #     "ylabel": "Events",
-            #     "log_scale": False,
-            #     "ratio_label": None,
-            # }
-
-            # p = (
-            #     HEPPlotter(figsize=(6,5))
-            #     .set_series(hist_1d_dict)
-            #     .set_output(output_name)
-            #     .set_labels(xlabel=var_label, ylabel="Events")
-            #     .add_annotation(x=0.05, y=0.95, s=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}")
-            #     .add_line(orientation="h", y=1.0, color="red", linestyle="--")
-            # )
 
             p = (
                 HEPPlotter()
@@ -629,17 +512,9 @@ def plot_1d_response_histograms(hists_dict, cat):
             )
             plotters.append(p)
 
-            # if args.workers > 1:
-            #     # plotting_info_list.append(info)
-            #     plotters.append(p)
-            # else:
-            #     cms_plotter.plot_1d_histograms(**info)
-
     if args.workers > 1:
         with Pool(args.workers) as pool:
-            # pool.map(cms_plotter.plot_1d_histograms_pool_map, plotting_info_list)
             pool.map(run_plot, plotters)
-            # pool.map(lambda p: p.run(), plotters)
     else:
         for p in plotters:
             p.run()
@@ -654,13 +529,6 @@ def plot_histo_met(plotting_info_list):
     plotting_info_list : list
         List of histogram plotting configurations.
     """
-
-    # if args.workers > 1:
-    #     with Pool(args.workers) as pool:
-    #         pool.map(cms_plotter.plot_1d_histograms_pool_map, plotting_info_list)
-    # else:
-    #     for info in plotting_info_list:
-    #         cms_plotter.plot_1d_histograms(**info)
 
     plotters = []
     for info in plotting_info_list:
