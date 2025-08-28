@@ -530,7 +530,7 @@ def plot_histo_met(plotting_info_list):
             .set_plot_config(figsize=(13,13))
             .set_output(info["output_base"])
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
-            .set_options(y_log=info["log_scale"], set_ylim=False)
+            .set_options(y_log=info["y_log"], set_ylim=False)
             .set_data(info["series_dict"], plot_type="1d")
         )
         plotters.append(p)
