@@ -328,16 +328,9 @@ def create_met_histos(col_var, category, plotting_info_list):
         for i, variable in enumerate(var_dict["variables"]):
             # print(f"Preparing {category} - {quantity_name} - {variable}")
             col_num = col_var[variable]
-            col_den = col_var[ref_var]  # only used for masking
+            weight = col_var["weight"]
             var_name = variable.split("_")[0]
-
-            # Apply mask consistently
-            mask_range = (col_den > var_dict["range"][0]) & (
-                col_den < var_dict["range"][1]
-            )
-            col_num = col_num[mask_range]
-            weight = col_var["weight"][mask_range]
-
+            
             # Build numerator histogram only
             hist_num = Hist.new.Reg(
                 N_bins,
@@ -365,7 +358,7 @@ def create_met_histos(col_var, category, plotting_info_list):
             "output_base": output_name,
             "xlabel": var_dict["plot_name"],
             "ylabel": "Events",
-            "log_scale": var_dict["log"],
+            "y_log": var_dict["log"],
             "ratio_label": var_dict.get("ratio_label", None),
         }
 
@@ -446,7 +439,7 @@ def plot_2d_response_histograms(hists_dict, cat):
                     series_dict,
                     plot_type="2d",
                 )
-                .set_options(log_scale=True)
+                .set_options(cbar_log=True)
             )
             plotters.append(p)
 
@@ -536,9 +529,9 @@ def plot_histo_met(plotting_info_list):
             HEPPlotter()
             .set_plot_config(figsize=(13,13))
             .set_output(info["output_base"])
-            .set_labels(info["xlabel"], info["ylabel"])
+            .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
+            .set_options(y_log=info["log_scale"], set_ylim=False)
             .set_data(info["series_dict"], plot_type="1d")
-            .set_options(log_scale=info["log_scale"], ratio_label=info["ratio_label"], set_ylim=False)
         )
         plotters.append(p)
     if args.workers > 1:
