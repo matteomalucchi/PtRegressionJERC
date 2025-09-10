@@ -83,30 +83,6 @@ class METProcessor(BaseProcessorABC):
         self.events["JetGoodPNetPlusNeutrino"] = ak.copy(self.events["JetGood"])
 
     def apply_object_preselection(self, variation):
-        # if "pt_raw" not in self.events["Jet"].fields:
-        #     self.events["Jet"] = ak.with_field(
-        #         self.events["Jet"],
-        #         self.events["Jet"].pt * (1 - self.events["Jet"].rawFactor),
-        #         "pt_raw",
-        #     )
-        #     self.events["Jet"] = ak.with_field(
-        #         self.events["Jet"],
-        #         self.events["Jet"].mass * (1 - self.events["Jet"].rawFactor),
-        #         "mass_raw",
-        #     )
-
-        # # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
-        # for suffix in ["", "JEC", "PNet", "PNetPlusNeutrino"]:
-        #     self.events[f"JetGood{suffix}"] = jet_selection_nopu(
-        #         self.events, f"Jet{suffix}", self.params, "pt_raw"
-        #     )
-        #     if self.only_physical_jet:
-        #         physisical_jet_mask = (
-        #             self.events[f"JetGood{suffix}"].pt_raw * np.cosh(self.events[f"JetGood{suffix}"].eta)
-        #             < (13.6 * 1000) / 2
-        #         )
-        #         self.events[f"JetGood{suffix}"] = self.events[f"JetGood{suffix}"][physisical_jet_mask]
-
         self.events["GenJetGood"] = self.events.GenJet[
             self.events.GenJet.pt > self.params.object_preselection["GenJet"]["pt"]
         ]
@@ -121,10 +97,6 @@ class METProcessor(BaseProcessorABC):
             with_name="Momentum4D",
         )
 
-        # cache = cachetools.Cache(np.inf)
-        # jets_dict = {}
-        # jet_calib_params = self.params.jets_calibration
-
         self.met_branches = ["RawPuppiMET", "PuppiMET"]
 
         for jet_coll_name in [
@@ -133,96 +105,9 @@ class METProcessor(BaseProcessorABC):
             "JetGoodPNet",
             "JetGoodPNetPlusNeutrino",
         ]:
-            # for _, jet_coll_name in jet_calib_params.collection[self._year].items():
-            # if "chs" in jet_type or "Puppi" in jet_type:
-            #     continue
-
-            # if "PNet" in jet_coll_name:
-            #     # For regression
-            #     # define the pnet reg jet colleciton
-            #     jets_dict[jet_coll_name] = ak.with_field(
-            #         self.events["JetGood"],
-            #         self.events.JetGood.pt_raw
-            #         * self.events.JetGood.PNetRegPtRawCorr
-            #         * (
-            #             self.events.JetGood.PNetRegPtRawCorrNeutrino
-            #             if "Neutrino" in jet_coll_name
-            #             else 1
-            #         ),
-            #         "pt",
-            #     )
-            #     jets_dict[jet_coll_name] = ak.with_field(
-            #         jets_dict[jet_coll_name],
-            #         jets_dict[jet_coll_name].pt,
-            #         "pt_raw",
-            #     )
-            #     jets_dict[jet_coll_name] = ak.with_field(
-            #         jets_dict[jet_coll_name],
-            #         ak.zeros_like(jets_dict[jet_coll_name].pt),
-            #         "rawFactor",
-            #     )
-
-            #     jets_dict[jet_coll_name] = ak.with_field(
-            #         jets_dict[jet_coll_name],
-            #         jets_dict[jet_coll_name].mass_raw
-            #         * jets_dict[jet_coll_name].PNetRegPtRawCorr
-            #         * (
-            #             jets_dict[jet_coll_name].PNetRegPtRawCorrNeutrino
-            #             if "Neutrino" in jet_coll_name
-            #             else 1
-            #         ),
-            #         "mass",
-            #     )
-            #     jets_dict[jet_coll_name] = ak.with_field(
-            #         jets_dict[jet_coll_name],
-            #         jets_dict[jet_coll_name].mass,
-            #         "mass_raw",
-            #     )
-            # else:
-            #     # For nominal jets
-            #     jets_dict[jet_coll_name] = ak.copy(self.events["JetGood"])
-
-            # # Calibrate the jets
-            # jets_calib_dict = {}
-            # # always apply the JEC to the regressed pt
-            # if True or jet_calib_params.apply_jec_nominal[self._year]:
-
-            #     jets_calib_dict[jet_coll_name] = jet_correction(
-            #         params=self.params,
-            #         events=self.events,
-            #         jets=jets_dict[jet_coll_name],
-            #         factory=self.jmefactory,
-            #         jet_type=jet_type,
-            #         chunk_metadata={
-            #             "year": self._year,
-            #             "isMC": self._isMC,
-            #             "era": self._era,
-            #         },
-            #         cache=cache,
-            #     )
-            # else:
-            #     jets_calib_dict[jet_coll_name] = jets_dict[jet_coll_name]
-
-            # jet_coll_suffix = jet_coll_name.split("Jet")[-1]
-
-            # Correct MET with MC Truth only jets with pt reg > 15
-            # corr_reg_pt_mask = (
-            #     jets_calib_dict[jet_coll_name].pt_raw > self.jec_pt_threshold
-            # )
-            # # compute pt
-            # self.events[f"JetGood{jet_coll_suffix}"] = ak.with_field(
-            #     jets_calib_dict[jet_coll_name],
-            #     ak.where(
-            #         corr_reg_pt_mask,
-            #         jets_calib_dict[jet_coll_name].pt,
-            #         jets_calib_dict[jet_coll_name].pt_raw,
-            #     ),
-            #     "pt",
-            # )
 
             # Correct MET with MC Truth only jets with pt reg > 15
             corr_reg_pt_mask = self.events[jet_coll_name].pt_raw > self.jec_pt_threshold
-            # breakpoint()
             # compute pt
             self.events[jet_coll_name] = ak.with_field(
                 self.events[jet_coll_name],
@@ -256,8 +141,6 @@ class METProcessor(BaseProcessorABC):
                 * np.sin(self.events[jet_coll_name].phi),
                 "py",
             )
-            # breakpoint()
-            # self.events[jet_coll_name] = add_fields(self.events[jet_coll_name])
 
             if self.rescale_MET_with_regressed_pT:
                 for met_branch, jet_coll in zip(
