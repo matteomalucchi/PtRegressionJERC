@@ -23,33 +23,33 @@ jets_calibration:
   rescale_MET_config:
     20216_PreVFP:
       apply: False
-      MET_collection: "MET"
-      Jet_collection: "Jet"
+      # MET_collection: "MET"
+      # Jet_collection: "Jet"
     2016_PostVFP:
       apply: False
-      MET_collection: "MET"
-      Jet_collection: "Jet"
+      # MET_collection: "MET"
+      # Jet_collection: "Jet"
     "2017":
       apply: False
-      MET_collection: "MET"
-      Jet_collection: "Jet"
+      # MET_collection: "MET"
+      # Jet_collection: "Jet"
     "2018": 
       apply: False
-      MET_collection: "MET"
-      Jet_collection: "Jet"
+      # MET_collection: "MET"
+      # Jet_collection: "Jet"
     2022_preEE:   
       apply: False
-      MET_collection: "PuppiMET"
-      Jet_collection: "Jet"
+      # MET_collection: "PuppiMET"
+      # Jet_collection: "Jet"
     2022_postEE:
       apply: False
-      MET_collection: "PuppiMET"
-      Jet_collection: "Jet"
+      # MET_collection: "PuppiMET"
+      # Jet_collection: "Jet"
     2023_preBPix:
       apply: False
-      MET_collection: "PuppiMET"
-      Jet_collection: "Jet"
+      # MET_collection: "PuppiMET"
+      # Jet_collection: "Jet"
     2023_postBPix:
       apply: False
-      MET_collection: "PuppiMET"
-      Jet_collection: "Jet"
+      # MET_collection: "PuppiMET"
+      # Jet_collection: "Jet"

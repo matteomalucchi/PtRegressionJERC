@@ -25,6 +25,8 @@ class METProcessor(BaseProcessorABC):
             "rescale_MET_with_regressed_pT"
         ]
         self.jec_pt_threshold = self.workflow_options["jec_pt_threshold"]
+        self.consider_all_jets = self.workflow_options["consider_all_jets"]
+        self.add_corr_t1_met_jets = self.workflow_options["add_corr_t1_met_jets"]
 
     def add_GenMET_plus_neutrino(self):
         # Add the neutrinos to the GetJets to compute the MET with neutrinos
@@ -62,21 +64,52 @@ class METProcessor(BaseProcessorABC):
                 self.events["Jet"].mass * (1 - self.events["Jet"].rawFactor),
                 "mass_raw",
             )
-
-        # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
-        self.events["JetGood"] = jet_selection_nopu(
-            self.events, "Jet", self.params, "pt_raw"
-        )
-        if self.only_physical_jet:
-            physisical_jet_mask = (
-                self.events["JetGood"].pt_raw * np.cosh(self.events["JetGood"].eta)
-                < (13.6 * 1000) / 2
+            
+        if self.add_corr_t1_met_jets:
+            # consider the lowpt_jets collection
+            lowpt_jets = self.events["CorrT1METJet"]
+            lowpt_jets = ak.with_field(lowpt_jets, lowpt_jets.rawPt, "pt")
+            lowpt_jets = ak.with_field(lowpt_jets, lowpt_jets.rawPt, "pt_raw")
+            lowpt_jets = ak.with_field(
+                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32), "mass"
             )
-            self.events["JetGood"] = self.events["JetGood"][physisical_jet_mask]
-        
-        reg_mask= self.events["JetGood"].PNetRegPtRawCorr>0
-        self.events["JetGood"] = self.events["JetGood"][reg_mask]
+            lowpt_jets = ak.with_field(
+                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32), "mass_raw"
+            )
+            lowpt_jets = ak.with_field(
+                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32), "rawFactor"
+            )
+            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "PNetRegPtRawCorr")
+            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "PNetRegPtRawCorrNeutrino")
+            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetB")
+            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetCvL")
+            
+            lowpt_jets=add_fields(lowpt_jets, "all", four_vec="Momentum4D")
 
+            # concatenate the two collections
+            self.events["JetGood"] = ak.concatenate(
+                [self.events["Jet"], lowpt_jets], axis=1
+            )
+        elif self.consider_all_jets:
+            self.events["JetGood"] = ak.copy(self.events["Jet"])
+        else:
+            # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
+            # TODO  add here the cut on pt only for the regression
+            self.events["JetGood"] = jet_selection_nopu(
+                self.events, "Jet", self.params, "pt_raw"
+            )
+
+            if self.only_physical_jet:
+                physisical_jet_mask = (
+                    self.events["JetGood"].pt_raw * np.cosh(self.events["JetGood"].eta)
+                    < (13.6 * 1000) / 2
+                )
+                self.events["JetGood"] = self.events["JetGood"][physisical_jet_mask]
+
+            # consider only jets with regressed pt > 0
+            reg_mask= self.events["JetGood"].PNetRegPtRawCorr>0
+            self.events["JetGood"] = self.events["JetGood"][reg_mask]
+            
         # Create extra Jet collections for calibration
         self.events["JetGoodJEC"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNet"] = ak.copy(self.events["JetGood"])
@@ -106,41 +139,45 @@ class METProcessor(BaseProcessorABC):
             "JetGoodPNetPlusNeutrino",
         ]:
 
-            # Correct MET with MC Truth only jets with pt reg > 15
-            corr_reg_pt_mask = self.events[jet_coll_name].pt_raw > self.jec_pt_threshold
-            # compute pt
-            self.events[jet_coll_name] = ak.with_field(
-                self.events[jet_coll_name],
-                ak.where(
-                    corr_reg_pt_mask,
-                    self.events[jet_coll_name].pt,
-                    self.events[jet_coll_name].pt_raw,
-                ),
-                "pt",
-            )
-            # compute mass
-            self.events[jet_coll_name] = ak.with_field(
-                self.events[jet_coll_name],
-                ak.where(
-                    corr_reg_pt_mask,
-                    self.events[jet_coll_name].mass,
-                    self.events[jet_coll_name].mass_raw,
-                ),
-                "mass",
-            )
-            # compute px and py
-            self.events[jet_coll_name] = ak.with_field(
-                self.events[jet_coll_name],
-                self.events[jet_coll_name].pt
-                * np.cos(self.events[jet_coll_name].phi),
-                "px",
-            )
-            self.events[jet_coll_name] = ak.with_field(
-                self.events[jet_coll_name],
-                self.events[jet_coll_name].pt
-                * np.sin(self.events[jet_coll_name].phi),
-                "py",
-            )
+            self.events[jet_coll_name]=add_fields(self.events[jet_coll_name], four_vec="Momentum4D")
+            if "PNet" in jet_coll_name:
+                # Correct MET with MC Truth only jets with pt reg > 15
+                corr_reg_pt_mask = (
+                    self.events[jet_coll_name].pt_raw > self.jec_pt_threshold
+                )
+                # compute pt
+                self.events[jet_coll_name] = ak.with_field(
+                    self.events[jet_coll_name],
+                    ak.where(
+                        corr_reg_pt_mask,
+                        self.events[jet_coll_name].pt,
+                        self.events[jet_coll_name].pt_raw,
+                    ),
+                    "pt",
+                )
+                # compute mass
+                self.events[jet_coll_name] = ak.with_field(
+                    self.events[jet_coll_name],
+                    ak.where(
+                        corr_reg_pt_mask,
+                        self.events[jet_coll_name].mass,
+                        self.events[jet_coll_name].mass_raw,
+                    ),
+                    "mass",
+                )
+                # compute px and py
+                self.events[jet_coll_name] = ak.with_field(
+                    self.events[jet_coll_name],
+                    self.events[jet_coll_name].pt
+                    * np.cos(self.events[jet_coll_name].phi),
+                    "px",
+                )
+                self.events[jet_coll_name] = ak.with_field(
+                    self.events[jet_coll_name],
+                    self.events[jet_coll_name].pt
+                    * np.sin(self.events[jet_coll_name].phi),
+                    "py",
+                )
 
             if self.rescale_MET_with_regressed_pT:
                 for met_branch, jet_coll in zip(
@@ -155,9 +192,7 @@ class METProcessor(BaseProcessorABC):
                         self.events[jet_coll_name],
                     )
                     jet_coll_suffix = jet_coll_name.split("JetGood")[-1]
-                    new_met_branch = (
-                        f"{met_branch}-Type1{jet_coll_suffix}"
-                    )
+                    new_met_branch = f"{met_branch}-Type1{jet_coll_suffix}"
 
                     self.events[new_met_branch] = ak.zip(
                         {

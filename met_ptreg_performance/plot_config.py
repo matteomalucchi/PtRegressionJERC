@@ -35,7 +35,25 @@ met_dict_names = {
     }
     for met, color, fmt in zip(met_list, color_list, fmt_list)
 }
-u_dict_names = {f"u{met}": infos for met, infos in met_dict_names.items()}
+# u_dict_names = {f"u{met}": infos for met, infos in met_dict_names.items()}
+
+plot_met_list=[
+    "RawPuppiMET",
+    "RawPuppiMET-Type1",
+    "RawPuppiMET-Type1JEC",
+    "RawPuppiMET-Type1PNet",
+    "RawPuppiMET-Type1PNetPlusNeutrino",
+    "PuppiMET",
+    "PuppiMET-Type1",
+    "PuppiMET-Type1JEC",
+    "PuppiMET-Type1PNet",
+    "PuppiMET-Type1PNetPlusNeutrino",
+]
+# keep only the key in plot_met_list
+met_dict_names= {met: infos for met, infos in met_dict_names.items() if met in plot_met_list}
+u_dict_names= {f"u{met}": infos for met, infos in met_dict_names.items()}
+
+
 
 
 total_var_dict = {
@@ -120,24 +138,24 @@ total_var_dict.update(met_hadronic_recoil_dict)
 response_var_name_dict = {
     "R": r"$-u_{\parallel}/q_{T}$",
     "R_mean": r"-$<u_{\parallel}/q_{T}>$",
-    "R_quantile_resolution": r"$q \sigma(u_{\parallel}/q_{T})$",
-    "R_stddev_resolution": r"$std dev \sigma(u_{\parallel}/q_{T})$",
+    "R_quantile_resolution": r"q $\sigma(u_{\parallel}/q_{T})$",
+    "R_stddev_resolution": r"std dev $\sigma(u_{\parallel}/q_{T})$",
     "u_perp": r"$u_{\perp}$ [GeV]",
     "u_perp_scaled": r"$u_{\perp}$ / (-$<u_{\parallel}/q_{T}>$)",
     "u_perp_mean": r"$<u_{\perp}>$ [GeV]",
     "u_perp_scaled_mean": r"$<u_{\perp}> / (-<u_{\parallel}/q_{T}>)$",
-    "u_perp_quantile_resolution": r"$q \sigma(u_{\perp})$ [GeV]",
-    "u_perp_scaled_quantile_resolution": r"$q \sigma(u_{\perp}) / (-<u_{\parallel}/q_{T}>)$",
-    "u_perp_stddev_resolution": r"$std dev \sigma({u_{\perp}})$ [GeV]",
-    "u_perp_stddev_scaled_resolution": r"$std dev \sigma({u_{\perp}}) / (-<u_{\parallel}/q_{T}>)$",
-    "u_paral": r"$u_{\parallel}+q_{T}$ [GeV]",
-    "u_paral_scaled": r"$u_{\parallel}+q_{T}$ / (-$<u_{\parallel}/q_{T}>$)",
-    "u_paral_mean": r"$<u_{\parallel}>$ [GeV]",
-    "u_paral_scaled_mean": r"$<u_{\parallel}> / (-<u_{\parallel}/q_{T}>)$",
-    "u_paral_quantile_resolution": r"$q \sigma(u_{\parallel})$ [GeV]",
-    "u_paral_scaled_quantile_resolution": r"$q \sigma(u_{\parallel}) / (-<u_{\parallel}/q_{T}>)$",
-    "u_paral_stddev_resolution": r"$std dev \sigma({u_{\parallel}})$ [GeV]",
-    "u_paral_stddev_scaled_resolution": r"$std dev \sigma({u_{\parallel}}) / (-<u_{\parallel}/q_{T}>)$",
+    "u_perp_quantile_resolution": r"q $\sigma(u_{\perp})$ [GeV]",
+    "u_perp_scaled_quantile_resolution": r"q $\sigma(u_{\perp}) / (-<u_{\parallel}/q_{T}>)$",
+    "u_perp_stddev_resolution": r"std dev $\sigma({u_{\perp}})$ [GeV]",
+    "u_perp_scaled_stddev_resolution": r"std dev $\sigma({u_{\perp}}) / (-<u_{\parallel}/q_{T}>)$",
+    "u_par": r"$u_{\parallel}+q_{T}$ [GeV]",
+    "u_par_scaled": r"$u_{\parallel}+q_{T}$ / (-$<u_{\parallel}/q_{T}>$)",
+    "u_par_mean": r"$<u_{\parallel}>$ [GeV]",
+    "u_par_scaled_mean": r"$<u_{\parallel}> / (-<u_{\parallel}/q_{T}>)$",
+    "u_par_quantile_resolution": r"q $\sigma(u_{\parallel})$ [GeV]",
+    "u_par_scaled_quantile_resolution": r"q $\sigma(u_{\parallel}) / (-<u_{\parallel}/q_{T}>)$",
+    "u_par_stddev_resolution": r"std dev $\sigma({u_{\parallel}})$ [GeV]",
+    "u_par_scaled_stddev_resolution": r"std dev $\sigma({u_{\parallel}}) / (-<u_{\parallel}/q_{T}>)$",
 }
 
 

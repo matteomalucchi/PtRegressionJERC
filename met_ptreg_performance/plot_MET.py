@@ -147,7 +147,9 @@ def compute_u_info(u_i, weights_i, distribution_name, hists_dict):
     hists_dict[f"{distribution_name}_quantile_resolution"]["data"]["y"][1].append(0)
 
     stddev_u_i, err_stddev_u_i = weighted_std_dev(u_i, weights_i)
-    hists_dict[f"{distribution_name}_stddev_resolution"]["data"]["y"][0].append(stddev_u_i)
+    hists_dict[f"{distribution_name}_stddev_resolution"]["data"]["y"][0].append(
+        stddev_u_i
+    )
     hists_dict[f"{distribution_name}_stddev_resolution"]["data"]["y"][1].append(
         err_stddev_u_i
     )
@@ -279,11 +281,12 @@ def create_reponses_info(qT_arr, u_dict, weights):
                                 "data": {"x": [[], []], "y": [[], []]},
                                 "style": style,
                             }
-                        all_responses[met_type][f"{var}_{metric}"]["data"]["x"][0]=bin_centers.tolist()
-                        all_responses[met_type][f"{var}_{metric}"]["data"]["x"][1]=(
+                        all_responses[met_type][f"{var}_{metric}"]["data"]["x"][
+                            0
+                        ] = bin_centers.tolist()
+                        all_responses[met_type][f"{var}_{metric}"]["data"]["x"][1] = (
                             (bin_edges[1:] - bin_edges[:-1]) / 2.0
                         ).tolist()
-                        
 
             for var, u_arr in u_info_dict.items():
                 compute_u_info(u_arr, weights_i, var, all_responses[met_type])
@@ -330,7 +333,7 @@ def create_met_histos(col_var, category, plotting_info_list):
             col_num = col_var[variable]
             weight = col_var["weight"]
             var_name = variable.split("_")[0]
-            
+
             # Build numerator histogram only
             hist_num = Hist.new.Reg(
                 N_bins,
@@ -378,7 +381,7 @@ def plot_reponses(reponses_dict, cat):
     """
 
     plotters = []
-    
+
     for var_name in reponses_dict:
         print(f"Plotting response for {var_name} in category {cat}")
         y_label = (
@@ -389,10 +392,19 @@ def plot_reponses(reponses_dict, cat):
 
         p = (
             HEPPlotter()
+            # .set_plot_config(figsize=(13, 13))
+            .set_options(split_legend=False)
             .set_output(f"{response_dir}/{cat}_{var_name}")
             .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", y_label)
             .set_data(reponses_dict[var_name], plot_type="graph")
         )
+        if "R" in var_name and "mean" in var_name:
+            p = p.add_line(
+                orientation="h",
+                y=1.0,
+                color="black",
+                linestyle="--",
+            )
         plotters.append(p)
 
     if args.workers > 1:
@@ -401,6 +413,7 @@ def plot_reponses(reponses_dict, cat):
     else:
         for p in plotters:
             p.run()
+
 
 def plot_2d_response_histograms(hists_dict, cat):
     """
@@ -429,9 +442,10 @@ def plot_2d_response_histograms(hists_dict, cat):
                     "style": {"label": f"{var_name} {met_type}"},
                 }
             }
-            
+
             p = (
                 HEPPlotter()
+                # .set_plot_config(figsize=(13, 13))
                 .set_options(legend=False)
                 .set_output(f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}")
                 .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", ylabel)
@@ -488,14 +502,16 @@ def plot_1d_response_histograms(hists_dict, cat):
 
             p = (
                 HEPPlotter()
+                .set_plot_config(figsize=(14, 13), lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}       (13.6 TeV)")
                 .set_output(output_name)
                 .set_labels(var_label, "Events")
+                .set_options(y_log=False)
                 .set_data(hist_1d_dict, plot_type="1d")
-                .add_annotation(
-                    x=0.05,
-                    y=0.9,
-                    s=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}",
-                )
+                # .add_annotation(
+                #     x=0.05,
+                #     y=0.9,
+                #     s=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}",
+                # )
                 .add_line(
                     orientation="v",
                     x=1.0 if var_name == "R" else 0.0,
@@ -527,10 +543,10 @@ def plot_histo_met(plotting_info_list):
     for info in plotting_info_list:
         p = (
             HEPPlotter()
-            .set_plot_config(figsize=(13,13))
+            .set_plot_config(figsize=(14, 13))
             .set_output(info["output_base"])
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
-            .set_options(y_log=info["y_log"], set_ylim=False)
+            .set_options(y_log=info["y_log"], set_ylim=True)
             .set_data(info["series_dict"], plot_type="1d")
         )
         plotters.append(p)

@@ -68,7 +68,7 @@ cfg = Configurator(
     datasets={
         "jsons": [
             # f"{localdir}/datasets/QCD.json",
-            f"{localdir}/datasets/QCD_PNetReg15.json",
+            # f"{localdir}/datasets/QCD_PNetReg15.json",
             f"{localdir}/datasets/DYJetsToLL_M-50_redirector.json",
         ],
         "filter": {
@@ -89,6 +89,8 @@ cfg = Configurator(
         "only_physical_jet": True,
         "rescale_MET_with_regressed_pT": True,
         "jec_pt_threshold": 15.0,
+        "consider_all_jets": True,
+        "add_corr_t1_met_jets": False,
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
