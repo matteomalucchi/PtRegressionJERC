@@ -362,7 +362,7 @@ def create_met_histos(col_var, category, plotting_info_list):
             "xlabel": var_dict["plot_name"],
             "ylabel": "Events",
             "y_log": var_dict["log"],
-            "ratio_label": var_dict.get("ratio_label", None),
+            "ratio_label": var_dict.get("ratio_label", "Ratio"),
         }
 
         plotting_info_list.append(info)
@@ -393,7 +393,7 @@ def plot_reponses(reponses_dict, cat):
         p = (
             HEPPlotter()
             # .set_plot_config(figsize=(13, 13))
-            .set_options(split_legend=False)
+            .set_options(split_legend=False, set_ylim=False)
             .set_output(f"{response_dir}/{cat}_{var_name}")
             .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", y_label)
             .set_data(reponses_dict[var_name], plot_type="graph")
@@ -446,14 +446,13 @@ def plot_2d_response_histograms(hists_dict, cat):
             p = (
                 HEPPlotter()
                 # .set_plot_config(figsize=(13, 13))
-                .set_options(legend=False)
+                .set_options(legend=False,cbar_log=True)
                 .set_output(f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}")
                 .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", ylabel)
                 .set_data(
                     series_dict,
                     plot_type="2d",
                 )
-                .set_options(cbar_log=True)
             )
             plotters.append(p)
 
