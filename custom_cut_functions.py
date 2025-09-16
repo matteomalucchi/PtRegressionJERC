@@ -4,7 +4,6 @@ import numpy as np
 # from configs.jme.params.binning import *
 
 
-
 def ptbin(events, params, **kwargs):
     # Mask to select events in a MatchedJets pt bin
     if params["pt_high"] == "Inf":
@@ -19,7 +18,6 @@ def ptbin(events, params, **kwargs):
     assert not ak.any(ak.is_none(mask, axis=1)), f"None in ptbin"
 
     return mask
-
 
 
 def etabin(events, params, **kwargs):
@@ -77,31 +75,42 @@ def reco_neutrino_abs_etabin(events, params, **kwargs):
     return mask
 
 
-
 def genjet_selection_flavsplit(events, jet_type, flavs):
     jets = events[jet_type]
-    mask_flav = jets.partonFlavour == flavs if type(flavs) == int else ak.any([jets.partonFlavour == flav for flav in flavs], axis=0)
+    mask_flav = (
+        jets.partonFlavour == flavs
+        if type(flavs) == int
+        else ak.any([jets.partonFlavour == flav for flav in flavs], axis=0)
+    )
     # mask_flav = ak.any([jets.partonFlavour == flav for flav in flavs], axis=0)
     mask_flav = ak.mask(mask_flav, mask_flav)
     return jets[mask_flav]
 
 
 def PV_presel_cuts(events, params, **kwargs):
-    mask=  abs(events.PV.z - events.GenVtx.z) < params["distance"]
+    mask = abs(events.PV.z - events.GenVtx.z) < params["distance"]
     return ak.where(ak.is_none(mask), False, mask)
-    
 
 
-def jet_selection_nopu(
-    events, jet_type, params, pt_cut="pt"
-):
+def jet_selection_nopu(events, jet_type, params, pt_cut="pt"):
     jets = events[jet_type]
     cuts = params.object_preselection[jet_type]
-    
+
     mask_jets = (
         (getattr(jets, pt_cut) > cuts[pt_cut])
         & (np.abs(jets.eta) < cuts["eta"])
         & (jets.jetId >= cuts["jetId"])
     )
 
+    return jets[mask_jets]
+
+
+def jet_type1_selection_nopu(events, jet_type, params, pt_cut="pt"):
+    jets = events[jet_type]
+    cuts = params.object_preselection[jet_type]
+
+    # same selection as in
+    # https://github.com/nurfikri89/NanoSkimmer/blob/1b4db934993267761710ab2401caf43d7a19d710/modules/AddJEC.C#L394
+    mask_jets = (getattr(jets, pt_cut) > cuts[pt_cut]) & jets.EmEF < cuts["EmEF"]
+    
     return jets[mask_jets]
