@@ -89,8 +89,9 @@ cfg = Configurator(
         "only_physical_jet": True,
         "rescale_MET_with_regressed_pT": True,
         "jec_pt_threshold": 15.0,
-        "consider_all_jets": True,
-        "add_corr_t1_met_jets": False,
+        "consider_all_jets": False,
+        "add_corr_t1_met_jets": True,
+        "jet_type1_selections": True,
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),

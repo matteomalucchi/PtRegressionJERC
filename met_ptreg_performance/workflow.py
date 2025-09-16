@@ -27,6 +27,7 @@ class METProcessor(BaseProcessorABC):
         self.jec_pt_threshold = self.workflow_options["jec_pt_threshold"]
         self.consider_all_jets = self.workflow_options["consider_all_jets"]
         self.add_corr_t1_met_jets = self.workflow_options["add_corr_t1_met_jets"]
+        self.jet_type1_selections = self.workflow_options["jet_type1_selections"]
 
     def add_GenMET_plus_neutrino(self):
         # Add the neutrinos to the GetJets to compute the MET with neutrinos
