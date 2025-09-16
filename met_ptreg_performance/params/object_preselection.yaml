@@ -4,6 +4,10 @@ object_preselection:
     eta: 4.7 
     jetId: 0
 
+  JetType1MET:
+    pt: 15
+    EmEF: 0.9 
+
   GenJet:
     pt: 8 
     eta: 10 

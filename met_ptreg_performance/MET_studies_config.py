@@ -38,7 +38,7 @@ parameters = defaults.merge_parameters_from_files(
     default_parameters,
     f"{localdir}/params/object_preselection.yaml",
     f"{localdir}/params/triggers.yaml",
-    f"{localdir}/params/jets_calibration.yaml",
+    f"{localdir}/params/jets_calibration_type1met.yaml",
     update=True,
 )
 
@@ -74,8 +74,8 @@ cfg = Configurator(
         "filter": {
             "samples": [
                 (
-                    "DYJetsToLL_M-50"
-                    # "DYJetsToLL_M-50_local"
+                    # "DYJetsToLL_M-50"
+                    "DYJetsToLL_M-50_local"
                 )
             ],
             "samples_exclude": [],
@@ -91,7 +91,7 @@ cfg = Configurator(
         "jec_pt_threshold": 15.0,
         "consider_all_jets": False,
         "add_corr_t1_met_jets": True,
-        "jet_type1_selections": True,
+        "jet_type1met_selections": True,
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),

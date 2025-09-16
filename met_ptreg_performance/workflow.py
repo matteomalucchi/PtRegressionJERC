@@ -13,7 +13,10 @@ from pocket_coffea.lib.leptons import lepton_selection, get_dilepton
 from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
 
 from configs.jme.workflow import QCDBaseProcessor
-from configs.jme.custom_cut_functions import jet_selection_nopu
+from configs.jme.custom_cut_functions import (
+    jet_selection_nopu,
+    jet_type1_selection_nopu,
+)
 from utils.basic_functions import add_fields
 
 
@@ -27,7 +30,7 @@ class METProcessor(BaseProcessorABC):
         self.jec_pt_threshold = self.workflow_options["jec_pt_threshold"]
         self.consider_all_jets = self.workflow_options["consider_all_jets"]
         self.add_corr_t1_met_jets = self.workflow_options["add_corr_t1_met_jets"]
-        self.jet_type1_selections = self.workflow_options["jet_type1_selections"]
+        self.jet_type1met_selections = self.workflow_options["jet_type1met_selections"]
 
     def add_GenMET_plus_neutrino(self):
         # Add the neutrinos to the GetJets to compute the MET with neutrinos
@@ -65,7 +68,24 @@ class METProcessor(BaseProcessorABC):
                 self.events["Jet"].mass * (1 - self.events["Jet"].rawFactor),
                 "mass_raw",
             )
-            
+
+        if self.consider_all_jets or self.jet_type1met_selections:
+            self.events["JetGood"] = ak.copy(self.events["Jet"])
+        else:
+            # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
+            self.events["JetGood"] = jet_selection_nopu(
+                self.events, "Jet", self.params, "pt_raw"
+            )
+            if self.only_physical_jet:
+                physisical_jet_mask = (
+                    self.events["JetGood"].pt_raw * np.cosh(self.events["JetGood"].eta)
+                    < (13.6 * 1000) / 2
+                )
+                self.events["JetGood"] = self.events["JetGood"][physisical_jet_mask]
+            # consider only jets with regressed pt > 0
+            reg_mask = self.events["JetGood"].PNetRegPtRawCorr > 0
+            self.events["JetGood"] = self.events["JetGood"][reg_mask]
+
         if self.add_corr_t1_met_jets:
             # consider the lowpt_jets collection
             lowpt_jets = self.events["CorrT1METJet"]
@@ -80,37 +100,63 @@ class METProcessor(BaseProcessorABC):
             lowpt_jets = ak.with_field(
                 lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32), "rawFactor"
             )
-            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "PNetRegPtRawCorr")
-            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "PNetRegPtRawCorrNeutrino")
-            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetB")
-            lowpt_jets = ak.with_field(lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetCvL")
-            
-            lowpt_jets=add_fields(lowpt_jets, "all", four_vec="Momentum4D")
+            lowpt_jets = ak.with_field(
+                lowpt_jets,
+                ak.ones_like(lowpt_jets.pt, dtype=np.float32),
+                "PNetRegPtRawCorr",
+            )
+            lowpt_jets = ak.with_field(
+                lowpt_jets,
+                ak.ones_like(lowpt_jets.pt, dtype=np.float32),
+                "PNetRegPtRawCorrNeutrino",
+            )
+            lowpt_jets = ak.with_field(
+                lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetB"
+            )
+            lowpt_jets = ak.with_field(
+                lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetCvL"
+            )
+            lowpt_jets = add_fields(lowpt_jets, "all", four_vec="Momentum4D")
+
+            if "EmEF" not in lowpt_jets.fields:
+                # EmEF is needed for the jet cleaning in the type1 met correction
+                lowpt_jets = ak.with_field(
+                    lowpt_jets,
+                    ak.zeros_like(lowpt_jets.pt, dtype=np.float32),
+                    "EmEF",
+                )
+            # compute emef for the jets
+            self.events["JetGood"] = ak.with_field(
+                self.events["JetGood"],
+                self.events["JetGood"].chEmEF + self.events["JetGood"].neEmEF,
+                "EmEF",
+            )
 
             # concatenate the two collections
-            self.events["JetGood"] = ak.concatenate(
-                [self.events["Jet"], lowpt_jets], axis=1
+            self.events["JetType1MET"] = ak.concatenate(
+                [ak.copy(self.events["JetGood"]), lowpt_jets], axis=1
             )
-        elif self.consider_all_jets:
-            self.events["JetGood"] = ak.copy(self.events["Jet"])
+            # self.events["JetGood"] = ak.concatenate(
+            #     [self.events["JetGood"], lowpt_jets], axis=1
+            # )
         else:
-            # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
-            # TODO  add here the cut on pt only for the regression
-            self.events["JetGood"] = jet_selection_nopu(
-                self.events, "Jet", self.params, "pt_raw"
-            )
+            self.events["JetType1MET"] = ak.copy(self.events["JetGood"])
 
-            if self.only_physical_jet:
-                physisical_jet_mask = (
-                    self.events["JetGood"].pt_raw * np.cosh(self.events["JetGood"].eta)
-                    < (13.6 * 1000) / 2
-                )
-                self.events["JetGood"] = self.events["JetGood"][physisical_jet_mask]
+        # Change the rawFactor of the JetType1MET collection to account for muon subtraction
+        # This is not exactly the correct thing to do. We shouldn't be using the full
+        # jet eta and phi but the eta and phi of muon-less jet p4. Not possible with
+        # current NanoAODs.
+        self.events["JetType1MET"] = ak.with_field(
+            self.events["JetType1MET"],
+            1
+            - (
+                (1 - self.events["JetType1MET"].rawFactor)
+                * (1 - self.events["JetType1MET"].muonSubtrFactor)
+            ),
+            "rawFactor",
+        )
+        # TODO: check if the muonless eta and phi are present in the file
 
-            # consider only jets with regressed pt > 0
-            reg_mask= self.events["JetGood"].PNetRegPtRawCorr>0
-            self.events["JetGood"] = self.events["JetGood"][reg_mask]
-            
         # Create extra Jet collections for calibration
         self.events["JetGoodJEC"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNet"] = ak.copy(self.events["JetGood"])
@@ -130,17 +176,37 @@ class METProcessor(BaseProcessorABC):
             },
             with_name="Momentum4D",
         )
+        # TODO: selection of type1 met jets
+        self.events["JetType1MET"] = jet_type1_selection_nopu(
+            self.events, "JetType1MET", self.params, "pt"
+        )
+
+        jets_type1met_raw = ak.zip(
+            {
+                "pt": self.events.JetType1MET.pt_raw,
+                "eta": self.events.JetType1MET.eta,
+                "phi": self.events.JetType1MET.phi,
+                "mass": self.events.JetType1MET.mass_raw,
+            },
+            with_name="Momentum4D",
+        )
 
         self.met_branches = ["RawPuppiMET", "PuppiMET"]
 
-        for jet_coll_name in [
-            "JetGood",
-            "JetGoodJEC",
-            "JetGoodPNet",
-            "JetGoodPNetPlusNeutrino",
-        ]:
+        for jet_coll_name, jets_raw in zip(
+            [
+                "JetGood",
+                "JetGoodJEC",
+                "JetType1MET",
+                "JetGoodPNet",
+                "JetGoodPNetPlusNeutrino",
+            ],
+            [jets_raw, jets_raw, jets_type1met_raw, jets_raw, jets_raw],
+        ):
 
-            self.events[jet_coll_name]=add_fields(self.events[jet_coll_name], four_vec="Momentum4D")
+            self.events[jet_coll_name] = add_fields(
+                self.events[jet_coll_name], four_vec="Momentum4D"
+            )
             if "PNet" in jet_coll_name:
                 # Correct MET with MC Truth only jets with pt reg > 15
                 corr_reg_pt_mask = (
