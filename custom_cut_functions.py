@@ -1,15 +1,13 @@
 import awkward as ak
 import numpy as np
 
-# from configs.jme.params.binning import *
-
 
 def ptbin(events, params, **kwargs):
     # Mask to select events in a MatchedJets pt bin
     if params["pt_high"] == "Inf":
         mask = events.MatchedJets.pt > params["pt_low"]
     elif type(params["pt_high"]) != str:
-        mask = (events.MatchedJets.JetPtRaw > params["pt_low"]) & (  # HERE
+        mask = (events.MatchedJets.JetPtRaw > params["pt_low"]) & (
             events.MatchedJets.JetPtRaw < params["pt_high"]
         )
     else:
@@ -111,6 +109,6 @@ def jet_type1_selection_nopu(events, jet_type, params, pt_cut="pt"):
 
     # same selection as in
     # https://github.com/nurfikri89/NanoSkimmer/blob/1b4db934993267761710ab2401caf43d7a19d710/modules/AddJEC.C#L394
-    mask_jets = (getattr(jets, pt_cut) > cuts[pt_cut]) & jets.EmEF < cuts["EmEF"]
-    
+    mask_jets = (getattr(jets, pt_cut) > cuts[pt_cut]) & (jets.EmEF < cuts["EmEF"])
+
     return jets[mask_jets]
