@@ -18,11 +18,13 @@ met_list = [
     "RawPuppiMET",
     "RawPuppiMET-Type1",
     "RawPuppiMET-Type1JEC",
+    "RawPuppiMET-Type1CorrMET",
     "RawPuppiMET-Type1PNet",
     "RawPuppiMET-Type1PNetPlusNeutrino",
     "PuppiMET",
     "PuppiMET-Type1",
     "PuppiMET-Type1JEC",
+    "PuppiMET-Type1CorrMET",
     "PuppiMET-Type1PNet",
     "PuppiMET-Type1PNetPlusNeutrino",
 ]
@@ -41,13 +43,15 @@ plot_met_list=[
     "RawPuppiMET",
     "RawPuppiMET-Type1",
     "RawPuppiMET-Type1JEC",
-    "RawPuppiMET-Type1PNet",
-    "RawPuppiMET-Type1PNetPlusNeutrino",
+    "RawPuppiMET-Type1CorrMET",
+    # "RawPuppiMET-Type1PNet",
+    # "RawPuppiMET-Type1PNetPlusNeutrino",
     "PuppiMET",
     "PuppiMET-Type1",
     "PuppiMET-Type1JEC",
-    "PuppiMET-Type1PNet",
-    "PuppiMET-Type1PNetPlusNeutrino",
+    "PuppiMET-Type1CorrMET",
+    # "PuppiMET-Type1PNet",
+    # "PuppiMET-Type1PNetPlusNeutrino",
 ]
 # keep only the key in plot_met_list
 met_dict_names= {met: infos for met, infos in met_dict_names.items() if met in plot_met_list}

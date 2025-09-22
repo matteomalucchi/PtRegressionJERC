@@ -4,7 +4,7 @@ object_preselection:
     eta: 4.7 
     jetId: 0
 
-  JetType1MET:
+  JetGoodCorrMET:
     pt: 15
     EmEF: 0.9 
 

@@ -121,7 +121,7 @@ def weighted_std_dev(x, w):
     return std_w, std_err_w
 
 
-def compute_u_info(u_i, weights_i, distribution_name, hists_dict):
+def compute_u_info(u_i, weights_i, distribution_name, all_responses):
     """
     Compute mean, quantile resolution, and std. dev for a given distribution
     and fill the results into the histogram dictionary.
@@ -134,23 +134,23 @@ def compute_u_info(u_i, weights_i, distribution_name, hists_dict):
         Weights corresponding to u_i.
     distribution_name : str
         Name of the distribution (e.g. 'u_perp', 'u_paral').
-    hists_dict : dict
+    all_responses : dict
         Dictionary where results (values/errors) are stored.
     """
     mean_u_i, err_mean_u_i = weighted_mean(u_i, weights_i)
-    hists_dict[f"{distribution_name}_mean"]["data"]["y"][0].append(mean_u_i)
-    hists_dict[f"{distribution_name}_mean"]["data"]["y"][1].append(err_mean_u_i)
+    all_responses[f"{distribution_name}_mean"]["data"]["y"][0].append(mean_u_i)
+    all_responses[f"{distribution_name}_mean"]["data"]["y"][1].append(err_mean_u_i)
 
-    hists_dict[f"{distribution_name}_quantile_resolution"]["data"]["y"][0].append(
+    all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][0].append(
         (np.quantile(u_i, 0.84) - np.quantile(u_i, 0.16)) / 2.0,
     )
-    hists_dict[f"{distribution_name}_quantile_resolution"]["data"]["y"][1].append(0)
+    all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][1].append(0)
 
     stddev_u_i, err_stddev_u_i = weighted_std_dev(u_i, weights_i)
-    hists_dict[f"{distribution_name}_stddev_resolution"]["data"]["y"][0].append(
+    all_responses[f"{distribution_name}_stddev_resolution"]["data"]["y"][0].append(
         stddev_u_i
     )
-    hists_dict[f"{distribution_name}_stddev_resolution"]["data"]["y"][1].append(
+    all_responses[f"{distribution_name}_stddev_resolution"]["data"]["y"][1].append(
         err_stddev_u_i
     )
 
@@ -255,6 +255,19 @@ def create_reponses_info(qT_arr, u_dict, weights):
 
         for i in range(1, len(bin_edges)):
             weights_i = weights[np.where(inds == i)[0]]
+            # check if the bin is empty and put nan
+            if sum(weights_i)<1e-6:
+                for var in ["R", "u_perp", "u_perp_scaled", "u_par", "u_par_scaled"]:
+                    for metric in ["mean", "quantile_resolution", "stddev_resolution"]:
+                        all_responses[met_type][f"{var}_{metric}"]["data"]["y"][0].append(
+                            np.nan
+                        )
+                        all_responses[met_type][f"{var}_{metric}"]["data"]["y"][1].append(
+                            0
+                        )
+                continue
+                
+                
 
             # Define quantities for this qT bin
             R_i = R_arr[np.where(inds == i)[0]]

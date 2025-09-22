@@ -640,25 +640,25 @@ jets_calibration:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetType1MET"
+      AK4PFPuppiType1MET: "JetGoodCorrMET"
       
     2022_postEE:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetType1MET"
+      AK4PFPuppiType1MET: "JetGoodCorrMET"
 
     2023_preBPix:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetType1MET"
+      AK4PFPuppiType1MET: "JetGoodCorrMET"
       
     2023_postBPix:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetType1MET"
+      AK4PFPuppiType1MET: "JetGoodCorrMET"
      
   collection_name_map:
     2022_preEE:

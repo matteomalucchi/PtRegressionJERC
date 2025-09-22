@@ -30,7 +30,6 @@ class METProcessor(BaseProcessorABC):
         self.jec_pt_threshold = self.workflow_options["jec_pt_threshold"]
         self.consider_all_jets = self.workflow_options["consider_all_jets"]
         self.add_corr_t1_met_jets = self.workflow_options["add_corr_t1_met_jets"]
-        self.jet_type1met_selections = self.workflow_options["jet_type1met_selections"]
 
     def add_GenMET_plus_neutrino(self):
         # Add the neutrinos to the GetJets to compute the MET with neutrinos
@@ -69,7 +68,7 @@ class METProcessor(BaseProcessorABC):
                 "mass_raw",
             )
 
-        if self.consider_all_jets or self.jet_type1met_selections:
+        if self.consider_all_jets:
             self.events["JetGood"] = ak.copy(self.events["Jet"])
         else:
             # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
@@ -111,10 +110,10 @@ class METProcessor(BaseProcessorABC):
                 "PNetRegPtRawCorrNeutrino",
             )
             lowpt_jets = ak.with_field(
-                lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetB"
+                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32)-1, "btagPNetB"
             )
             lowpt_jets = ak.with_field(
-                lowpt_jets, ak.ones_like(lowpt_jets.pt, dtype=np.float32), "btagPNetCvL"
+                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32)-1, "btagPNetCvL"
             )
             lowpt_jets = add_fields(lowpt_jets, "all", four_vec="Momentum4D")
 
@@ -122,10 +121,10 @@ class METProcessor(BaseProcessorABC):
                 # EmEF is needed for the jet cleaning in the type1 met correction
                 lowpt_jets = ak.with_field(
                     lowpt_jets,
-                    ak.zeros_like(lowpt_jets.pt, dtype=np.float32),
+                    ak.zeros_like(lowpt_jets.pt, dtype=np.float32)-1,
                     "EmEF",
                 )
-            # compute emef for the jets
+            # compute EmEF for the jets
             self.events["JetGood"] = ak.with_field(
                 self.events["JetGood"],
                 self.events["JetGood"].chEmEF + self.events["JetGood"].neEmEF,
@@ -133,41 +132,51 @@ class METProcessor(BaseProcessorABC):
             )
 
             # concatenate the two collections
-            self.events["JetType1MET"] = ak.concatenate(
+            self.events["JetGoodCorrMET"]= ak.concatenate(
                 [ak.copy(self.events["JetGood"]), lowpt_jets], axis=1
             )
-            # self.events["JetGood"] = ak.concatenate(
-            #     [self.events["JetGood"], lowpt_jets], axis=1
-            # )
         else:
-            self.events["JetType1MET"] = ak.copy(self.events["JetGood"])
+            self.events["JetGoodCorrMET"]= ak.copy(self.events["JetGood"])
 
-        # Change the rawFactor of the JetType1MET collection to account for muon subtraction
+        # Change the rawFactor of the JetGoodCorrMET collection to account for muon subtraction
         # This is not exactly the correct thing to do. We shouldn't be using the full
         # jet eta and phi but the eta and phi of muon-less jet p4. Not possible with
         # current NanoAODs.
-        self.events["JetType1MET"] = ak.with_field(
-            self.events["JetType1MET"],
+        # This is the factor that is used to get the raw muon-less jet pT and mass
+        self.events["JetGoodCorrMET"] = ak.with_field(
+            self.events["JetGoodCorrMET"],
             1
             - (
-                (1 - self.events["JetType1MET"].rawFactor)
-                * (1 - self.events["JetType1MET"].muonSubtrFactor)
+                (1 - self.events["JetGoodCorrMET"].rawFactor)
+                * (1 - self.events["JetGoodCorrMET"].muonSubtrFactor)
             ),
             "rawFactor",
         )
-        # TODO: check if the muonless eta and phi are present in the file
-
+        
+        if "muonSubtrDeltaEta" in self.events["JetGoodCorrMET"].fields:
+            self.events["JetGoodCorrMET"] = ak.with_field(
+                self.events["JetGoodCorrMET"],
+                self.events["JetGoodCorrMET"].muonSubtrDeltaEta+self.events["JetGoodCorrMET"].eta,
+                "eta",)
+        if "muonSubtrDeltaPhi" in self.events["JetGoodCorrMET"].fields:
+            self.events["JetGoodCorrMET"] = ak.with_field(
+                self.events["JetGoodCorrMET"],
+                self.events["JetGoodCorrMET"].muonSubtrDeltaPhi+self.events["JetGoodCorrMET"].phi,
+                "phi",)
+        
         # Create extra Jet collections for calibration
         self.events["JetGoodJEC"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNet"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNetPlusNeutrino"] = ak.copy(self.events["JetGood"])
+        
+        breakpoint()
 
     def apply_object_preselection(self, variation):
         self.events["GenJetGood"] = self.events.GenJet[
             self.events.GenJet.pt > self.params.object_preselection["GenJet"]["pt"]
         ]
 
-        jets_raw = ak.zip(
+        jets_raw_coll = ak.zip(
             {
                 "pt": self.events.JetGood.pt_raw,
                 "eta": self.events.JetGood.eta,
@@ -176,17 +185,19 @@ class METProcessor(BaseProcessorABC):
             },
             with_name="Momentum4D",
         )
-        # TODO: selection of type1 met jets
-        self.events["JetType1MET"] = jet_type1_selection_nopu(
-            self.events, "JetType1MET", self.params, "pt"
+        
+        self.events["JetGoodCorrMET"] = jet_type1_selection_nopu(
+            self.events, "JetGoodCorrMET", self.params, "pt"
         )
+        breakpoint()
 
-        jets_type1met_raw = ak.zip(
+        # for the JetGoodCorrMET we use the raw mass
+        jets_corrmet_raw_coll = ak.zip(
             {
-                "pt": self.events.JetType1MET.pt_raw,
-                "eta": self.events.JetType1MET.eta,
-                "phi": self.events.JetType1MET.phi,
-                "mass": self.events.JetType1MET.mass_raw,
+                "pt": self.events.JetGoodCorrMET.pt_raw,
+                "eta": self.events.JetGoodCorrMET.eta,
+                "phi": self.events.JetGoodCorrMET.phi,
+                "mass": self.events.JetGoodCorrMET.mass_raw,
             },
             with_name="Momentum4D",
         )
@@ -197,17 +208,19 @@ class METProcessor(BaseProcessorABC):
             [
                 "JetGood",
                 "JetGoodJEC",
-                "JetType1MET",
+                "JetGoodCorrMET",
                 "JetGoodPNet",
                 "JetGoodPNetPlusNeutrino",
             ],
-            [jets_raw, jets_raw, jets_type1met_raw, jets_raw, jets_raw],
+            [jets_raw_coll, jets_raw_coll, jets_corrmet_raw_coll, jets_raw_coll, jets_raw_coll],
         ):
 
             self.events[jet_coll_name] = add_fields(
                 self.events[jet_coll_name], four_vec="Momentum4D"
             )
             if "PNet" in jet_coll_name:
+                continue
+                
                 # Correct MET with MC Truth only jets with pt reg > 15
                 corr_reg_pt_mask = (
                     self.events[jet_coll_name].pt_raw > self.jec_pt_threshold
@@ -268,6 +281,7 @@ class METProcessor(BaseProcessorABC):
                         },
                     )
                     self.met_branches.append(new_met_branch)
+                    breakpoint()
 
         self.events["MuonGood"] = lepton_selection(self.events, "Muon", self.params)
         self.events["ElectronGood"] = lepton_selection(
