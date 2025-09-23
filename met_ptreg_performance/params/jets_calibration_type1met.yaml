@@ -660,7 +660,7 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
       AK4PFPuppiType1MET: "JetGoodCorrMET"
      
-  collection_name_map:
+  collection_name_alias:
     2022_preEE:
       AK4PFPuppiType1MET : "AK4PFPuppi"
       
