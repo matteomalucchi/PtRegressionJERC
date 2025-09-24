@@ -101,14 +101,3 @@ def jet_selection_nopu(events, jet_type, params, pt_cut="pt"):
     )
 
     return jets[mask_jets]
-
-
-def jet_type1_selection_nopu(events, jet_type, params, pt_cut="pt"):
-    jets = events[jet_type]
-    cuts = params.object_preselection[jet_type]
-
-    # same selection as in
-    # https://github.com/nurfikri89/NanoSkimmer/blob/1b4db934993267761710ab2401caf43d7a19d710/modules/AddJEC.C#L394
-    mask_jets = (getattr(jets, pt_cut) > cuts[pt_cut]) & (jets.EmEF < cuts["EmEF"])
-
-    return jets[mask_jets]
