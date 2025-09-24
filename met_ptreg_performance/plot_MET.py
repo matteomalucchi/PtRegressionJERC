@@ -38,6 +38,12 @@ parser.add_argument(
     default=1,
     help="Number of workers for multiprocessing (default: 1, no multiprocessing)",
 )
+parser.add_argument(
+    "--novars",
+    action="store_true",
+    help="If true, old save format without saved variations is expected",
+    default=False,
+)
 parser.add_argument("-o", "--output", type=str, help="Output directory", default="")
 
 args = parser.parse_args()
