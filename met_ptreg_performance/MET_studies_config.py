@@ -98,9 +98,8 @@ cfg = Configurator(
     ],
     preselections=[
         PV_presel,
-        dimuon_presel,
         at_least_one_jet,
-        # get_nObj_min(2, coll="MuonGood")
+        dimuon_presel,
     ],
     categories={
         **common_cats,

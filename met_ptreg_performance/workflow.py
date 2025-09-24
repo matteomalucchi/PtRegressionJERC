@@ -8,16 +8,14 @@ vector.register_awkward()
 
 from pocket_coffea.workflows.base import BaseProcessorABC
 from pocket_coffea.utils.configurator import Configurator
-from pocket_coffea.lib.jets import jet_correction, met_correction_after_jec
+from pocket_coffea.lib.jets import jet_correction, met_correction_after_jec, jet_type1_selection
 from pocket_coffea.lib.leptons import lepton_selection, get_dilepton
 from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
 
 from configs.jme.workflow import QCDBaseProcessor
-from configs.jme.custom_cut_functions import (
-    jet_selection_nopu,
-    jet_type1_selection_nopu,
-)
+from configs.jme.custom_cut_functions import     jet_selection_nopu
 from utils.basic_functions import add_fields
+from configs.MET_studies.custom_cuts_functions import muon_selection_custom
 
 
 class METProcessor(BaseProcessorABC):
@@ -85,6 +83,13 @@ class METProcessor(BaseProcessorABC):
             reg_mask = self.events["JetGood"].PNetRegPtRawCorr > 0
             self.events["JetGood"] = self.events["JetGood"][reg_mask]
 
+        # compute EmEF for the jets
+        self.events["JetGood"] = ak.with_field(
+            self.events["JetGood"],
+            self.events["JetGood"].chEmEF + self.events["JetGood"].neEmEF,
+            "EmEF",
+        )
+        
         if self.add_corr_t1_met_jets:
             # consider the lowpt_jets collection
             lowpt_jets = self.events["CorrT1METJet"]
@@ -110,10 +115,14 @@ class METProcessor(BaseProcessorABC):
                 "PNetRegPtRawCorrNeutrino",
             )
             lowpt_jets = ak.with_field(
-                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32)-1, "btagPNetB"
+                lowpt_jets,
+                ak.zeros_like(lowpt_jets.pt, dtype=np.float32) - 1,
+                "btagPNetB",
             )
             lowpt_jets = ak.with_field(
-                lowpt_jets, ak.zeros_like(lowpt_jets.pt, dtype=np.float32)-1, "btagPNetCvL"
+                lowpt_jets,
+                ak.zeros_like(lowpt_jets.pt, dtype=np.float32) - 1,
+                "btagPNetCvL",
             )
             lowpt_jets = add_fields(lowpt_jets, "all", four_vec="Momentum4D")
 
@@ -121,22 +130,16 @@ class METProcessor(BaseProcessorABC):
                 # EmEF is needed for the jet cleaning in the type1 met correction
                 lowpt_jets = ak.with_field(
                     lowpt_jets,
-                    ak.zeros_like(lowpt_jets.pt, dtype=np.float32)-1,
+                    ak.zeros_like(lowpt_jets.pt, dtype=np.float32) - 1,
                     "EmEF",
                 )
-            # compute EmEF for the jets
-            self.events["JetGood"] = ak.with_field(
-                self.events["JetGood"],
-                self.events["JetGood"].chEmEF + self.events["JetGood"].neEmEF,
-                "EmEF",
-            )
 
             # concatenate the two collections
-            self.events["JetGoodCorrMET"]= ak.concatenate(
+            self.events["JetGoodCorrMET"] = ak.concatenate(
                 [ak.copy(self.events["JetGood"]), lowpt_jets], axis=1
             )
         else:
-            self.events["JetGoodCorrMET"]= ak.copy(self.events["JetGood"])
+            self.events["JetGoodCorrMET"] = ak.copy(self.events["JetGood"])
 
         # Change the rawFactor of the JetGoodCorrMET collection to account for muon subtraction
         # This is not exactly the correct thing to do. We shouldn't be using the full
@@ -152,23 +155,27 @@ class METProcessor(BaseProcessorABC):
             ),
             "rawFactor",
         )
-        
+
         if "muonSubtrDeltaEta" in self.events["JetGoodCorrMET"].fields:
             self.events["JetGoodCorrMET"] = ak.with_field(
                 self.events["JetGoodCorrMET"],
-                self.events["JetGoodCorrMET"].muonSubtrDeltaEta+self.events["JetGoodCorrMET"].eta,
-                "eta",)
+                self.events["JetGoodCorrMET"].muonSubtrDeltaEta
+                + self.events["JetGoodCorrMET"].eta,
+                "eta",
+            )
         if "muonSubtrDeltaPhi" in self.events["JetGoodCorrMET"].fields:
             self.events["JetGoodCorrMET"] = ak.with_field(
                 self.events["JetGoodCorrMET"],
-                self.events["JetGoodCorrMET"].muonSubtrDeltaPhi+self.events["JetGoodCorrMET"].phi,
-                "phi",)
-        
+                self.events["JetGoodCorrMET"].muonSubtrDeltaPhi
+                + self.events["JetGoodCorrMET"].phi,
+                "phi",
+            )
+
         # Create extra Jet collections for calibration
         self.events["JetGoodJEC"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNet"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNetPlusNeutrino"] = ak.copy(self.events["JetGood"])
-        
+
         breakpoint()
 
     def apply_object_preselection(self, variation):
@@ -185,9 +192,9 @@ class METProcessor(BaseProcessorABC):
             },
             with_name="Momentum4D",
         )
-        
-        self.events["JetGoodCorrMET"] = jet_type1_selection_nopu(
-            self.events, "JetGoodCorrMET", self.params, "pt"
+
+        self.events["JetGoodCorrMET"] = jet_type1_selection(
+            self.events, "JetGoodCorrMET", self.params
         )
         breakpoint()
 
@@ -212,7 +219,13 @@ class METProcessor(BaseProcessorABC):
                 "JetGoodPNet",
                 "JetGoodPNetPlusNeutrino",
             ],
-            [jets_raw_coll, jets_raw_coll, jets_corrmet_raw_coll, jets_raw_coll, jets_raw_coll],
+            [
+                jets_raw_coll,
+                jets_raw_coll,
+                jets_corrmet_raw_coll,
+                jets_raw_coll,
+                jets_raw_coll,
+            ],
         ):
 
             self.events[jet_coll_name] = add_fields(
@@ -220,7 +233,7 @@ class METProcessor(BaseProcessorABC):
             )
             if "PNet" in jet_coll_name:
                 continue
-                
+
                 # Correct MET with MC Truth only jets with pt reg > 15
                 corr_reg_pt_mask = (
                     self.events[jet_coll_name].pt_raw > self.jec_pt_threshold
@@ -283,10 +296,12 @@ class METProcessor(BaseProcessorABC):
                     self.met_branches.append(new_met_branch)
                     breakpoint()
 
-        self.events["MuonGood"] = lepton_selection(self.events, "Muon", self.params)
+        self.events["MuonGood"] = muon_selection_custom(self.events, "Muon", self.params)
         self.events["ElectronGood"] = lepton_selection(
             self.events, "Electron", self.params
         )
+
+        # di lepton is composed by the 2 leading muons
         self.events["ll"] = get_dilepton(None, self.events.MuonGood)
 
     def get_hadronic_recoil(self, lepton_coll, MET_coll):

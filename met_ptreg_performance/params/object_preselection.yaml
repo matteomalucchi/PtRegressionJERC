@@ -7,16 +7,19 @@ object_preselection:
   JetGoodCorrMET:
     pt: 15
     EmEF: 0.9 
+    eta: 5.2
 
   GenJet:
     pt: 8 
     eta: 10 
     
   Muon:
-    pt: 20
-    eta: 10
-    id: tightId
-    iso: 0.25
+    pt: 10
+    eta: 2.4
+    dxy: 0.045
+    dz: 0.2
+    id: mediumId
+    iso: 0.15
 
   Electron:
     pt: 15
