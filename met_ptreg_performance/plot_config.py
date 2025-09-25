@@ -100,7 +100,7 @@ total_var_dict = {
     "response_comparison": {
         "plot_name": r"$-u_{||}/q_{T}$",
         "variables": ["u" + met + "_response" for met in met_dict_names],
-        "range": (-1, 2),
+        "range": (-2, 2),
         "log": True,
         # "ratio_label": "MET / RawPuppiMET",
         "reference": "uRawPuppiMET_response",
@@ -152,14 +152,14 @@ response_var_name_dict = {
     "u_perp_scaled_quantile_resolution": r"q $\sigma(u_{\perp}) / (-<u_{\parallel}/q_{T}>)$",
     "u_perp_stddev_resolution": r"std dev $\sigma({u_{\perp}})$ [GeV]",
     "u_perp_scaled_stddev_resolution": r"std dev $\sigma({u_{\perp}}) / (-<u_{\parallel}/q_{T}>)$",
-    "u_par": r"$u_{\parallel}+q_{T}$ [GeV]",
-    "u_par_scaled": r"$u_{\parallel}+q_{T}$ / (-$<u_{\parallel}/q_{T}>$)",
-    "u_par_mean": r"$<u_{\parallel}>$ [GeV]",
-    "u_par_scaled_mean": r"$<u_{\parallel}> / (-<u_{\parallel}/q_{T}>)$",
-    "u_par_quantile_resolution": r"q $\sigma(u_{\parallel})$ [GeV]",
-    "u_par_scaled_quantile_resolution": r"q $\sigma(u_{\parallel}) / (-<u_{\parallel}/q_{T}>)$",
-    "u_par_stddev_resolution": r"std dev $\sigma({u_{\parallel}})$ [GeV]",
-    "u_par_scaled_stddev_resolution": r"std dev $\sigma({u_{\parallel}}) / (-<u_{\parallel}/q_{T}>)$",
+    "u_paral": r"$u_{\parallel}+q_{T}$ [GeV]",
+    "u_paral_scaled": r"$(u_{\parallel}+q_{T})$ / (-$<u_{\parallel}/q_{T}>$)",
+    "u_paral_mean": r"$<u_{\parallel}+q_{T}>$ [GeV]",
+    "u_paral_scaled_mean": r"$<u_{\parallel}+q_{T}> / (-<u_{\parallel}/q_{T}>)$",
+    "u_paral_quantile_resolution": r"q $\sigma(u_{\parallel}+q_{T})$ [GeV]",
+    "u_paral_scaled_quantile_resolution": r"q $\sigma(u_{\parallel}+q_{T}) / (-<u_{\parallel}/q_{T}>)$",
+    "u_paral_stddev_resolution": r"std dev $\sigma({u_{\parallel}+q_{T}})$ [GeV]",
+    "u_paral_scaled_stddev_resolution": r"std dev $\sigma({u_{\parallel}+q_{T}}) / (-<u_{\parallel}/q_{T}>)$",
 }
 
 
@@ -193,3 +193,6 @@ qT_bins = np.array(
 )
 
 N_bins=40
+
+R_bin_edges = np.linspace(-2, 2, N_bins)
+u_bin_edges = np.linspace(-200, 200, N_bins)

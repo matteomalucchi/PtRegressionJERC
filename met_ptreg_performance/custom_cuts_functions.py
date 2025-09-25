@@ -37,7 +37,7 @@ def muon_selection_custom(events, params):
     passes_dxy = abs(leptons.dxy) < cuts["dxy"]
     passes_dz = abs(leptons.dz) < cuts["dz"]
     passes_id = leptons[cuts["id"]] == True
-    passes_iso = leptons.miniPFRelIso_a < cuts["iso"]
+    passes_iso = leptons.miniPFRelIso_all < cuts["iso"]
     passes_is_global = leptons.isGlobal == True
     passes_is_tracker = leptons.isTracker == True
 

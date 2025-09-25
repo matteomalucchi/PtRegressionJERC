@@ -1,3 +1,8 @@
+import logging
+logger = logging.getLogger("matplotlib")
+logger.setLevel(logging.WARNING)  # suppress INFO
+logger.propagate = False
+
 import os
 import numpy as np
 from collections import defaultdict
@@ -14,6 +19,8 @@ from plot_config import (
     met_dict_names,
     u_dict_names,
     N_bins,
+    R_bin_edges,
+    u_bin_edges,
 )
 from utils.plot.HEPPlotter import HEPPlotter
 
@@ -150,6 +157,7 @@ def compute_u_info(u_i, weights_i, distribution_name, all_responses):
     all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][0].append(
         (np.quantile(u_i, 0.84) - np.quantile(u_i, 0.16)) / 2.0,
     )
+    # TODO: compute error on quantile resolution
     all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][1].append(0)
 
     stddev_u_i, err_stddev_u_i = weighted_std_dev(u_i, weights_i)
@@ -161,7 +169,16 @@ def compute_u_info(u_i, weights_i, distribution_name, all_responses):
     )
 
 
-def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges, style):
+def create_hist(
+    hists_dict,
+    qT_arr,
+    u_array,
+    weights,
+    distribution_name,
+    bin_edges,
+    style,
+    rescale_array=None,
+):
     """
     Create and fill a 2D histogram (qT vs variable).
 
@@ -171,8 +188,8 @@ def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges, st
         Dictionary where histograms are stored.
     qT_arr : array-like
         Array of Z boson transverse momentum (qT).
-    u : array-like
-        Variable to be histogrammed (e.g. u_perp, response).
+    u_array : array-like
+        Variable to be histogrammed (e.g. u_perp, u_paral, response).
     weights : array-like
         Event weights.
     distribution_name : str
@@ -188,7 +205,14 @@ def create_hist(hists_dict, qT_arr, u, weights, distribution_name, bin_edges, st
         .Weight()
     )
     h.style = style
-    h.fill(qT_arr, u, weight=weights)
+    if rescale_array is not None:
+        # rescale u by the average response in each qT bin
+        bin_indices = np.digitize(qT_arr, qT_bins) - 1
+        # avoid out of range indices
+        bin_indices = np.clip(bin_indices, 0, len(rescale_array) - 1)
+        u_array = u_array / np.array(rescale_array)[bin_indices]
+
+    h.fill(qT_arr, u_array, weight=weights)
     hists_dict[f"{distribution_name}"] = h
 
 
@@ -233,47 +257,21 @@ def create_reponses_info(qT_arr, u_dict, weights):
             elif "response" in var_name:
                 R_arr = u_dict[met_type][var_name]
 
-        all_hists[met_type] = {}
-        R_bin_edges = np.linspace(-2, 2, N_bins)
-        u_bin_edges = np.linspace(-200, 200, N_bins)
-
-        array_dict = {
-            "R": {"array": R_arr, "bin_edges": R_bin_edges},
-            "u_perp": {"array": u_perp_arr, "bin_edges": u_bin_edges},
-            # TODO: fix the scaling
-            "u_perp_scaled": {"array": u_perp_arr / R_arr, "bin_edges": u_bin_edges},
-            "u_paral": {"array": u_par_arr, "bin_edges": u_bin_edges},
-            # TODO: fix the scaling
-            "u_paral_scaled": {"array": u_par_arr / R_arr, "bin_edges": u_bin_edges},
-        }
-        for var in array_dict:
-            create_hist(
-                all_hists[met_type],
-                qT_arr,
-                array_dict[var]["array"],
-                weights,
-                var,
-                array_dict[var]["bin_edges"],
-                style,
-            )
-
         all_responses[met_type] = defaultdict(defaultdict)
 
         for i in range(1, len(bin_edges)):
             weights_i = weights[np.where(inds == i)[0]]
             # check if the bin is empty and put nan
-            if sum(weights_i)<1e-6:
-                for var in ["R", "u_perp", "u_perp_scaled", "u_par", "u_par_scaled"]:
+            if sum(weights_i) < 1e-6:
+                for var in ["R", "u_perp", "u_perp_scaled", "u_paral", "u_paral_scaled"]:
                     for metric in ["mean", "quantile_resolution", "stddev_resolution"]:
-                        all_responses[met_type][f"{var}_{metric}"]["data"]["y"][0].append(
-                            np.nan
-                        )
-                        all_responses[met_type][f"{var}_{metric}"]["data"]["y"][1].append(
+                        all_responses[met_type][f"{var}_{metric}"]["data"]["y"][
                             0
-                        )
+                        ].append(np.nan)
+                        all_responses[met_type][f"{var}_{metric}"]["data"]["y"][
+                            1
+                        ].append(0)
                 continue
-                
-                
 
             # Define quantities for this qT bin
             R_i = R_arr[np.where(inds == i)[0]]
@@ -287,8 +285,8 @@ def create_reponses_info(qT_arr, u_dict, weights):
                 "R": R_i,
                 "u_perp": u_perp_i,
                 "u_perp_scaled": u_perp_scaled_i,
-                "u_par": u_par_i,
-                "u_par_scaled": u_par_scaled_i,
+                "u_paral": u_par_i,
+                "u_paral_scaled": u_par_scaled_i,
             }
 
             if i == 1:
@@ -309,6 +307,40 @@ def create_reponses_info(qT_arr, u_dict, weights):
 
             for var, u_arr in u_info_dict.items():
                 compute_u_info(u_arr, weights_i, var, all_responses[met_type])
+
+        # Create 2D histograms of qT vs response, u_perp, u_paral
+        all_hists[met_type] = {}
+
+        array_dict = {
+            "R": {"array": R_arr, "bin_edges": R_bin_edges},
+            "u_perp": {"array": u_perp_arr, "bin_edges": u_bin_edges},
+            "u_perp_scaled": {
+                "array": u_perp_arr,
+                "bin_edges": u_bin_edges,
+                "rescale_array": all_responses[met_type]["R_mean"]["data"]["y"][0],
+            },
+            "u_paral": {"array": u_par_arr, "bin_edges": u_bin_edges},
+            "u_paral_scaled": {
+                "array": u_par_arr,
+                "bin_edges": u_bin_edges,
+                "rescale_array": all_responses[met_type]["R_mean"]["data"]["y"][0],
+            },
+        }
+        for var in array_dict:
+            create_hist(
+                all_hists[met_type],
+                qT_arr,
+                array_dict[var]["array"],
+                weights,
+                var,
+                array_dict[var]["bin_edges"],
+                style,
+                (
+                    array_dict[var]["rescale_array"]
+                    if "rescale_array" in array_dict[var]
+                    else None
+                ),
+            )
 
     # change the gerarchy of the keys
     reponses_dict = {}
@@ -465,7 +497,7 @@ def plot_2d_response_histograms(hists_dict, cat):
             p = (
                 HEPPlotter()
                 # .set_plot_config(figsize=(13, 13))
-                .set_options(legend=False,cbar_log=True)
+                .set_options(legend=False, cbar_log=True)
                 .set_output(f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}")
                 .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", ylabel)
                 .set_data(
@@ -501,6 +533,9 @@ def plot_1d_response_histograms(hists_dict, cat):
     for i in range(len(qT_bins) - 1):
         bin_edges_string = f"{qT_bins[i]}_{qT_bins[i+1]}"
         for var_name in hists_dict:
+            print(
+                f"Plotting 1d histogram for {var_name} in category {cat}, qT bin {bin_edges_string}"
+            )
             hist_1d_dict = {}
             for met_type in hists_dict[var_name]:
                 hist = hists_dict[var_name][met_type]
@@ -520,7 +555,10 @@ def plot_1d_response_histograms(hists_dict, cat):
 
             p = (
                 HEPPlotter()
-                .set_plot_config(figsize=(14, 13), lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}       (13.6 TeV)")
+                .set_plot_config(
+                    figsize=(14, 13),
+                    lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}       (13.6 TeV)",
+                )
                 .set_output(output_name)
                 .set_labels(var_label, "Events")
                 .set_options(y_log=False)
@@ -615,6 +653,8 @@ if __name__ == "__main__":
         if file.endswith(".coffea")
     ]
 
-    cat_col, total_datasets_list = get_columns_from_files(inputfiles_data, "nominal", None, False, args.novars)
+    cat_col, total_datasets_list = get_columns_from_files(
+        inputfiles_data, "nominal", None, False, args.novars
+    )
     print(f"Total datasets found: {total_datasets_list}")
     main(cat_col)

@@ -176,8 +176,6 @@ class METProcessor(BaseProcessorABC):
         self.events["JetGoodPNet"] = ak.copy(self.events["JetGood"])
         self.events["JetGoodPNetPlusNeutrino"] = ak.copy(self.events["JetGood"])
 
-        breakpoint()
-
     def apply_object_preselection(self, variation):
         self.events["GenJetGood"] = self.events.GenJet[
             self.events.GenJet.pt > self.params.object_preselection["GenJet"]["pt"]
@@ -196,7 +194,7 @@ class METProcessor(BaseProcessorABC):
         self.events["JetGoodCorrMET"] = jet_type1_selection(
             self.events, "JetGoodCorrMET", self.params
         )
-        breakpoint()
+        # breakpoint()
 
         # for the JetGoodCorrMET we use the raw mass
         jets_corrmet_raw_coll = ak.zip(
@@ -233,7 +231,8 @@ class METProcessor(BaseProcessorABC):
             )
             if "PNet" in jet_coll_name:
                 continue
-
+                
+                # TODO: this is probably wrong for the regression
                 # Correct MET with MC Truth only jets with pt reg > 15
                 corr_reg_pt_mask = (
                     self.events[jet_coll_name].pt_raw > self.jec_pt_threshold
@@ -294,9 +293,11 @@ class METProcessor(BaseProcessorABC):
                         },
                     )
                     self.met_branches.append(new_met_branch)
-                    breakpoint()
+                    # print(f"old met {met_branch}", self.events[met_branch].pt)
+                    # print(f"new met {new_met_branch}", self.events[new_met_branch].pt)
+                    # breakpoint()
 
-        self.events["MuonGood"] = muon_selection_custom(self.events, "Muon", self.params)
+        self.events["MuonGood"] = muon_selection_custom(self.events, self.params)
         self.events["ElectronGood"] = lepton_selection(
             self.events, "Electron", self.params
         )
@@ -304,16 +305,11 @@ class METProcessor(BaseProcessorABC):
         # di lepton is composed by the 2 leading muons
         self.events["ll"] = get_dilepton(None, self.events.MuonGood)
 
-    def get_hadronic_recoil(self, lepton_coll, MET_coll):
+    def get_hadronic_recoil(self, qT, MET_coll):
         met = self.events[MET_coll]
-        leptons_px = ak.sum(
-            self.events[lepton_coll].pt * np.cos(self.events[lepton_coll].phi), axis=1
-        )
-        leptons_py = ak.sum(
-            self.events[lepton_coll].pt * np.sin(self.events[lepton_coll].phi), axis=1
-        )
-        hadronic_recoil_px = -(met.pt * np.cos(met.phi) + leptons_px)
-        hadronic_recoil_py = -(met.pt * np.sin(met.phi) + leptons_py)
+        
+        hadronic_recoil_px = -(met.pt * np.cos(met.phi) + qT.x)
+        hadronic_recoil_py = -(met.pt * np.sin(met.phi) + qT.y)
 
         hadronic_recoil_pt = np.sqrt(hadronic_recoil_px**2 + hadronic_recoil_py**2)
         hadronic_recoil_phi = np.arctan2(hadronic_recoil_py, hadronic_recoil_px)
@@ -362,11 +358,10 @@ class METProcessor(BaseProcessorABC):
             {"x": self.events["ll"].px, "y": self.events["ll"].py},
             with_name="Vector2D",
         )
-        # substract leptons from MET
         for MET_coll in self.met_branches:
-            lepton_coll = "MuonGood"
+            # substract leptons from MET
             self.events[f"u{MET_coll}"] = self.get_hadronic_recoil(
-                lepton_coll, MET_coll
+                self.events["qT"], MET_coll
             )
 
             u_perp_predict, u_paral_predict, response = self.compute_projections_qT(
