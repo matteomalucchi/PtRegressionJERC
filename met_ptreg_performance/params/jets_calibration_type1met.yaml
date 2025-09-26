@@ -636,42 +636,51 @@ jets_calibration:
     "2018":
       AK4PFchs: "Jet"
       AK8PFPuppi: "FatJet"
+
     2022_preEE:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetGoodCorrMET"
+      AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
+      AK4PFPuppiMuonSubtr: "JetMuonSubtr"
       
     2022_postEE:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetGoodCorrMET"
+      AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
+      AK4PFPuppiMuonSubtr: "JetMuonSubtr"
 
     2023_preBPix:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetGoodCorrMET"
+      AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
+      AK4PFPuppiMuonSubtr: "JetMuonSubtr"
       
     2023_postBPix:
       AK4PFPuppi: "JetGoodJEC"
       AK4PFPuppiPNetRegression: "JetGoodPNet"
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
-      AK4PFPuppiType1MET: "JetGoodCorrMET"
-     
+      AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
+      AK4PFPuppiMuonSubtr: "JetMuonSubtr"
+
   collection_name_alias:
     2022_preEE:
-      AK4PFPuppiType1MET : "AK4PFPuppi"
+      AK4PFPuppiLowPtMuonSubtr : "AK4PFPuppi"
+      AK4PFPuppiMuonSubtr : "AK4PFPuppi"
       
     2022_postEE:
-      AK4PFPuppiType1MET : "AK4PFPuppi"
+      AK4PFPuppiLowPtMuonSubtr : "AK4PFPuppi"
+      AK4PFPuppiMuonSubtr : "AK4PFPuppi"
 
     2023_preBPix:
-      AK4PFPuppiType1MET : "AK4PFPuppi"
+      AK4PFPuppiLowPtMuonSubtr : "AK4PFPuppi"
+      AK4PFPuppiMuonSubtr : "AK4PFPuppi"
       
     2023_postBPix:
-      AK4PFPuppiType1MET : "AK4PFPuppi"
+      AK4PFPuppiLowPtMuonSubtr : "AK4PFPuppi"
+      AK4PFPuppiMuonSubtr : "AK4PFPuppi"
 
   jec_name_map_MC: "${default_jets_calibration.jec_name_map_MC}"
   jec_name_map_Data: "${default_jets_calibration.jec_name_map_Data}"
