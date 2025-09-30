@@ -151,7 +151,6 @@ class METProcessor(BaseProcessorABC):
         )
 
         self.events["JetMuonSubtr"] = ak.copy(self.events["Jet"])
-        # NOTE: if I select all jets here, then what happens to the ones without the regression?
         self.events["JetPNetMuonSubtr"] = ak.copy(self.events["Jet"])
         self.events["JetPNetPlusNeutrinoMuonSubtr"] = ak.copy(self.events["Jet"])
 
@@ -207,10 +206,12 @@ class METProcessor(BaseProcessorABC):
                 self.events[jet_name], saved_fields, four_vec="Momentum4D"
             )
             if "PNet" in jet_name:
+                mask_None = ak.is_none(jets_notNone.pt, axis=1)
+                
                 if self.jet_regressed_option == "option_1":
                     # remove None
-                    jets_notNone=jets_notNone[~ak.is_none(jets_notNone.pt, axis=1)]
-                
+                    jets_notNone = jets_notNone[~mask_None]
+
                 elif self.jet_regressed_option == "option_2":
                     jets_muon_subtr = add_fields(
                         self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
@@ -221,7 +222,7 @@ class METProcessor(BaseProcessorABC):
                             jets_notNone = ak.with_field(
                                 jets_notNone,
                                 ak.where(
-                                    ak.is_none(jets_notNone[field], axis=1),
+                                    mask_None,
                                     ak.values_astype(jets_muon_subtr[field], "float32"),
                                     ak.values_astype(jets_notNone[field], "float32"),
                                 ),
@@ -241,8 +242,7 @@ class METProcessor(BaseProcessorABC):
                         self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
                     )
                     # remove None
-                    mask_notNone=~ak.is_none(jets_notNone.pt, axis=1)
-                    jets_notNone=jets_notNone[mask_notNone]
+                    jets_notNone = jets_notNone[~mask_None]
                     for field in saved_fields:
                         if "raw" in field:
                             # for the raw variables, take the ones from the standard jets
@@ -250,38 +250,15 @@ class METProcessor(BaseProcessorABC):
                             # before the correction
                             jets_notNone = ak.with_field(
                                 jets_notNone,
-                                ak.values_astype(jets_muon_subtr[field][mask_notNone], "float32"),
+                                ak.values_astype(
+                                    jets_muon_subtr[field][~mask_None], "float32"
+                                ),
                                 field,
                             )
                 else:
-                    raise ValueError(f"Unknown jet_regressed_option {self.jet_regressed_option}")
-
-                    # ak.fill_none(
-                    #     jets_notNone[field], self.events["JetMuonSubtr"][field]
-                    # )
-                # ak.fill_none(jets_notNone, self.events["JetMuonSubtr"])
-
-                # left = ak.with_name(self.events[jet_name], "Jet")
-                # right = self.events["JetMuonSubtr"]
-
-                # # Use only common fields
-                # common_fields = sorted(set(left.fields) & set(right.fields))
-
-                # # Fill None field-by-field, then rebuild the record
-                # jets_notNone = ak.zip({f: ak.fill_none(left[f], right[f]) for f in common_fields},depth_limit=1)
-
-            # common_fields = sorted(
-            #     set(jets_notNone.fields) & set(self.events["JetLowPtMuonSubtr"].fields)
-            # )
-            # low_pt_jet=ak.zip(
-            #     {f: self.events["JetLowPtMuonSubtr"][f] for f in common_fields},
-            #     depth_limit=1
-            # )
-            # jets_notNone = ak.zip(
-            #     {f: jets_notNone[f] for f in common_fields},
-            #     depth_limit=1
-            # )
-            # jets_notNone = add_fields(jets_notNone, saved_fields, four_vec="Momentum4D")
+                    raise ValueError(
+                        f"Unknown jet_regressed_option {self.jet_regressed_option}"
+                    )
 
             jet_name_corr = jet_name.replace("MuonSubtr", "CorrMET")
             # Add the low pt jets to the collection
@@ -296,15 +273,14 @@ class METProcessor(BaseProcessorABC):
             self.jet_good_list.append(jet_good_name_corr)
 
         self.met_branches = ["RawPuppiMET", "PuppiMET"]
-        # breakpoint()
 
         for jet_coll_name in self.jet_good_list:
             # Create the raw pt collection
-            if self.jet_regressed_option== "option_1" and "PNet" in jet_coll_name:
-                jet_raw_coll_name="JetGoodCorrMET"
+            if self.jet_regressed_option == "option_1" and "PNet" in jet_coll_name:
+                jet_raw_coll_name = "JetGoodCorrMET"
             else:
-                jet_raw_coll_name=jet_coll_name
-                
+                jet_raw_coll_name = jet_coll_name
+
             jets_raw = ak.zip(
                 {
                     "pt": self.events[jet_raw_coll_name].pt_raw,
@@ -314,10 +290,7 @@ class METProcessor(BaseProcessorABC):
                 },
                 with_name="Momentum4D",
             )
-
-            self.events[jet_coll_name] = add_fields(
-                self.events[jet_coll_name], four_vec="Momentum4D"
-            )
+            breakpoint()
 
             if self.rescale_MET_with_regressed_pT:
                 for met_branch, jet_coll in zip(
