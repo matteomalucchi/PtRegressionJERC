@@ -58,8 +58,8 @@ for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
             "-Type1",
             "-Type1JEC",
             "-Type1CorrMET",
-            # "-Type1PNet",
-            # "-Type1PNetPlusNeutrino",
+            "-Type1PNetCorrMET",
+            "-Type1PNetPlusNeutrinoCorrMET",
         ]:
 
             tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
@@ -91,6 +91,7 @@ cfg = Configurator(
         "rescale_MET_with_regressed_pT": True,
         "jec_pt_threshold": 15.0,
         "consider_all_jets": True,
+        "jet_regressed_option": "option_3",
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
@@ -114,7 +115,7 @@ cfg = Configurator(
         },
         "bysample": {},
     },
-    calibrators=[JetsPtRegressionCalibrator, JetsCalibrator],
+    calibrators=[JetsCalibrator, JetsPtRegressionCalibrator],
     variations={
         "weights": {
             "common": {

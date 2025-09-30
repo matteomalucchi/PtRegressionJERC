@@ -7,7 +7,17 @@ object_preselection:
   JetCorrMET:
     pt: 15
     EmEF: 0.9 
-    eta: 5.2
+    eta: 9.9
+
+  JetPNetCorrMET:
+    pt: 15
+    EmEF: 0.9 
+    eta: 9.9
+
+  JetPNetPlusNeutrinoCorrMET:
+    pt: 15
+    EmEF: 0.9 
+    eta: 9.9
 
   GenJet:
     pt: 8 

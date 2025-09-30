@@ -639,29 +639,29 @@ jets_calibration:
 
     2022_preEE:
       AK4PFPuppi: "JetGoodJEC"
-      AK4PFPuppiPNetRegression: "JetGoodPNet"
-      AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
+      AK4PFPuppiPNetRegression: "JetPNetMuonSubtr"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
       
     2022_postEE:
       AK4PFPuppi: "JetGoodJEC"
-      AK4PFPuppiPNetRegression: "JetGoodPNet"
-      AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
+      AK4PFPuppiPNetRegression: "JetPNetMuonSubtr"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
 
     2023_preBPix:
       AK4PFPuppi: "JetGoodJEC"
-      AK4PFPuppiPNetRegression: "JetGoodPNet"
-      AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
+      AK4PFPuppiPNetRegression: "JetPNetMuonSubtr"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
       
     2023_postBPix:
       AK4PFPuppi: "JetGoodJEC"
-      AK4PFPuppiPNetRegression: "JetGoodPNet"
-      AK4PFPuppiPNetRegressionPlusNeutrino: "JetGoodPNetPlusNeutrino"
+      AK4PFPuppiPNetRegression: "JetPNetMuonSubtr"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
 

@@ -19,14 +19,14 @@ met_list = [
     # "RawPuppiMET-Type1",
     "RawPuppiMET-Type1CorrMET",
     "RawPuppiMET-Type1JEC",
-    "RawPuppiMET-Type1PNet",
-    "RawPuppiMET-Type1PNetPlusNeutrino",
+    "RawPuppiMET-Type1PNetCorrMET",
+    "RawPuppiMET-Type1PNetPlusNeutrinoCorrMET",
     "PuppiMET",
     # "PuppiMET-Type1",
     "PuppiMET-Type1CorrMET",
     "PuppiMET-Type1JEC",
-    "PuppiMET-Type1PNet",
-    "PuppiMET-Type1PNetPlusNeutrino",
+    "PuppiMET-Type1PNetCorrMET",
+    "PuppiMET-Type1PNetPlusNeutrinoCorrMET",
 ]
 met_dict_names = {
     met: {
@@ -42,14 +42,14 @@ met_dict_names = {
 plot_met_list=[
     "RawPuppiMET",
     # "RawPuppiMET-Type1",
-    "RawPuppiMET-Type1JEC",
+    # "RawPuppiMET-Type1JEC",
     "RawPuppiMET-Type1CorrMET",
-    # "RawPuppiMET-Type1PNet",
-    # "RawPuppiMET-Type1PNetPlusNeutrino",
+    "RawPuppiMET-Type1PNetCorrMET",
+    "RawPuppiMET-Type1PNetPlusNeutrinoCorrMET",
     "PuppiMET",
     # "PuppiMET-Type1",
-    "PuppiMET-Type1JEC",
-    "PuppiMET-Type1CorrMET",
+    # "PuppiMET-Type1JEC",
+    # "PuppiMET-Type1CorrMET",
     # "PuppiMET-Type1PNet",
     # "PuppiMET-Type1PNetPlusNeutrino",
 ]
