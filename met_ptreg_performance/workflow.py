@@ -57,6 +57,87 @@ class METProcessor(BaseProcessorABC):
             self.events["GenMETPlusNeutrino"], GenMETPlusNeutrino["phi"], "phi"
         )
 
+    def align_by_eta(self, full, reduced, put_none=False):
+        """
+        Replace jets in `full` with those from `reduced`
+        wherever eta matches. Missing entries in `reduced`
+        are kept from `full`.
+
+        Both `full` and `reduced` can be jagged JetArrays.
+        """
+        full_eta = full.eta
+        reduced_eta = reduced.eta
+
+        # broadcast: (n_events, n_full, n_reduced)
+        matches = full_eta[:, :, None] == reduced_eta[:, None, :]
+
+        # for each full jet, does a match exist?
+        has_match = ak.any(matches, axis=2)
+
+        # index of the matching jet in reduced (if exists)
+        idx = ak.argmax(matches, axis=2)
+
+        # gather rescaled jets
+        gathered = reduced[idx]
+
+        if put_none:
+            # mask out jets that had no match and put None
+            aligned = ak.mask(gathered, has_match)
+        else:
+            # use rescaled if present, otherwise original
+            aligned = ak.where(has_match, gathered, full)
+
+        return aligned
+
+    def get_low_pt_jets(self):
+        # consider the lowpt jets collection for type 1 met correction
+        jet_low_pt = ak.copy(self.events["CorrT1METJet"])
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            jet_low_pt.rawPt,
+            "pt",
+        )
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            ak.zeros_like(jet_low_pt.pt, dtype=np.float32),
+            "mass",
+        )
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            ak.zeros_like(jet_low_pt.pt, dtype=np.float32),
+            "rawFactor",
+        )
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            ak.ones_like(jet_low_pt.pt, dtype=np.float32),
+            "PNetRegPtRawCorr",
+        )
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            ak.ones_like(jet_low_pt.pt, dtype=np.float32),
+            "PNetRegPtRawCorrNeutrino",
+        )
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            ak.zeros_like(jet_low_pt.pt, dtype=np.float32) - 1,
+            "btagPNetB",
+        )
+        jet_low_pt = ak.with_field(
+            jet_low_pt,
+            ak.zeros_like(jet_low_pt.pt, dtype=np.float32) - 1,
+            "btagPNetCvL",
+        )
+        if "EmEF" not in jet_low_pt.fields:
+            # EmEF is needed for the jet cleaning in the type1 met correction
+            jet_low_pt = ak.with_field(
+                jet_low_pt,
+                ak.zeros_like(jet_low_pt.pt, dtype=np.float32) - 1,
+                "EmEF",
+            )
+        jet_low_pt = add_fields(jet_low_pt, "all", four_vec="Momentum4D")
+
+        return jet_low_pt
+
     def process_extra_after_skim(self):
         self.jet_good_list = ["JetGood"]
 
@@ -101,55 +182,7 @@ class METProcessor(BaseProcessorABC):
 
         # Jets for type 1 met correction
 
-        # consider the lowpt jets collection for type 1 met correction
-        self.events["JetLowPtMuonSubtr"] = ak.copy(self.events["CorrT1METJet"])
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            self.events["JetLowPtMuonSubtr"].rawPt,
-            "pt",
-        )
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            ak.zeros_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32),
-            "mass",
-        )
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            ak.zeros_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32),
-            "rawFactor",
-        )
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            ak.ones_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32),
-            "PNetRegPtRawCorr",
-        )
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            ak.ones_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32),
-            "PNetRegPtRawCorrNeutrino",
-        )
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            ak.zeros_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32) - 1,
-            "btagPNetB",
-        )
-        self.events["JetLowPtMuonSubtr"] = ak.with_field(
-            self.events["JetLowPtMuonSubtr"],
-            ak.zeros_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32) - 1,
-            "btagPNetCvL",
-        )
-        if "EmEF" not in self.events["JetLowPtMuonSubtr"].fields:
-            # EmEF is needed for the jet cleaning in the type1 met correction
-            self.events["JetLowPtMuonSubtr"] = ak.with_field(
-                self.events["JetLowPtMuonSubtr"],
-                ak.zeros_like(self.events["JetLowPtMuonSubtr"].pt, dtype=np.float32)
-                - 1,
-                "EmEF",
-            )
-        self.events["JetLowPtMuonSubtr"] = add_fields(
-            self.events["JetLowPtMuonSubtr"], "all", four_vec="Momentum4D"
-        )
-
+        self.events["JetLowPtMuonSubtr"] = self.get_low_pt_jets()
         self.events["JetMuonSubtr"] = ak.copy(self.events["Jet"])
         self.events["JetPNetMuonSubtr"] = ak.copy(self.events["Jet"])
         self.events["JetPNetPlusNeutrinoMuonSubtr"] = ak.copy(self.events["Jet"])
@@ -192,69 +225,114 @@ class METProcessor(BaseProcessorABC):
         self.events["GenJetGood"] = self.events.GenJet[
             self.events.GenJet.pt > self.params.object_preselection["GenJet"]["pt"]
         ]
-        saved_fields = ["pt", "mass", "phi", "eta", "EmEF", "pt_raw", "mass_raw"]
+        saved_fields = [
+            "pt",
+            "mass",
+            "phi",
+            "eta",
+            "EmEF",
+            "pt_raw",
+            "mass_raw",
+            "rawFactor",
+        ]
 
-        low_pt_jet = add_fields(
-            self.events["JetLowPtMuonSubtr"], saved_fields, four_vec="Momentum4D"
-        )
+        # low_pt_jet = add_fields(
+        #     self.events["JetLowPtMuonSubtr"], saved_fields, four_vec="Momentum4D"
+        # )
         for jet_name in [
             "JetMuonSubtr",
             "JetPNetMuonSubtr",
             "JetPNetPlusNeutrinoMuonSubtr",
         ]:
-            jets_notNone = add_fields(
-                self.events[jet_name], saved_fields, four_vec="Momentum4D"
-            )
+            jets_notNone = self.events[jet_name]
+            # jets_notNone = add_fields(
+            #     self.events[jet_name], saved_fields, four_vec="Momentum4D"
+            # )
             if "PNet" in jet_name:
-                mask_None = ak.is_none(jets_notNone.pt, axis=1)
-                
                 if self.jet_regressed_option == "option_1":
-                    # remove None
-                    jets_notNone = jets_notNone[~mask_None]
+                    pass
 
                 elif self.jet_regressed_option == "option_2":
-                    jets_muon_subtr = add_fields(
-                        self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
+                    jets_notNone = self.align_by_eta(
+                        self.events["JetMuonSubtr"], jets_notNone
                     )
-                    # if Regressed, replace the None with the standard jets
-                    for field in saved_fields:
-                        if "raw" not in field:
-                            jets_notNone = ak.with_field(
-                                jets_notNone,
-                                ak.where(
-                                    mask_None,
-                                    ak.values_astype(jets_muon_subtr[field], "float32"),
-                                    ak.values_astype(jets_notNone[field], "float32"),
-                                ),
-                                field,
-                            )
-                        else:
-                            # for the raw variables, take the ones from the standard jets
-                            # because the pt_raw of the regressed jets is actually the regressed pt
-                            # before the correction
-                            jets_notNone = ak.with_field(
-                                jets_notNone,
-                                ak.values_astype(jets_muon_subtr[field], "float32"),
-                                field,
-                            )
+
+                    # for the raw variables, take the ones from the standard jets
+                    # because the pt_raw of the regressed jets is actually the regressed pt
+                    # before the correction
+                    for field in [f for f in saved_fields if "raw" in f]:
+                        jets_notNone = ak.with_field(
+                            jets_notNone,
+                            ak.values_astype(
+                                self.events["JetMuonSubtr"][field], "float32"
+                            ),
+                            field,
+                        )
+
+                    # jets_muon_subtr = add_fields(
+                    #     self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
+                    # )
+                    # # if Regressed, replace the None with the standard jets
+                    # for field in saved_fields:
+                    #     if "raw" not in field:
+                    #         jets_notNone = ak.with_field(
+                    #             jets_notNone,
+                    #             ak.where(
+                    #                 mask_None,
+                    #                 ak.values_astype(jets_muon_subtr[field], "float32"),
+                    #                 ak.values_astype(jets_notNone[field], "float32"),
+                    #             ),
+                    #             field,
+                    #         )
+                    #     else:
+                    #         # for the raw variables, take the ones from the standard jets
+                    #         # because the pt_raw of the regressed jets is actually the regressed pt
+                    #         # before the correction
+                    #         jets_notNone = ak.with_field(
+                    #             jets_notNone,
+                    #             ak.values_astype(jets_muon_subtr[field], "float32"),
+                    #             field,
+                    #         )
+
                 elif self.jet_regressed_option == "option_3":
-                    jets_muon_subtr = add_fields(
-                        self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
+                    jets_None = self.align_by_eta(
+                        self.events["JetMuonSubtr"], jets_notNone, put_none=True
                     )
-                    # remove None
-                    jets_notNone = jets_notNone[~mask_None]
-                    for field in saved_fields:
-                        if "raw" in field:
-                            # for the raw variables, take the ones from the standard jets
-                            # because the pt_raw of the regressed jets is actually the regressed pt
-                            # before the correction
-                            jets_notNone = ak.with_field(
-                                jets_notNone,
+                    mask_None = ak.is_none(jets_None)
+
+                    # for the raw variables, take the ones from the standard jets
+                    # because the pt_raw of the regressed jets is actually the regressed pt
+                    # before the correction
+                    breakpoint()
+                    for field in [f for f in saved_fields if "raw" in f]:
+                        jets_None = ak.with_field(
+                            jets_None,
                                 ak.values_astype(
-                                    jets_muon_subtr[field][~mask_None], "float32"
-                                ),
-                                field,
-                            )
+                                    self.events["JetMuonSubtr"][field], "float32"
+                            ),
+                            field,
+                        )
+                    
+                    jets_notNone = jets_None[~mask_None]
+
+                    # jets_muon_subtr = add_fields(
+                    #     self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
+                    # )
+                    # # remove None
+                    # jets_notNone = jets_notNone[~mask_None]
+                    # for field in saved_fields:
+                    #     if "raw" in field:
+                    #         # for the raw variables, take the ones from the standard jets
+                    #         # because the pt_raw of the regressed jets is actually the regressed pt
+                    #         # before the correction
+                    #         jets_notNone = ak.with_field(
+                    #             jets_notNone,
+                    #             ak.values_astype(
+                    #                 jets_muon_subtr[field][~mask_None], "float32"
+                    #             ),
+                    #             field,
+                    #         )
+
                 else:
                     raise ValueError(
                         f"Unknown jet_regressed_option {self.jet_regressed_option}"
@@ -263,12 +341,15 @@ class METProcessor(BaseProcessorABC):
             jet_name_corr = jet_name.replace("MuonSubtr", "CorrMET")
             # Add the low pt jets to the collection
             self.events[jet_name_corr] = ak.concatenate(
-                [jets_notNone, low_pt_jet],
+                [jets_notNone, self.events["JetLowPtMuonSubtr"]],
                 axis=1,
             )
             jet_good_name_corr = jet_name_corr.replace("Jet", "JetGood")
             self.events[jet_good_name_corr] = jet_type1_selection(
                 self.events, jet_name_corr, self.params
+            )
+            self.events[jet_good_name_corr] = add_fields(
+                self.events[jet_good_name_corr], saved_fields, four_vec="Momentum4D"
             )
             self.jet_good_list.append(jet_good_name_corr)
 
@@ -290,10 +371,9 @@ class METProcessor(BaseProcessorABC):
                 },
                 with_name="Momentum4D",
             )
-            breakpoint()
 
             if self.rescale_MET_with_regressed_pT:
-                for met_branch, jet_coll in zip(
+                for met_branch, jet_coll_to_remove in zip(
                     ["RawPuppiMET", "PuppiMET"],
                     [jets_raw, self.events.JetGood],
                 ):
@@ -301,7 +381,7 @@ class METProcessor(BaseProcessorABC):
                     new_MET = met_correction_after_jec(
                         self.events,
                         met_branch,
-                        jet_coll,
+                        jet_coll_to_remove,
                         self.events[jet_coll_name],
                     )
                     jet_coll_suffix = jet_coll_name.split("JetGood")[-1]
