@@ -236,18 +236,12 @@ class METProcessor(BaseProcessorABC):
             "rawFactor",
         ]
 
-        # low_pt_jet = add_fields(
-        #     self.events["JetLowPtMuonSubtr"], saved_fields, four_vec="Momentum4D"
-        # )
         for jet_name in [
             "JetMuonSubtr",
             "JetPNetMuonSubtr",
             "JetPNetPlusNeutrinoMuonSubtr",
         ]:
             jets_notNone = self.events[jet_name]
-            # jets_notNone = add_fields(
-            #     self.events[jet_name], saved_fields, four_vec="Momentum4D"
-            # )
             if "PNet" in jet_name:
                 if self.jet_regressed_option == "option_1":
                     pass
@@ -269,41 +263,15 @@ class METProcessor(BaseProcessorABC):
                             field,
                         )
 
-                    # jets_muon_subtr = add_fields(
-                    #     self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
-                    # )
-                    # # if Regressed, replace the None with the standard jets
-                    # for field in saved_fields:
-                    #     if "raw" not in field:
-                    #         jets_notNone = ak.with_field(
-                    #             jets_notNone,
-                    #             ak.where(
-                    #                 mask_None,
-                    #                 ak.values_astype(jets_muon_subtr[field], "float32"),
-                    #                 ak.values_astype(jets_notNone[field], "float32"),
-                    #             ),
-                    #             field,
-                    #         )
-                    #     else:
-                    #         # for the raw variables, take the ones from the standard jets
-                    #         # because the pt_raw of the regressed jets is actually the regressed pt
-                    #         # before the correction
-                    #         jets_notNone = ak.with_field(
-                    #             jets_notNone,
-                    #             ak.values_astype(jets_muon_subtr[field], "float32"),
-                    #             field,
-                    #         )
-
                 elif self.jet_regressed_option == "option_3":
                     jets_None = self.align_by_eta(
                         self.events["JetMuonSubtr"], jets_notNone, put_none=True
                     )
-                    mask_None = ak.is_none(jets_None)
+                    mask_None = ak.is_none(jets_None, axis=1)
 
                     # for the raw variables, take the ones from the standard jets
                     # because the pt_raw of the regressed jets is actually the regressed pt
                     # before the correction
-                    breakpoint()
                     for field in [f for f in saved_fields if "raw" in f]:
                         jets_None = ak.with_field(
                             jets_None,
@@ -314,24 +282,6 @@ class METProcessor(BaseProcessorABC):
                         )
                     
                     jets_notNone = jets_None[~mask_None]
-
-                    # jets_muon_subtr = add_fields(
-                    #     self.events["JetMuonSubtr"], saved_fields, four_vec="Momentum4D"
-                    # )
-                    # # remove None
-                    # jets_notNone = jets_notNone[~mask_None]
-                    # for field in saved_fields:
-                    #     if "raw" in field:
-                    #         # for the raw variables, take the ones from the standard jets
-                    #         # because the pt_raw of the regressed jets is actually the regressed pt
-                    #         # before the correction
-                    #         jets_notNone = ak.with_field(
-                    #             jets_notNone,
-                    #             ak.values_astype(
-                    #                 jets_muon_subtr[field][~mask_None], "float32"
-                    #             ),
-                    #             field,
-                    #         )
 
                 else:
                     raise ValueError(
