@@ -263,7 +263,7 @@ class METProcessor(BaseProcessorABC):
                             field,
                         )
 
-                elif self.jet_regressed_option == "option_3":
+                elif self.jet_regressed_option == "option_3" or self.jet_regressed_option == "option_4":
                     jets_None = self.align_by_eta(
                         self.events["JetMuonSubtr"], jets_notNone, put_none=True
                     )
@@ -289,11 +289,16 @@ class METProcessor(BaseProcessorABC):
                     )
 
             jet_name_corr = jet_name.replace("MuonSubtr", "CorrMET")
-            # Add the low pt jets to the collection
-            self.events[jet_name_corr] = ak.concatenate(
-                [jets_notNone, self.events["JetLowPtMuonSubtr"]],
-                axis=1,
-            )
+            
+            if self.jet_regressed_option == "option_4" and "PNet" in jet_name:
+                self.events[jet_name_corr]=jets_notNone
+            else:
+                # Add the low pt jets to the collection
+                self.events[jet_name_corr] = ak.concatenate(
+                    [jets_notNone, self.events["JetLowPtMuonSubtr"]],
+                    axis=1,
+                )
+                
             jet_good_name_corr = jet_name_corr.replace("Jet", "JetGood")
             self.events[jet_good_name_corr] = jet_type1_selection(
                 self.events, jet_name_corr, self.params
