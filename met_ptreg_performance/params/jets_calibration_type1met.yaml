@@ -846,3 +846,60 @@ jets_calibration:
   # the key default_jets_calibration.variations.full_variations contains the full setup of JET variations.
   # setup `jets_calibration.variations == "${default_jets_calibration.variations.full_variations}"` to use all variations
   variations: "${default_jets_calibration.variations.total_variation}"
+
+MET_calibration:
+  collection:
+    2016_PreVFP: 
+      MET: "Jet"
+    2016_PostVFP:
+      MET: "Jet"
+    "2017":
+      MET: "Jet"
+    "2018":
+      MET: "Jet"
+    2022_preEE:
+      PuppiMET: "Jet"
+    2022_postEE:
+      PuppiMET: "Jet"
+    2023_preBPix:
+      PuppiMET: "Jet"
+    2023_postBPix:
+      PuppiMET: "Jet"
+
+  apply_type1_correction:
+    2016_PreVFP: 
+      MET: False
+    2016_PostVFP:
+      MET: False
+    "2017":
+      MET: False
+    "2018":
+      MET: False
+    2022_preEE:
+      PuppiMET: True
+    2022_postEE:
+      PuppiMET: True
+    2023_preBPix:
+      PuppiMET: True
+    2023_postBPix:
+      PuppiMET: True
+  
+  add_low_pt_jets:
+    2016_PreVFP: 
+      MET: False
+    2016_PostVFP:
+      MET: False
+    "2017":
+      MET: False
+    "2018":
+      MET: False
+    2022_preEE:
+      PuppiMET: True
+    2022_postEE:
+      PuppiMET: True
+    2023_preBPix:
+      PuppiMET: True
+    2023_postBPix:
+      PuppiMET: True
+
+
