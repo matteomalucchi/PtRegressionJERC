@@ -56,6 +56,9 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 args = parser.parse_args()
 
 
+YEAR="2022_preEE"
+
+
 outputdir = args.output if args.output else "plots_MET"
 # Create output directory if it does not exist
 if not os.path.exists(outputdir):
@@ -443,7 +446,7 @@ def plot_reponses(reponses_dict, cat):
 
         p = (
             HEPPlotter()
-            # .set_plot_config(figsize=(13, 13))
+            .set_plot_config(lumitext=f"{YEAR} (13.6 TeV)")
             .set_options(split_legend=False, set_ylim=False)
             .set_output(f"{response_dir}/{cat}_{var_name}")
             .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", y_label)
@@ -496,7 +499,7 @@ def plot_2d_response_histograms(hists_dict, cat):
 
             p = (
                 HEPPlotter()
-                # .set_plot_config(figsize=(13, 13))
+                .set_plot_config(lumitext=f"{YEAR} (13.6 TeV)")
                 .set_options(legend=False, cbar_log=True)
                 .set_output(f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}")
                 .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", ylabel)
@@ -557,7 +560,7 @@ def plot_1d_response_histograms(hists_dict, cat):
                 HEPPlotter()
                 .set_plot_config(
                     figsize=(14, 13),
-                    lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}       (13.6 TeV)",
+                    lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}      {YEAR} (13.6 TeV)",
                 )
                 .set_output(output_name)
                 .set_labels(var_label, "Events")
@@ -599,7 +602,7 @@ def plot_histo_met(plotting_info_list):
     for info in plotting_info_list:
         p = (
             HEPPlotter()
-            .set_plot_config(figsize=(14, 13))
+            .set_plot_config(figsize=(14, 13), lumitext=f"{YEAR} (13.6 TeV)")
             .set_output(info["output_base"])
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
             .set_options(y_log=info["y_log"], set_ylim=True)

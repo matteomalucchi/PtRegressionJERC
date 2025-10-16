@@ -31,6 +31,7 @@ class METProcessor(BaseProcessorABC):
         ]
         self.jec_pt_threshold = self.workflow_options["jec_pt_threshold"]
         self.consider_all_jets = self.workflow_options["consider_all_jets"]
+        self.add_low_pt_jets = self.workflow_options["add_low_pt_jets"]
         self.jet_regressed_option = self.workflow_options["jet_regressed_option"]
 
     def add_GenMET_plus_neutrino(self):
@@ -193,7 +194,7 @@ class METProcessor(BaseProcessorABC):
             "JetPNetMuonSubtr",
             "JetPNetPlusNeutrinoMuonSubtr",
         ]:
-            # Change the rawFactor of the JetMuonSubtr and JetLowPtMuonSubtr collection to account for muon subtraction
+            # Change the rawFactor to account for muon subtraction
             # This is not exactly the correct thing to do. We shouldn't be using the full
             # jet eta and phi but the eta and phi of muon-less jet p4. Not possible with
             # current NanoAODs.
@@ -246,7 +247,11 @@ class METProcessor(BaseProcessorABC):
                 if self.jet_regressed_option == "option_1":
                     pass
 
-                elif self.jet_regressed_option == "option_2":
+                elif (
+                    self.jet_regressed_option == "option_2"
+                    or self.jet_regressed_option == "option_5"
+                ):
+                    # add the jets without the regression back in the collection
                     jets_notNone = self.align_by_eta(
                         self.events["JetMuonSubtr"], jets_notNone
                     )
@@ -263,7 +268,11 @@ class METProcessor(BaseProcessorABC):
                             field,
                         )
 
-                elif self.jet_regressed_option == "option_3" or self.jet_regressed_option == "option_4":
+                elif (
+                    self.jet_regressed_option == "option_3"
+                    or self.jet_regressed_option == "option_4"
+                ):
+                    # remove the jets without regressed pt from the Jet collection
                     jets_None = self.align_by_eta(
                         self.events["JetMuonSubtr"], jets_notNone, put_none=True
                     )
@@ -275,12 +284,12 @@ class METProcessor(BaseProcessorABC):
                     for field in [f for f in saved_fields if "raw" in f]:
                         jets_None = ak.with_field(
                             jets_None,
-                                ak.values_astype(
-                                    self.events["JetMuonSubtr"][field], "float32"
+                            ak.values_astype(
+                                self.events["JetMuonSubtr"][field], "float32"
                             ),
                             field,
                         )
-                    
+
                     jets_notNone = jets_None[~mask_None]
 
                 else:
@@ -289,16 +298,21 @@ class METProcessor(BaseProcessorABC):
                     )
 
             jet_name_corr = jet_name.replace("MuonSubtr", "CorrMET")
-            
-            if self.jet_regressed_option == "option_4" and "PNet" in jet_name:
-                self.events[jet_name_corr]=jets_notNone
+
+            if (
+                (self.jet_regressed_option == "option_4" and "PNet" in jet_name)
+                or (self.jet_regressed_option == "option_5" and "PNet" in jet_name)
+                or (not self.add_low_pt_jets and "PNet" not in jet_name)
+            ):
+                # Do not add the low pt jets to the collection
+                self.events[jet_name_corr] = jets_notNone
             else:
                 # Add the low pt jets to the collection
                 self.events[jet_name_corr] = ak.concatenate(
                     [jets_notNone, self.events["JetLowPtMuonSubtr"]],
                     axis=1,
                 )
-                
+
             jet_good_name_corr = jet_name_corr.replace("Jet", "JetGood")
             self.events[jet_good_name_corr] = jet_type1_selection(
                 self.events, jet_name_corr, self.params
