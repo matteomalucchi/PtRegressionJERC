@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger("matplotlib")
 logger.setLevel(logging.WARNING)  # suppress INFO
 logger.propagate = False
@@ -12,6 +13,7 @@ from hist import Hist
 
 
 from utils.plot.get_columns_from_files import get_columns_from_files
+from utils.plot.weighted_quantile import weighted_quantile
 from plot_config import (
     total_var_dict,
     response_var_name_dict,
@@ -56,7 +58,7 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 args = parser.parse_args()
 
 
-YEAR="2022_preEE"
+YEAR = "2022_preEE"
 
 
 outputdir = args.output if args.output else "plots_MET"
@@ -158,7 +160,11 @@ def compute_u_info(u_i, weights_i, distribution_name, all_responses):
     all_responses[f"{distribution_name}_mean"]["data"]["y"][1].append(err_mean_u_i)
 
     all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][0].append(
-        (np.quantile(u_i, 0.84) - np.quantile(u_i, 0.16)) / 2.0,
+        (
+            weighted_quantile(u_i, 0.84, weights_i)
+            - weighted_quantile(u_i, 0.16, weights_i)
+        )
+        / 2.0,
     )
     # TODO: compute error on quantile resolution
     all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][1].append(0)
@@ -266,7 +272,13 @@ def create_reponses_info(qT_arr, u_dict, weights):
             weights_i = weights[np.where(inds == i)[0]]
             # check if the bin is empty and put nan
             if sum(weights_i) < 1e-6:
-                for var in ["R", "u_perp", "u_perp_scaled", "u_paral", "u_paral_scaled"]:
+                for var in [
+                    "R",
+                    "u_perp",
+                    "u_perp_scaled",
+                    "u_paral",
+                    "u_paral_scaled",
+                ]:
                     for metric in ["mean", "quantile_resolution", "stddev_resolution"]:
                         all_responses[met_type][f"{var}_{metric}"]["data"]["y"][
                             0
