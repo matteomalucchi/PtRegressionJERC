@@ -13,7 +13,7 @@ from pocket_coffea.parameters.histograms import (
     Axis,
 )
 from pocket_coffea.parameters import defaults
-from pocket_coffea.lib.calibrators.common.common import (
+from pocket_coffea.lib.calibrators.legacy.legacy_calibrators import (
     JetsCalibrator,
     JetsPtRegressionCalibrator,
 )

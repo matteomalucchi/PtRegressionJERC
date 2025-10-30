@@ -8,18 +8,14 @@ vector.register_awkward()
 
 from pocket_coffea.workflows.base import BaseProcessorABC
 from pocket_coffea.utils.configurator import Configurator
-from pocket_coffea.lib.jets import (
-    jet_correction,
-    met_correction_after_jec,
-    jet_type1_selection,
-)
+from pocket_coffea.lib.jets import met_correction_after_jec
 from pocket_coffea.lib.leptons import lepton_selection, get_dilepton
 from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
 
 from configs.jme.workflow import QCDBaseProcessor
 from configs.jme.custom_cut_functions import jet_selection_nopu
 from utils.basic_functions import add_fields
-from configs.MET_studies.custom_cuts_functions import muon_selection_custom
+from configs.MET_studies.custom_selections import jet_type1_selection, muon_selection_custom
 
 
 class METProcessor(BaseProcessorABC):
