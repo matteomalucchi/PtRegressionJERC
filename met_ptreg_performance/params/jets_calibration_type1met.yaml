@@ -617,6 +617,7 @@ default_jets_calibration:
 # The user can build it from the default factory configurations above
 
 jets_calibration:
+  legacy_txt_calibration: true
   factory_file: "./jets_calibrator_JES_JER_Syst.pkl.gz"
   jet_types:
     MC: 
@@ -654,6 +655,8 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
+      AK8PFPuppi: "FatJet"
+
       
     2022_postEE:
       AK4PFPuppi: "JetGoodJEC"
@@ -661,6 +664,8 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
+      AK8PFPuppi: "FatJet"
+
 
     2023_preBPix:
       AK4PFPuppi: "JetGoodJEC"
@@ -668,6 +673,8 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
+      AK8PFPuppi: "FatJet"
+
       
     2023_postBPix:
       AK4PFPuppi: "JetGoodJEC"
@@ -675,6 +682,8 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetPlusNeutrinoMuonSubtr"
       AK4PFPuppiLowPtMuonSubtr: "JetLowPtMuonSubtr"
       AK4PFPuppiMuonSubtr: "JetMuonSubtr"
+      AK8PFPuppi: "FatJet"
+
 
   # collection_name_alias:
   #   2022_preEE:
@@ -715,24 +724,32 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
     2022_postEE: 
       AK4PFPuppi: True
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
     2023_preBPix: 
       AK4PFPuppi: True
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
     2023_postBPix: 
       AK4PFPuppi: True
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
 
   apply_jec_Data:  # this is needed to know which collection is corrected with which jet factory
     2016_PreVFP: 
@@ -753,24 +770,32 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
     2022_postEE: 
       AK4PFPuppi: True
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
     2023_preBPix: 
       AK4PFPuppi: True
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
     2023_postBPix: 
       AK4PFPuppi: True
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: True
       AK4PFPuppiMuonSubtr: True
+      AK8PFPuppi: False
+
 
   #  Default configuration for pt Regression  **before** JEC
   apply_pt_regr_MC:
@@ -792,24 +817,32 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
     2022_postEE: 
       AK4PFPuppi: False
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
     2023_preBPix: 
       AK4PFPuppi: False
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
     2023_postBPix: 
       AK4PFPuppi: False
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
 
   apply_pt_regr_Data:
     2016_PreVFP: 
@@ -830,24 +863,32 @@ jets_calibration:
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
     2022_postEE: 
       AK4PFPuppi: False
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
     2023_preBPix: 
       AK4PFPuppi: False
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
     2023_postBPix: 
       AK4PFPuppi: False
       AK4PFPuppiPNetRegression: True
       AK4PFPuppiPNetRegressionPlusNeutrino: True
       AK4PFPuppiLowPtMuonSubtr: False
       AK4PFPuppiMuonSubtr: False
+      AK8PFPuppi: False
+
 
 
   rescale_MET_config:

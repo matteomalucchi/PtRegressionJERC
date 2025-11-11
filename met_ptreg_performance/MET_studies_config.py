@@ -29,7 +29,7 @@ localdir = os.path.dirname(os.path.abspath(__file__))
 default_parameters = defaults.get_default_parameters()
 defaults.register_configuration_dir("config_dir", localdir + "/params")
 
-year = os.environ.get("YEAR", "2022_preEE")
+# year = os.environ.get("YEAR", "2022_preEE")
 # default_parameters.lepton_scale_factors.electron_sf["apply_ele_scale_and_smearing"][year] = False
 
 

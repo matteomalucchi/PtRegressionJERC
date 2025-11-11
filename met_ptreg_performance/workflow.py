@@ -14,7 +14,7 @@ from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_n
 
 from configs.jme.workflow import QCDBaseProcessor
 from configs.jme.custom_cut_functions import jet_selection_nopu
-from utils.basic_functions import add_fields
+from utils.basic_functions import add_fields, align_by_eta
 from configs.MET_studies.custom_selections import jet_type1_selection, muon_selection_custom
 
 
@@ -53,38 +53,6 @@ class METProcessor(BaseProcessorABC):
         self.events["GenMETPlusNeutrino"] = ak.with_field(
             self.events["GenMETPlusNeutrino"], GenMETPlusNeutrino["phi"], "phi"
         )
-
-    def align_by_eta(self, full, reduced, put_none=False):
-        """
-        Replace jets in `full` with those from `reduced`
-        wherever eta matches. Missing entries in `reduced`
-        are kept from `full`.
-
-        Both `full` and `reduced` can be jagged JetArrays.
-        """
-        full_eta = full.eta
-        reduced_eta = reduced.eta
-
-        # broadcast: (n_events, n_full, n_reduced)
-        matches = full_eta[:, :, None] == reduced_eta[:, None, :]
-
-        # for each full jet, does a match exist?
-        has_match = ak.any(matches, axis=2)
-
-        # index of the matching jet in reduced (if exists)
-        idx = ak.argmax(matches, axis=2)
-
-        # gather rescaled jets
-        gathered = reduced[idx]
-
-        if put_none:
-            # mask out jets that had no match and put None
-            aligned = ak.mask(gathered, has_match)
-        else:
-            # use rescaled if present, otherwise original
-            aligned = ak.where(has_match, gathered, full)
-
-        return aligned
 
     def get_low_pt_jets(self):
         # consider the lowpt jets collection for type 1 met correction
@@ -248,7 +216,7 @@ class METProcessor(BaseProcessorABC):
                     or self.jet_regressed_option == "option_5"
                 ):
                     # add the jets without the regression back in the collection
-                    jets_notNone = self.align_by_eta(
+                    jets_notNone = align_by_eta(
                         self.events["JetMuonSubtr"], jets_notNone
                     )
 
@@ -269,7 +237,7 @@ class METProcessor(BaseProcessorABC):
                     or self.jet_regressed_option == "option_4"
                 ):
                     # remove the jets without regressed pt from the Jet collection
-                    jets_None = self.align_by_eta(
+                    jets_None = align_by_eta(
                         self.events["JetMuonSubtr"], jets_notNone, put_none=True
                     )
                     mask_None = ak.is_none(jets_None, axis=1)
