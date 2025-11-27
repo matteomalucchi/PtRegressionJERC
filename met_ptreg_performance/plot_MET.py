@@ -38,6 +38,7 @@ parser.add_argument(
 parser.add_argument(
     "--histo",
     action="store_true",
+    default=False,
     help="If set, will plot 1d and 2d histograms of the recoil variables",
 )
 parser.add_argument(
@@ -163,6 +164,7 @@ def compute_u_info(u_i, weights_i, distribution_name, all_responses):
         (
             weighted_quantile(u_i, 0.84, weights_i)
             - weighted_quantile(u_i, 0.16, weights_i)
+            # np.quantile(u_i, 0.84) - np.quantile(u_i, 0.16)
         )
         / 2.0,
     )
@@ -612,6 +614,7 @@ def plot_histo_met(plotting_info_list):
 
     plotters = []
     for info in plotting_info_list:
+        print(f"Plotting MET histogram: {info['output_base']}")
         p = (
             HEPPlotter()
             .set_plot_config(figsize=(14, 13), lumitext=f"{YEAR} (13.6 TeV)")
