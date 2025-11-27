@@ -8,6 +8,7 @@ def jet_type1_selection(events, jet_type, params):
         (jets.pt > cuts["pt"])
         & (abs(jets.eta) < cuts["eta"]) 
         & (jets.EmEF < cuts["EmEF"])
+        & (jets.jetId >= cuts["jetId"])
     )
 
     return jets[mask_jets]
