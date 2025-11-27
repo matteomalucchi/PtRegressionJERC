@@ -1,8 +1,7 @@
 import awkward as ak
-import os
-import cachetools
 import numpy as np
 import vector
+import copy
 
 vector.register_awkward()
 
@@ -56,7 +55,7 @@ class METProcessor(BaseProcessorABC):
 
     def get_low_pt_jets(self):
         # consider the lowpt jets collection for type 1 met correction
-        jet_low_pt = ak.copy(self.events["CorrT1METJet"])
+        jet_low_pt = copy.copy(self.events["CorrT1METJet"])
         jet_low_pt = ak.with_field(
             jet_low_pt,
             jet_low_pt.rawPt,
@@ -125,7 +124,7 @@ class METProcessor(BaseProcessorABC):
             )
 
         if self.consider_all_jets:
-            self.events["JetGood"] = ak.copy(self.events["Jet"])
+            self.events["JetGood"] = copy.copy(self.events["Jet"])
         else:
             # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
             self.events["JetGood"] = jet_selection_nopu(
@@ -142,15 +141,15 @@ class METProcessor(BaseProcessorABC):
             self.events["JetGood"] = self.events["JetGood"][reg_mask]
 
         # Create extra Jet collections for calibration
-        self.events["JetGoodJEC"] = ak.copy(self.events["JetGood"])
+        self.events["JetGoodJEC"] = copy.copy(self.events["JetGood"])
         self.jet_good_list.append("JetGoodJEC")
 
         # Jets for type 1 met correction
 
         self.events["JetLowPtMuonSubtr"] = self.get_low_pt_jets()
-        self.events["JetMuonSubtr"] = ak.copy(self.events["Jet"])
-        self.events["JetPNetMuonSubtr"] = ak.copy(self.events["Jet"])
-        self.events["JetPNetPlusNeutrinoMuonSubtr"] = ak.copy(self.events["Jet"])
+        self.events["JetMuonSubtr"] = copy.copy(self.events["Jet"])
+        self.events["JetPNetMuonSubtr"] = copy.copy(self.events["Jet"])
+        self.events["JetPNetPlusNeutrinoMuonSubtr"] = copy.copy(self.events["Jet"])
 
         for jet_coll in [
             "JetMuonSubtr",
@@ -278,9 +277,12 @@ class METProcessor(BaseProcessorABC):
                 )
 
             jet_good_name_corr = jet_name_corr.replace("Jet", "JetGood")
+            
+            # Apply the jet selection for type 1 met correction
             self.events[jet_good_name_corr] = jet_type1_selection(
                 self.events, jet_name_corr, self.params
             )
+            
             self.events[jet_good_name_corr] = add_fields(
                 self.events[jet_good_name_corr], saved_fields, four_vec="Momentum4D"
             )
@@ -329,6 +331,11 @@ class METProcessor(BaseProcessorABC):
                     self.met_branches.append(new_met_branch)
 
         self.events["MuonGood"] = muon_selection_custom(self.events, self.params)
+        # order muons in pt
+        self.events["MuonGood"] = self.events.MuonGood[
+            ak.argsort(self.events.MuonGood.pt, axis=1, ascending=False)
+        ]
+        
         self.events["ElectronGood"] = lepton_selection(
             self.events, "Electron", self.params
         )
