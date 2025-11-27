@@ -13,14 +13,17 @@ from pocket_coffea.parameters.histograms import (
     Axis,
 )
 from pocket_coffea.parameters import defaults
-from pocket_coffea.lib.calibrators.legacy.legacy_calibrators import (
-    JetsCalibrator,
-    JetsPtRegressionCalibrator,
+import pocket_coffea.lib.calibrators.legacy.legacy_calibrators as legacy_cal
+from pocket_coffea.lib.cut_functions import (
+    get_HLTsel,
+    get_L1sel,
+    goldenJson,
+    eventFlags,
+    get_nPVgood,
 )
 
 from configs.MET_studies.workflow import METProcessor
-from configs.jme.cuts import PV_presel
-from custom_cuts import dimuon_presel, at_least_one_jet
+import custom_cuts as cuts
 
 localdir = os.path.dirname(os.path.abspath(__file__))
 
@@ -38,7 +41,7 @@ parameters = defaults.merge_parameters_from_files(
     default_parameters,
     f"{localdir}/params/object_preselection.yaml",
     f"{localdir}/params/triggers.yaml",
-    f"{localdir}/params/jets_calibration_type1met.yaml",
+    f"{localdir}/params/jets_calibration_legacy_type1met.yaml",
     update=True,
 )
 
@@ -96,11 +99,15 @@ cfg = Configurator(
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
+        eventFlags,
+        get_nPVgood(1),
+        goldenJson,
     ],
     preselections=[
-        PV_presel,
-        at_least_one_jet,
-        dimuon_presel,
+        cuts.custom_JetVetoMap,
+        cuts.PV_presel,
+        cuts.at_least_one_jet,
+        cuts.dimuon_presel,
     ],
     categories={
         **common_cats,
@@ -116,7 +123,7 @@ cfg = Configurator(
         },
         "bysample": {},
     },
-    calibrators=[JetsCalibrator, JetsPtRegressionCalibrator],
+    calibrators=[legacy_cal.JetsCalibrator, legacy_cal.JetsPtRegressionCalibrator],
     variations={
         "weights": {
             "common": {
