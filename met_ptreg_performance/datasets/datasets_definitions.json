@@ -18,6 +18,26 @@
                 ]
             }
         ]
+    },
+    "DYJetsToLL_M-50-v15": {
+        "sample": "DYJetsToLL_M-50-v15",
+        "json_output": "datasets/DYJetsToLL_M-50.json",
+        "description": "Cross-section taken from https://xsecdb-xsdb-official.app.cern.ch/xsdb/?searchQuery=DAS=DYto2L-4Jets_MLL-50_TuneCP5_13p6TeV_madgraphMLM-pythia8",
+        "files": [
+            {
+                "das_names": [
+                    "/DYto2L-4Jets_MLL-50_TuneCP5_13p6TeV_madgraphMLM-pythia8/Run3Summer22NanoAODv15-150X_mcRun3_2022_realistic_v1-v2/NANOAODSIM"
+                ],
+                "metadata": {
+                    "year": "2022_preEE",
+                    "isMC": true,
+                    "xsec": 5467.0
+                },
+                "das_parents_names": [
+                    "/DYto2L-4Jets_MLL-50_TuneCP5_13p6TeV_madgraphMLM-pythia8/Run3Summer22MiniAODv4-130X_mcRun3_2022_realistic_v5-v3/MINIAODSIM"
+                ]
+            }
+        ]
     }
 
 }
