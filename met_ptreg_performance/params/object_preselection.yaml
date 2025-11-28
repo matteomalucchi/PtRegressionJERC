@@ -1,31 +1,34 @@
 object_preselection:
   Jet:
     pt_raw: 15
-    eta: 4.7 
+    eta: 4.7
     jetId: 0
 
+  # same Jet for type-1 MET Correction selections as in
+  # https://github.com/nurfikri89/NanoSkimmer/blob/1b4db934993267761710ab2401caf43d7a19d710/modules/AddJEC.C#L394
+  # with also the JetId
   JetCorrMET:
     pt: 15
-    EmEF: 0.9 
+    EmEF: 0.9
     eta: 5.2
-    jetId: 6
+    jetId: 0 #6
 
   JetPNetCorrMET:
     pt: 15
-    EmEF: 0.9 
+    EmEF: 0.9
     eta: 5.2
-    jetId: 6
+    jetId: 0 #6
 
   JetPNetPlusNeutrinoCorrMET:
     pt: 15
-    EmEF: 0.9 
+    EmEF: 0.9
     eta: 5.2
-    jetId: 6
+    jetId: 0 #6
 
   GenJet:
-    pt: 8 
-    eta: 10 
-    
+    pt: 8
+    eta: 10
+
   Muon:
     pt: 10
     eta: 2.4
