@@ -208,7 +208,6 @@ class METProcessor(BaseProcessorABC):
             "JetPNetMuonSubtr",
             "JetPNetPlusNeutrinoMuonSubtr",
         ]:
-            # jets_notNone = self.events[jet_name]
             jets = self.events[jet_name]
             if "PNet" in jet_name:
                 mask_regressed = jets.pt > 0
@@ -220,9 +219,6 @@ class METProcessor(BaseProcessorABC):
                     or self.jet_regressed_option == "option_5"
                 ):
                     # add the jets without the regression back in the collection
-                    # jets_notNone = align_by_eta(
-                    #     self.events["JetMuonSubtr"], jets_notNone
-                    # )
                     jets = ak.where(
                         mask_regressed,
                         jets,
@@ -233,13 +229,6 @@ class METProcessor(BaseProcessorABC):
                     # because the pt_raw of the regressed jets is actually the regressed pt
                     # before the correction
                     for field in [f for f in saved_fields if "raw" in f]:
-                        # jets_notNone = ak.with_field(
-                        #     jets_notNone,
-                        #     ak.values_astype(
-                        #         self.events["JetMuonSubtr"][field], "float32"
-                        #     ),
-                        #     field,
-                        # )
                         jets = ak.with_field(
                             jets,
                             ak.where(
@@ -255,23 +244,10 @@ class METProcessor(BaseProcessorABC):
                     self.jet_regressed_option == "option_3"
                     or self.jet_regressed_option == "option_4"
                 ):
-                    # remove the jets without regressed pt from the Jet collection
-                    # jets_None = align_by_eta(
-                    #     self.events["JetMuonSubtr"], jets_notNone, put_none=True
-                    # )
-                    # mask_None = ak.is_none(jets_None, axis=1)
-
                     # for the raw variables, take the ones from the standard jets
                     # because the pt_raw of the regressed jets is actually the regressed pt
                     # before the correction
                     for field in [f for f in saved_fields if "raw" in f]:
-                        # jets_None = ak.with_field(
-                        #     jets_None,
-                        #     ak.values_astype(
-                        #         self.events["JetMuonSubtr"][field], "float32"
-                        #     ),
-                        #     field,
-                        # )
                         jets = ak.with_field(
                             jets,
                             ak.where(
@@ -283,7 +259,7 @@ class METProcessor(BaseProcessorABC):
                             field,
                         )
 
-                    # jets_notNone = jets_None[~mask_None]
+                    # remove the jets without regressed pt from the Jet collection
                     jets = jets[mask_regressed]
 
                 else:
@@ -299,14 +275,9 @@ class METProcessor(BaseProcessorABC):
                 or (not self.add_low_pt_jets and "PNet" not in jet_name)
             ):
                 # Do not add the low pt jets to the collection
-                # self.events[jet_name_corr] = jets_notNone
                 self.events[jet_name_corr] = jets
             else:
                 # Add the low pt jets to the collection
-                # self.events[jet_name_corr] = ak.concatenate(
-                #     [jets_notNone, self.events["JetLowPtMuonSubtr"]],
-                #     axis=1,
-                # )
                 self.events[jet_name_corr] = ak.concatenate(
                     [jets, self.events["JetLowPtMuonSubtr"]],
                     axis=1,
