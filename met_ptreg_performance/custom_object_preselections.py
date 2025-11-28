@@ -1,15 +1,28 @@
-def jet_type1_selection(events, jet_type, params):
-    jets = events[jet_type]
-    cuts = params.object_preselection[jet_type]
+from utils.custom_cut_functions import custom_jet_selection
 
-    # same selection as in
-    # https://github.com/nurfikri89/NanoSkimmer/blob/1b4db934993267761710ab2401caf43d7a19d710/modules/AddJEC.C#L394
-    mask_jets = (
-        (jets.pt > cuts["pt"])
-        & (abs(jets.eta) < cuts["eta"]) 
-        & (jets.EmEF < cuts["EmEF"])
-        & (jets.jetId >= cuts["jetId"])
+def jet_type1_selection(
+    events,
+    jet_type,
+    params,
+    year,
+    leptons_collection="",
+    jet_tagger="",
+):
+
+    jets = events[jet_type]
+
+    _, mask = custom_jet_selection(
+        events,
+        jet_type,
+        params,
+        year,
+        leptons_collection,
+        jet_tagger,
     )
+
+    mask_EmEF = jets.EmEF < params.object_preselection[jet_type]["EmEF"]
+
+    mask_jets = mask & mask_EmEF
 
     return jets[mask_jets]
 

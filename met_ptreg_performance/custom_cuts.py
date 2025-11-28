@@ -1,7 +1,8 @@
 import awkward as ak
 from pocket_coffea.lib.cut_definition import Cut
 
-from configs.MET_studies.custom_cuts_functions import dimuon, PV_presel_cut, get_custom_JetVetoMap_Mask
+from configs.MET_studies.custom_cuts_functions import dimuon, PV_presel_cut
+from utils.custom_cut_functions import get_custom_JetVetoMap_Mask
 
 dimuon_presel = Cut(
     name="dilepton",
