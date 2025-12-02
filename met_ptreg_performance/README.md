@@ -2,6 +2,8 @@
 
 Repository to compute MET Type-1 corrections for PNet regressed pT jets, structured as an analysis configurations for a specific development branch from a fork [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main).
 
+The response and resolution of MET as well as the effect of the Type-1 correction derived for PNet regressed pT jets are studied.
+
 ## Workflow
 
 ### Running the analysis
