@@ -1,11 +1,13 @@
-# MC Truth corrections for PNet pT regression
+# MC Truth corrections for pT regression
 
-Repository to compute MC Truth corrections for PNet regressed pT jets, structured as an analysis configurations for a specific development branch from a fork [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main).
+Repository to compute MC Truth corrections for regressed pT jets, structured as an analysis configurations for a specific development branch from a fork [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main).
 
 ## Setup
 
-### lxplus
+### lxplus installation
+
 To setup a local installation on `lxplus`:
+
 ```bash
 # Clone the fork and checkout the desired branch
 git clone --branch jme-pnet-reg https://github.com/matteomalucchi/PocketCoffea.git
@@ -31,7 +33,7 @@ cd ../AnalysisConfigs
 pip install -e .
 ```
 
-After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script. 
+After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
 
 On `lxplus`, it can be done by adding the following line to your `~/.bashrc`:
 
@@ -42,7 +44,7 @@ alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
          /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-el9-stable'
 ```
 
-### Other systems
+### Other systems installation
 
 If instead you are using a different system, where for example you want to install the environment in micromamba, you can do the following:
 
@@ -72,7 +74,9 @@ alias pocket_coffea='micromamba activate pocket-coffea'
 ```
 
 ## Activate the environment
-### lxplus
+
+### lxplus environment
+
 To activate the environment, you can use the alias defined above:
 
 ```bash
@@ -80,16 +84,18 @@ source PocketCoffea/pocket_coffea_env/bin/activate
 export PYTHONPATH=$PWD/PocketCoffea:$PYTHONPATH
 ```
 
-### Other systems
+### Other systems environment
+
 To activate the environment, you can use the alias defined above:
 
 ```bash
 pocket_coffea
 ```
 
-
 ## Workflow
+
 ### Running the analysis
+
 To run this over the full dataset for a particular year in each $\eta$ and $p_T$ bin, you can use the following command:
 
 ```bash
@@ -107,6 +113,7 @@ Year can be set to:
 
 This will save the results in the `dir_name` directory inside the
 `output_all.coffea` file. If running on `lxplus`, there will be an output file for each worker in the `dir_name` directory and you can merge them using:
+
 ```bash
 cd <dir_name>
 pocket-coffea merge-outputs -o output_all.coffea output_job_*.coffea
@@ -114,8 +121,8 @@ pocket-coffea merge-outputs -o output_all.coffea output_job_*.coffea
 
 The output file contains 2D histograms for each $\eta$ bin in which the x-axis is the jet $p_T$ response and the y-axis is the jet $p_T$.
 
-
 ### Computing the MC Truth corrections
+
 After running the full dataset, in order to compute the MC Truth corrections, you can use the following command:
 
 ```bash
@@ -144,13 +151,15 @@ It will also:
 - Plot the inverse of the median in each bin in $\eta$ as a function of $p_T$.
 - Plot the resolution of the response in each bin in $\eta$ as a function of $p_T$ using 3 different definitions.
 
-
 ### Closure test
+
 To run the closure test of the corrections you can re-run the analysis with some additional flags:
+
 ```bash
 python exec.py --full -pnet --dir <dir_name> -y <year> --closure --abs-eta-inclusive [--lxplus]
 ```
-This will run the analysis applying the newly derived corrections which have to be specified in the config file. 
+
+This will run the analysis applying the newly derived corrections which have to be specified in the config file.
 Once this is done, you can run the other steps of the anlaysis to obtain the final plots.
 
 To plot all eta bins on the same plot you can use the following command:
@@ -159,6 +168,5 @@ To plot all eta bins on the same plot you can use the following command:
 cd response_plot/
 python plot_summary_reponse.py -d <dir_name>
 ```
+
 This is useful to plot the closure test of the MC Truth corrections in a inclusive way.
-
-
