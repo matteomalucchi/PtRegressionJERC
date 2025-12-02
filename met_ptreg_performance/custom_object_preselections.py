@@ -1,5 +1,6 @@
 from utils.custom_cut_functions import custom_jet_selection
 
+
 def jet_type1_selection(
     events,
     jet_type,
@@ -26,6 +27,24 @@ def jet_type1_selection(
 
     return jets[mask_jets]
 
+
+def low_pt_jet_type1_selection(
+    events,
+    jet_type,
+    params,
+    year,
+):
+
+    jets = events[jet_type]
+    cuts = params.object_preselection[jet_type]
+
+    mask_jets = (
+        (jets.pt > cuts["pt"])
+        & (abs(jets.eta) < cuts["eta"])
+        & (jets.EmEF < cuts["EmEF"])
+    )
+
+    return jets[mask_jets]
 
 def muon_selection_custom(events, params):
     lepton_flavour = "Muon"

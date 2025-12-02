@@ -578,7 +578,7 @@ def plot_1d_response_histograms(hists_dict, cat):
                 )
                 .set_output(output_name)
                 .set_labels(var_label, "Events")
-                .set_options(y_log=False)
+                .set_options(y_log=False, split_legend=False)
                 .set_data(hist_1d_dict, plot_type="1d")
                 # .add_annotation(
                 #     x=0.05,
@@ -620,7 +620,7 @@ def plot_histo_met(plotting_info_list):
             .set_plot_config(figsize=(14, 13), lumitext=f"{YEAR} (13.6 TeV)")
             .set_output(info["output_base"])
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
-            .set_options(y_log=info["y_log"], set_ylim=True)
+            .set_options(y_log=info["y_log"], set_ylim=True, split_legend=False)
             .set_data(info["series_dict"], plot_type="1d")
         )
         plotters.append(p)

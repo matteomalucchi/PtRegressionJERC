@@ -17,6 +17,7 @@ from utils.basic_functions import add_fields, align_by_eta
 from configs.MET_studies.custom_object_preselections import (
     jet_type1_selection,
     muon_selection_custom,
+    low_pt_jet_type1_selection,
 )
 
 
@@ -188,6 +189,22 @@ class METProcessor(BaseProcessorABC):
                     "phi",
                 )
 
+        # Create uncorrected collection for type 1 met correction
+        # where only muon subtraction and not JECs are applied
+        self.events["JetMuonSubtrUncorrected"] = copy.copy(self.events["Jet"])
+        for field in [
+            "pt",
+            "mass",
+            "pt_raw",
+            "mass_raw",
+        ]:
+            self.events["JetMuonSubtrUncorrected"] = ak.with_field(
+                self.events["JetMuonSubtrUncorrected"],
+                self.events["JetMuonSubtrUncorrected"][field]
+                * (1 - self.events["JetMuonSubtrUncorrected"].muonSubtrFactor),
+                field,
+            )
+
     def apply_object_preselection(self, variation):
         self.events["GenJetGood"] = self.events.GenJet[
             self.events.GenJet.pt > self.params.object_preselection["GenJet"]["pt"]
@@ -203,8 +220,17 @@ class METProcessor(BaseProcessorABC):
             "rawFactor",
         ]
 
+        # cut the low pt jets
+        self.events["JetGoodLowPtMuonSubtr"] = low_pt_jet_type1_selection(
+            self.events,
+            "JetLowPtMuonSubtr",
+            self.params,
+            self._year,
+        )
+
         for jet_name in [
             "JetMuonSubtr",
+            "JetMuonSubtrUncorrected",
             "JetPNetMuonSubtr",
             "JetPNetPlusNeutrinoMuonSubtr",
         ]:
@@ -267,28 +293,37 @@ class METProcessor(BaseProcessorABC):
                         f"Unknown jet_regressed_option {self.jet_regressed_option}"
                     )
 
-            jet_name_corr = jet_name.replace("MuonSubtr", "CorrMET")
+            self.events[jet_name] = jets
 
-            if (
+            jet_good_name_corr = jet_name.replace("MuonSubtr", "CorrMET").replace(
+                "Jet", "JetGood"
+            )
+
+            # Apply the jet selection for type 1 met correction
+            self.events[jet_good_name_corr] = jet_type1_selection(
+                self.events, jet_name, self.params, self._year
+            )
+            if not (
                 (self.jet_regressed_option == "option_4" and "PNet" in jet_name)
                 or (self.jet_regressed_option == "option_5" and "PNet" in jet_name)
                 or (not self.add_low_pt_jets and "PNet" not in jet_name)
             ):
-                # Do not add the low pt jets to the collection
-                self.events[jet_name_corr] = jets
-            else:
                 # Add the low pt jets to the collection
-                self.events[jet_name_corr] = ak.concatenate(
-                    [jets, self.events["JetLowPtMuonSubtr"]],
+                self.events[jet_good_name_corr] = ak.concatenate(
+                    [
+                        self.events[jet_good_name_corr],
+                        self.events["JetGoodLowPtMuonSubtr"],
+                    ],
                     axis=1,
                 )
-
-            jet_good_name_corr = jet_name_corr.replace("Jet", "JetGood")
-
-            # Apply the jet selection for type 1 met correction
-            self.events[jet_good_name_corr] = jet_type1_selection(
-                self.events, jet_name_corr, self.params, self._year
-            )
+                # sort them by pt
+                self.events[jet_good_name_corr] = self.events[jet_good_name_corr][
+                    ak.argsort(
+                        self.events[jet_good_name_corr].pt,
+                        axis=1,
+                        ascending=False,
+                    )
+                ]
 
             self.events[jet_good_name_corr] = add_fields(
                 self.events[jet_good_name_corr], saved_fields, four_vec="Momentum4D"

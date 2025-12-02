@@ -61,6 +61,7 @@ for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
             "-Type1",
             "-Type1JEC",
             "-Type1CorrMET",
+            "-Type1CorrMETUncorrected",
             "-Type1PNetCorrMET",
             "-Type1PNetPlusNeutrinoCorrMET",
         ]:
@@ -71,9 +72,8 @@ cfg = Configurator(
     parameters=parameters,
     datasets={
         "jsons": [
-            # f"{localdir}/datasets/QCD.json",
-            # f"{localdir}/datasets/QCD_PNetReg15.json",
-            f"{localdir}/datasets/DYJetsToLL_M-50_redirector.json",
+            f"{localdir}/datasets/DYJetsToLL_M-50_pnfs_redirector.json",
+            # f"{localdir}/datasets/DYJetsToLL_M-50_redirector.json",
         ],
         "filter": {
             "samples": [
