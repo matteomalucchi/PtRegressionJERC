@@ -138,19 +138,5 @@
             "nevents": "27096229",
             "size": "34684495679"
         }
-    },
-    "DYJetsToLL_M-50_local_2022_preEE": {
-        "files": [
-            "/pnfs/psi.ch/cms/trivcat/store/user/mmalucch/DYJetsToLL_M-50_MET_studies/home/matteo-malucchi/software/DY.root"
-        ],
-        "metadata": {
-            "das_names": "['/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/Run3Summer22NanoAODv12-forPOG_130X_mcRun3_2022_realistic_v5-v2/NANOAODSIM']",
-            "sample": "DYJetsToLL_M-50_local",
-            "year": "2022_preEE",
-            "isMC": "True",
-            "xsec": "1438000000.0",
-            "nevents": "27096229",
-            "size": "34684495679"
-        }
     }
 }

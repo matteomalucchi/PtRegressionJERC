@@ -19,9 +19,29 @@
             }
         ]
     },
-    "DYJetsToLL_M-50-v15": {
-        "sample": "DYJetsToLL_M-50-v15",
-        "json_output": "datasets/DYJetsToLL_M-50.json",
+    "DYto2L-4Jets_MLL-50-v12": {
+        "sample": "DYto2L-4Jets_MLL-50-v12",
+        "json_output": "datasets/DYto2L-4Jets_MLL-50.json",
+        "description": "Cross-section taken from https://xsdb-temp.app.cern.ch/xsdb/?columns=67108863&currentPage=0&ordDirection=1&ordFieldName=cross_section&pageSize=10&searchQuery=process_name%3DQCD_PT-15to7000_TuneCP5_13p6TeV_pythia8",
+        "files": [
+            {
+                "das_names": [
+                    "/DYto2L-4Jets_MLL-50_TuneCP5_13p6TeV_madgraphMLM-pythia8/Run3Summer22NanoAODv12-130X_mcRun3_2022_realistic_v5-v3/NANOAODSIM"
+                ],
+                "metadata": {
+                    "year": "2022_preEE",
+                    "isMC": true,
+                    "xsec": 5558.0
+                },
+                "das_parents_names": [
+                    ""
+                ]
+            }
+        ]
+    },
+    "DYto2L-4Jets_MLL-50-v15": {
+        "sample": "DYto2L-4Jets_MLL-50-v15",
+        "json_output": "datasets/DYto2L-4Jets_MLL-50.json",
         "description": "Cross-section taken from https://xsecdb-xsdb-official.app.cern.ch/xsdb/?searchQuery=DAS=DYto2L-4Jets_MLL-50_TuneCP5_13p6TeV_madgraphMLM-pythia8",
         "files": [
             {
