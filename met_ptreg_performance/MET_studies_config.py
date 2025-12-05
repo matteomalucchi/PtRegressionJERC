@@ -42,6 +42,7 @@ parameters = defaults.merge_parameters_from_files(
     f"{localdir}/params/object_preselection.yaml",
     f"{localdir}/params/triggers.yaml",
     f"{localdir}/params/jets_calibration_legacy_type1met.yaml",
+    # f"{localdir}/../HH4b_common/params/jets_calibration_regression_json.yaml",
     update=True,
 )
 
@@ -73,12 +74,14 @@ cfg = Configurator(
     datasets={
         "jsons": [
             f"{localdir}/datasets/DYJetsToLL_M-50_pnfs_redirector.json",
+            f"{localdir}/datasets/DYto2L-4Jets_MLL-50_pnfs_redirector.json",
             # f"{localdir}/datasets/DYJetsToLL_M-50_redirector.json",
         ],
         "filter": {
             "samples": [
                 (
-                    "DYJetsToLL_M-50-v15"
+                    # "DYto2L-4Jets_MLL-50-v12"
+                    "DYto2L-4Jets_MLL-50-v15"
                     # "DYJetsToLL_M-50"
                     # "DYJetsToLL_M-50_local"
                 )
@@ -100,12 +103,12 @@ cfg = Configurator(
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
-        eventFlags,
-        get_nPVgood(1),
-        goldenJson,
+        # eventFlags,
+        # get_nPVgood(1),
+        # goldenJson,
     ],
     preselections=[
-        cuts.custom_JetVetoMap,
+        # cuts.custom_JetVetoMap,
         cuts.PV_presel,
         cuts.at_least_one_jet,
         cuts.dimuon_presel,

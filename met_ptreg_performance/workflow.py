@@ -217,7 +217,6 @@ class METProcessor(BaseProcessorABC):
             "EmEF",
             "pt_raw",
             "mass_raw",
-            "rawFactor",
         ]
 
         # cut the low pt jets
@@ -236,7 +235,7 @@ class METProcessor(BaseProcessorABC):
         ]:
             jets = self.events[jet_name]
             if "PNet" in jet_name:
-                mask_regressed = jets.pt > 0
+                mask_regressed = ak.nan_to_num(jets.pt, nan=-1) > 0
                 if self.jet_regressed_option == "option_1":
                     jets = jets[mask_regressed]
 
@@ -257,12 +256,7 @@ class METProcessor(BaseProcessorABC):
                     for field in [f for f in saved_fields if "raw" in f]:
                         jets = ak.with_field(
                             jets,
-                            ak.where(
-                                mask_regressed,
-                                self.events["JetMuonSubtr"][field]
-                                * (jets[field] if field == "rawFactor" else 1),
-                                self.events["JetMuonSubtr"][field],
-                            ),
+                            self.events["JetMuonSubtr"][field],
                             field,
                         )
 
@@ -276,12 +270,7 @@ class METProcessor(BaseProcessorABC):
                     for field in [f for f in saved_fields if "raw" in f]:
                         jets = ak.with_field(
                             jets,
-                            ak.where(
-                                mask_regressed,
-                                self.events["JetMuonSubtr"][field]
-                                * (jets[field] if field == "rawFactor" else 1),
-                                self.events["JetMuonSubtr"][field],
-                            ),
+                            self.events["JetMuonSubtr"][field],
                             field,
                         )
 
