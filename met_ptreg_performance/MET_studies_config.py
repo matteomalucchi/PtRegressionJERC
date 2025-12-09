@@ -14,6 +14,7 @@ from pocket_coffea.parameters.histograms import (
 )
 from pocket_coffea.parameters import defaults
 import pocket_coffea.lib.calibrators.legacy.legacy_calibrators as legacy_cal
+from pocket_coffea.lib.calibrators.common.common import JetsCalibrator
 from pocket_coffea.lib.cut_functions import (
     get_HLTsel,
     get_L1sel,
@@ -32,17 +33,14 @@ localdir = os.path.dirname(os.path.abspath(__file__))
 default_parameters = defaults.get_default_parameters()
 defaults.register_configuration_dir("config_dir", localdir + "/params")
 
-# year = os.environ.get("YEAR", "2022_preEE")
-# default_parameters.lepton_scale_factors.electron_sf["apply_ele_scale_and_smearing"][year] = False
-
 
 # adding object preselection
 parameters = defaults.merge_parameters_from_files(
     default_parameters,
     f"{localdir}/params/object_preselection.yaml",
     f"{localdir}/params/triggers.yaml",
-    f"{localdir}/params/jets_calibration_legacy_type1met.yaml",
-    # f"{localdir}/../HH4b_common/params/jets_calibration_regression_json.yaml",
+    # f"{localdir}/params/jets_calibration_legacy_type1met.yaml",
+    f"{localdir}/params/jets_calibration_regression_json.yaml",
     update=True,
 )
 
@@ -56,7 +54,8 @@ recoil_vars = ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]
 
 tot_cols = []
 for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
-    for raw in ["Raw", ""]:
+    # for raw in ["Raw", ""]:
+    for raw in ["Raw"]:
         for type1 in [
             "",
             "-Type1",
@@ -80,14 +79,14 @@ cfg = Configurator(
         "filter": {
             "samples": [
                 (
-                    # "DYto2L-4Jets_MLL-50-v12"
-                    "DYto2L-4Jets_MLL-50-v15"
+                    "DYto2L-4Jets_MLL-50-v12"
+                    # "DYto2L-4Jets_MLL-50-v15"
                     # "DYJetsToLL_M-50"
                     # "DYJetsToLL_M-50_local"
                 )
             ],
             "samples_exclude": [],
-            # "year": [year],
+            "year": ["2023_preBPix"],
         },
         "subsamples": {},
     },
@@ -127,7 +126,8 @@ cfg = Configurator(
         },
         "bysample": {},
     },
-    calibrators=[legacy_cal.JetsCalibrator, legacy_cal.JetsPtRegressionCalibrator],
+    # calibrators=[legacy_cal.JetsCalibrator, legacy_cal.JetsPtRegressionCalibrator],
+    calibrators=[JetsCalibrator],
     variations={
         "weights": {
             "common": {
@@ -135,7 +135,12 @@ cfg = Configurator(
                 "bycategory": {},
             },
             "bysample": {},
-        }
+        },
+        # "shape": {
+        #     "common": {
+        #         "inclusive": ["jet_calibration"],
+        #         },
+        #     }
     },
     variables={},
     columns={

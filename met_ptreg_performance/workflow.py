@@ -340,7 +340,8 @@ class METProcessor(BaseProcessorABC):
 
             if self.rescale_MET_with_regressed_pT:
                 for met_branch, jet_coll_to_remove in zip(
-                    ["RawPuppiMET", "PuppiMET"],
+                    # ["RawPuppiMET", "PuppiMET"],
+                    ["RawPuppiMET"],
                     [jets_raw, self.events.JetGood],
                 ):
 
