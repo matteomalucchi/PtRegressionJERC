@@ -59,7 +59,7 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 args = parser.parse_args()
 
 
-YEAR = "2022_preEE"
+YEARS = ["2022_preEE", "2022_postEE", "2023_preBPix", "2023_postBPix"]
 
 
 outputdir = args.output if args.output else "plots_MET"
@@ -162,8 +162,8 @@ def compute_u_info(u_i, weights_i, distribution_name, all_responses):
 
     all_responses[f"{distribution_name}_quantile_resolution"]["data"]["y"][0].append(
         (
-            weighted_quantile(u_i, 0.84, weights_i)
-            - weighted_quantile(u_i, 0.16, weights_i)
+            float(weighted_quantile(u_i, 0.84, weights_i))
+            - float(weighted_quantile(u_i, 0.16, weights_i))
             # np.quantile(u_i, 0.84) - np.quantile(u_i, 0.16)
         )
         / 2.0,
@@ -436,7 +436,7 @@ def create_met_histos(col_var, category, plotting_info_list):
         plotting_info_list.append(info)
 
 
-def plot_reponses(reponses_dict, cat):
+def plot_reponses(reponses_dict, cat, year):
     """
     Plot response curves (mean, stddev, quantile resolutions) vs qT.
 
@@ -446,6 +446,8 @@ def plot_reponses(reponses_dict, cat):
         Response summary information from `create_reponses_info`.
     cat : str
         Category name.
+    year : str
+        Year string for labeling.
     """
 
     plotters = []
@@ -460,7 +462,7 @@ def plot_reponses(reponses_dict, cat):
 
         p = (
             HEPPlotter()
-            .set_plot_config(lumitext=f"{YEAR} (13.6 TeV)")
+            .set_plot_config(lumitext=f"{year} (13.6 TeV)")
             .set_options(split_legend=False, set_ylim=False)
             .set_output(f"{response_dir}/{cat}_{var_name}")
             .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", y_label)
@@ -483,7 +485,7 @@ def plot_reponses(reponses_dict, cat):
             p.run()
 
 
-def plot_2d_response_histograms(hists_dict, cat):
+def plot_2d_response_histograms(hists_dict, cat, year):
     """
     Plot 2D histograms (qT vs variable) for each MET type.
 
@@ -493,6 +495,8 @@ def plot_2d_response_histograms(hists_dict, cat):
         Histogram dictionary from `create_reponses_info`.
     cat : str
         Category name.
+    year : str
+        Year string for labeling.
     """
 
     plotters = []
@@ -513,7 +517,7 @@ def plot_2d_response_histograms(hists_dict, cat):
 
             p = (
                 HEPPlotter()
-                .set_plot_config(lumitext=f"{YEAR} (13.6 TeV)")
+                .set_plot_config(lumitext=f"{year} (13.6 TeV)")
                 .set_options(legend=False, cbar_log=True)
                 .set_output(f"{histograms_2d_dir}/2d_histo_{cat}_{var_name}_{met_type}")
                 .set_labels(r"Z q$_{\mathrm{T}}$ [GeV]", ylabel)
@@ -532,7 +536,7 @@ def plot_2d_response_histograms(hists_dict, cat):
             p.run()
 
 
-def plot_1d_response_histograms(hists_dict, cat):
+def plot_1d_response_histograms(hists_dict, cat, year):
     """
     Plot 1D histograms of variables in each qT bin.
 
@@ -542,6 +546,8 @@ def plot_1d_response_histograms(hists_dict, cat):
         Histogram dictionary from `create_reponses_info`.
     cat : str
         Category name.
+    year : str
+        Year string for labeling.
     """
 
     # for each bin on qT, plot the distribution of the variable
@@ -574,7 +580,7 @@ def plot_1d_response_histograms(hists_dict, cat):
                 HEPPlotter()
                 .set_plot_config(
                     figsize=(14, 13),
-                    lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}      {YEAR} (13.6 TeV)",
+                    lumitext=f"{qT_bins[i]} < q$_{{\\mathrm{{T}}}}$ (GeV) < {qT_bins[i+1]}      {year} (13.6 TeV)",
                 )
                 .set_output(output_name)
                 .set_labels(var_label, "Events")
@@ -602,7 +608,7 @@ def plot_1d_response_histograms(hists_dict, cat):
             p.run()
 
 
-def plot_histo_met(plotting_info_list):
+def plot_histo_met(plotting_info_list, year):
     """
     Plot MET histograms using either multiprocessing or sequential execution.
 
@@ -610,6 +616,8 @@ def plot_histo_met(plotting_info_list):
     ----------
     plotting_info_list : list
         List of histogram plotting configurations.
+    year : str
+        Year string for labeling.
     """
 
     plotters = []
@@ -617,7 +625,7 @@ def plot_histo_met(plotting_info_list):
         print(f"Plotting MET histogram: {info['output_base']}")
         p = (
             HEPPlotter()
-            .set_plot_config(figsize=(14, 13), lumitext=f"{YEAR} (13.6 TeV)")
+            .set_plot_config(figsize=(14, 13), lumitext=f"{year} (13.6 TeV)")
             .set_output(info["output_base"])
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
             .set_options(y_log=info["y_log"], set_ylim=True, split_legend=False)
@@ -632,7 +640,7 @@ def plot_histo_met(plotting_info_list):
             p.run()
 
 
-def main(cat_col):
+def main(cat_col, year):
     plotting_info_list = []
     for category, col_var in cat_col.items():
         print(f"Processing category: {category}")
@@ -655,12 +663,12 @@ def main(cat_col):
         reponses_dict, hists_dict = create_reponses_info(v_qT, u_dict, weights)
         create_met_histos(col_var, category, plotting_info_list)
 
-        plot_reponses(reponses_dict, category)
+        plot_reponses(reponses_dict, category, year)
         if args.histo:
-            plot_1d_response_histograms(hists_dict, category)
-            plot_2d_response_histograms(hists_dict, category)
+            plot_1d_response_histograms(hists_dict, category, year)
+            plot_2d_response_histograms(hists_dict, category, year)
 
-    plot_histo_met(plotting_info_list)
+    plot_histo_met(plotting_info_list, year)
 
 
 if __name__ == "__main__":
@@ -674,5 +682,13 @@ if __name__ == "__main__":
     cat_col, total_datasets_list = get_columns_from_files(
         inputfiles_data, "nominal", None, False, args.novars
     )
+
+    # get year from dataset
+    year = ""
+    for dataset in total_datasets_list:
+        for yr in YEARS:
+            if yr in dataset:
+                year="_".join([year, yr]) if year else yr
+
     print(f"Total datasets found: {total_datasets_list}")
-    main(cat_col)
+    main(cat_col, year)
