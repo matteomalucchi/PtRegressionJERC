@@ -692,3 +692,5 @@ if __name__ == "__main__":
 
     print(f"Total datasets found: {total_datasets_list}")
     main(cat_col, year)
+    
+    print("Finished plotting!")
