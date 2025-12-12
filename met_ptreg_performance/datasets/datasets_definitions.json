@@ -62,6 +62,19 @@
                 "das_parents_names": [
                     ""
                 ]
+            },
+            {
+                "das_names": [
+                    "/DYto2L-4Jets_MLL-50_TuneCP5_13p6TeV_madgraphMLM-pythia8/Run3Summer23BPixNanoAODv12-130X_mcRun3_2023_realistic_postBPix_v2-v4/NANOAODSIM"
+                ],
+                "metadata": {
+                    "year": "2023_postBPix",
+                    "isMC": true,
+                    "xsec": 5558.0
+                },
+                "das_parents_names": [
+                    ""
+                ]
             }
         ]
     },

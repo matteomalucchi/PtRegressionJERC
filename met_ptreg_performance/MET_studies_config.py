@@ -90,7 +90,7 @@ cfg = Configurator(
                 )
             ],
             "samples_exclude": [],
-            "year": ["2022_postEE"],
+            "year": ["2023_postBPix"],
         },
         "subsamples": {},
     },
