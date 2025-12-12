@@ -67,6 +67,10 @@ for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
         ]:
 
             tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
+    
+    tot_cols.append(ColOut(f"{recoil}PuppiMET", vars_col))
+
+print("Total columns to be stored: ", tot_cols)
 
 cfg = Configurator(
     parameters=parameters,
@@ -86,7 +90,7 @@ cfg = Configurator(
                 )
             ],
             "samples_exclude": [],
-            "year": ["2023_preBPix"],
+            "year": ["2022_postEE"],
         },
         "subsamples": {},
     },
@@ -99,6 +103,7 @@ cfg = Configurator(
         "consider_all_jets": True,
         "add_low_pt_jets": False,
         "jet_regressed_option": "option_5",
+        "dump_columns_as_arrays_per_chunk":"/work/mmalucch/out_MET/out_Option5_Nanov12_2022_postEE/parquet_files"
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
