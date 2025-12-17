@@ -688,7 +688,7 @@ if __name__ == "__main__":
     for dataset in total_datasets_list:
         for yr in YEARS:
             if yr in dataset:
-                year="_".join([year, yr]) if year else yr
+                year=", ".join([year, yr]) if year else yr
 
     print(f"Total datasets found: {total_datasets_list}")
     main(cat_col, year)

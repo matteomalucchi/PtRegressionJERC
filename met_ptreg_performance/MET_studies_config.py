@@ -45,13 +45,26 @@ parameters = defaults.merge_parameters_from_files(
 )
 
 
+### Configuring the MET studies config ###
+year = "2022_preEE"
+# dataset = "DYJetsToLL_M-50"
+dataset = "DYto2L-4Jets_MLL-50-v15"
+option = "option_5"
+add_str=""
+output_chunks_name = (
+    f"/work/mmalucch/out_MET/out_{option}_{dataset}_{year}{add_str}/parquet_files"
+)
+##########################################
+
+
 common_cats = {
     "baseline": [passthrough],
 }
 
+
+# Define the columns to save
 met_vars = ["pt", "phi"]
 recoil_vars = ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]
-
 tot_cols = []
 for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
     # for raw in ["Raw", ""]:
@@ -67,7 +80,7 @@ for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
         ]:
 
             tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
-    
+
     tot_cols.append(ColOut(f"{recoil}PuppiMET", vars_col))
 
 print("Total columns to be stored: ", tot_cols)
@@ -83,14 +96,15 @@ cfg = Configurator(
         "filter": {
             "samples": [
                 (
-                    "DYto2L-4Jets_MLL-50-v12"
+                    dataset
+                    # "DYto2L-4Jets_MLL-50-v12"
                     # "DYto2L-4Jets_MLL-50-v15"
                     # "DYJetsToLL_M-50"
                     # "DYJetsToLL_M-50_local"
                 )
             ],
             "samples_exclude": [],
-            "year": ["2023_postBPix"],
+            "year": [year],
         },
         "subsamples": {},
     },
@@ -102,8 +116,8 @@ cfg = Configurator(
         "jec_pt_threshold": 15.0,
         "consider_all_jets": True,
         "add_low_pt_jets": False,
-        "jet_regressed_option": "option_5",
-        "dump_columns_as_arrays_per_chunk":"/work/mmalucch/out_MET/out_Option5_Nanov12_2022_postEE/parquet_files"
+        "jet_regressed_option": option,
+        "dump_columns_as_arrays_per_chunk": output_chunks_name,
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
