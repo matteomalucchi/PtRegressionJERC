@@ -26,6 +26,15 @@ from pocket_coffea.lib.cut_functions import (
 from configs.MET_studies.workflow import METProcessor
 import custom_cuts as cuts
 
+
+# Define the saving method
+SAVE_COLUMNS = True
+DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK = True
+SAVE_HISTOGRAMS = False
+if SAVE_HISTOGRAMS and (SAVE_COLUMNS or DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK):
+    raise ValueError("You can either save histograms or columns, not both.")
+
+
 localdir = os.path.dirname(os.path.abspath(__file__))
 
 # Loading default parameters
@@ -46,11 +55,11 @@ parameters = defaults.merge_parameters_from_files(
 
 
 ### Configuring the MET studies config ###
-year = "2022_preEE"
+year = "2024"
 # dataset = "DYJetsToLL_M-50"
 dataset = "DYto2L-4Jets_MLL-50-v15"
 option = "option_5"
-add_str=""
+add_str = ""
 output_chunks_name = (
     f"/work/mmalucch/out_MET/out_{option}_{dataset}_{year}{add_str}/parquet_files"
 )
@@ -82,8 +91,13 @@ for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
             tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
 
     tot_cols.append(ColOut(f"{recoil}PuppiMET", vars_col))
-
+    
 print("Total columns to be stored: ", tot_cols)
+
+
+# Define the variables to save
+
+
 
 cfg = Configurator(
     parameters=parameters,
@@ -117,7 +131,9 @@ cfg = Configurator(
         "consider_all_jets": True,
         "add_low_pt_jets": False,
         "jet_regressed_option": option,
-        "dump_columns_as_arrays_per_chunk": output_chunks_name,
+        "dump_columns_as_arrays_per_chunk": (
+            output_chunks_name if DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK else ""
+        ),
     },
     skim=[
         get_HLTsel(primaryDatasets=["SingleMuon"]),
@@ -164,11 +180,17 @@ cfg = Configurator(
     variables={},
     columns={
         "common": {
-            "inclusive": [
-                ColOut("ll", ["mass", "pt", "eta", "phi"]),
-                ColOut("GenMET", ["pt", "phi"]),
-            ]
-            + tot_cols
+            "inclusive": (
+                (
+                    [
+                        ColOut("ll", ["mass", "pt", "eta", "phi"]),
+                        ColOut("GenMET", ["pt", "phi"]),
+                    ]
+                    + tot_cols
+                )
+                if SAVE_COLUMNS
+                else []
+            ),
         },
         "bysample": {},
     },
