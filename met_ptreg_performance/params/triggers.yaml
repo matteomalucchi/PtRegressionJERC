@@ -11,3 +11,6 @@ HLT_triggers:
   "2023_postBPix":
     SingleMuon:
        - IsoMu24
+  "2024":
+    SingleMuon:
+       - IsoMu24
