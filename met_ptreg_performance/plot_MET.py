@@ -7,6 +7,7 @@ logger.propagate = False
 import os
 import numpy as np
 from collections import defaultdict
+import re
 from multiprocessing import Pool
 import argparse
 from hist import Hist
@@ -59,7 +60,7 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 args = parser.parse_args()
 
 
-YEARS = ["2022_preEE", "2022_postEE", "2023_preBPix", "2023_postBPix"]
+YEARS = ["2022_preEE", "2022_postEE", "2023_preBPix", "2023_postBPix", "2024"]
 
 
 outputdir = args.output if args.output else "plots_MET"
@@ -81,6 +82,11 @@ if not os.path.exists(histograms_dir):
 histograms_2d_dir = os.path.join(outputdir, "2d_response_histograms")
 if not os.path.exists(histograms_2d_dir):
     os.makedirs(histograms_2d_dir)
+
+
+def extract_year_tag(s):
+    match = re.search(r"(19|20)\d{2}(?:_[A-Za-z0-9]+)?", s)
+    return match.group() if match else None
 
 
 def run_plot(plotter):
@@ -584,7 +590,7 @@ def plot_1d_response_histograms(hists_dict, cat, year):
                 )
                 .set_output(output_name)
                 .set_labels(var_label, "Events")
-                .set_options(y_log=False, split_legend=False, set_ylim_ratio= 0.5)
+                .set_options(y_log=False, split_legend=False, set_ylim_ratio=0.5)
                 .set_data(hist_1d_dict, plot_type="1d")
                 # .add_annotation(
                 #     x=0.05,
@@ -628,7 +634,12 @@ def plot_histo_met(plotting_info_list, year):
             .set_plot_config(figsize=(14, 13), lumitext=f"{year} (13.6 TeV)")
             .set_output(info["output_base"])
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
-            .set_options(y_log=info["y_log"], set_ylim=True, split_legend=False, set_ylim_ratio= 0.5)
+            .set_options(
+                y_log=info["y_log"],
+                set_ylim=True,
+                split_legend=False,
+                set_ylim_ratio=0.5,
+            )
             .set_data(info["series_dict"], plot_type="1d")
         )
         plotters.append(p)
@@ -686,11 +697,12 @@ if __name__ == "__main__":
     # get year from dataset
     year = ""
     for dataset in total_datasets_list:
-        for yr in YEARS:
-            if yr in dataset:
-                year=", ".join([year, yr]) if year else yr
+        # dataset are of the shape name_year_yearsuffix or name_year
+        y = extract_year_tag(dataset)
 
-    print(f"Total datasets found: {total_datasets_list}")
+        year = ", ".join([year, y]) if year else y
+
+    print(f"Total datasets found: {total_datasets_list}" and f"Year: {year}")
     main(cat_col, year)
-    
+
     print("Finished plotting!")
