@@ -11,7 +11,8 @@ import re
 from multiprocessing import Pool
 import argparse
 from hist import Hist
-
+from coffea.util import load, save
+# from coffea import hist as coffea_hist
 
 from utils.plot.get_columns_from_files import get_columns_from_files
 from utils.plot.weighted_quantile import weighted_quantile
@@ -43,6 +44,13 @@ parser.add_argument(
     help="If set, will plot 1d and 2d histograms of the recoil variables",
 )
 parser.add_argument(
+    "-a",
+    "--array",
+    action="store_true",
+    default=False,
+    help="If set, the inputs are read from columns or parquet files instead of variables",
+)
+parser.add_argument(
     "-w",
     "--workers",
     type=int,
@@ -55,6 +63,13 @@ parser.add_argument(
     help="If true, old save format without saved variations is expected",
     default=False,
 )
+parser.add_argument(
+    "-l",
+    "--load",
+    type=str,
+    help="Path to precomputed histograms coffea file to load and plot",
+    default=None,
+)
 parser.add_argument("-o", "--output", type=str, help="Output directory", default="")
 
 args = parser.parse_args()
@@ -64,6 +79,7 @@ YEARS = ["2022_preEE", "2022_postEE", "2023_preBPix", "2023_postBPix", "2024"]
 
 
 outputdir = args.output if args.output else "plots_MET"
+
 # Create output directory if it does not exist
 if not os.path.exists(outputdir):
     os.makedirs(outputdir)
@@ -83,6 +99,45 @@ histograms_2d_dir = os.path.join(outputdir, "2d_response_histograms")
 if not os.path.exists(histograms_2d_dir):
     os.makedirs(histograms_2d_dir)
 
+def save_dict_to_file(dict_to_save, output_path):
+    """Save multiple dictionaries to a single coffea file.
+
+    Parameters
+    ----------
+    dict_to_save : dict
+        Dictionary to save.
+    output_path : str
+        Output file path.
+    """
+
+    save(dict_to_save, output_path)
+    print(f"Saved histograms to {output_path}")
+
+def do_plots(reponses_dict, hists_dict, met_dict, category, year):
+    """Plot all the required plots.
+
+    Parameters
+    ----------
+    reponses_dict : dict
+        Response summary information from `create_reponses_info`.
+    hists_dict : dict
+        Histogram dictionary from `create_reponses_info`.
+    met_dict : dict
+        Dictionary of histogram plotting configurations.
+    category : str
+        Category name.
+    year : str
+        Year string for labeling.
+    """
+
+    # plot response curves
+    plot_reponses(reponses_dict, category, year)
+    # plot per-bin response histograms
+    if args.histo:
+        plot_1d_response_histograms(hists_dict, category, year)
+        plot_2d_response_histograms(hists_dict, category, year)
+    # plot MET histograms
+    plot_histo_met(met_dict, year)
 
 def extract_year_tag(s):
     match = re.search(r"(19|20)\d{2}(?:_[A-Za-z0-9]+)?", s)
@@ -383,7 +438,7 @@ def create_reponses_info(qT_arr, u_dict, weights):
     return reponses_dict, hists_dict
 
 
-def create_met_histos(col_var, category, plotting_info_list):
+def create_met_histos(col_var, category, met_dict):
     """
     Build MET comparison histograms for a given category.
 
@@ -393,8 +448,8 @@ def create_met_histos(col_var, category, plotting_info_list):
         Dictionary of input variables (columns).
     category : str
         Category name (e.g. event selection).
-    plotting_info_list : list
-        List to be filled with histogram plotting configurations.
+    met_dict : dict
+        Dictionary to be filled with histogram plotting configurations.
     """
 
     for quantity_name, var_dict in total_var_dict.items():
@@ -439,7 +494,7 @@ def create_met_histos(col_var, category, plotting_info_list):
             "ratio_label": var_dict.get("ratio_label", "Ratio"),
         }
 
-        plotting_info_list.append(info)
+        met_dict[quantity_name]=info
 
 
 def plot_reponses(reponses_dict, cat, year):
@@ -614,20 +669,20 @@ def plot_1d_response_histograms(hists_dict, cat, year):
             p.run()
 
 
-def plot_histo_met(plotting_info_list, year):
+def plot_histo_met(met_dict, year):
     """
     Plot MET histograms using either multiprocessing or sequential execution.
 
     Parameters
     ----------
-    plotting_info_list : list
-        List of histogram plotting configurations.
+    met_dict : dict
+        Dictionary of histogram plotting configurations.
     year : str
         Year string for labeling.
     """
 
     plotters = []
-    for info in plotting_info_list:
+    for info in met_dict.values():
         print(f"Plotting MET histogram: {info['output_base']}")
         p = (
             HEPPlotter()
@@ -651,58 +706,108 @@ def plot_histo_met(plotting_info_list, year):
             p.run()
 
 
-def main(cat_col, year):
-    plotting_info_list = []
-    for category, col_var in cat_col.items():
-        print(f"Processing category: {category}")
-        v_qT = col_var["ll_pt"]
-
-        u_dict = {}
-        for var in col_var:
-            coll = var.split("_")[0]
-            if (
-                any(x in var for x in ["u_perp_predict", "u_paral_predict", "response"])
-                and coll in u_dict_names
-            ):
-
-                if coll not in u_dict:
-                    u_dict[coll] = {}
-                print(var)
-                u_dict[coll][var] = col_var[var]
-            elif "weight" in var:
-                weights = col_var[var]
-        reponses_dict, hists_dict = create_reponses_info(v_qT, u_dict, weights)
-        create_met_histos(col_var, category, plotting_info_list)
-
-        plot_reponses(reponses_dict, category, year)
-        if args.histo:
-            plot_1d_response_histograms(hists_dict, category, year)
-            plot_2d_response_histograms(hists_dict, category, year)
-
-    plot_histo_met(plotting_info_list, year)
-
-
-if __name__ == "__main__":
-
+def main():
     inputfiles_data = [
         os.path.join(args.input_dir, file)
         for file in os.listdir(args.input_dir)
         if file.endswith(".coffea")
     ]
 
-    cat_col, total_datasets_list = get_columns_from_files(
-        inputfiles_data, "nominal", None, False, args.novars
-    )
+    if args.load:
+        # load precomputed histograms
+        print(f"Loading precomputed histograms from {args.load}")
+        loaded_dict = load(args.load)
+        reponses_dict = loaded_dict["responses"]
+        hists_dict = loaded_dict["hists"]
+        met_dict = loaded_dict["met_histos"]
+        year = loaded_dict.get("year", "unknown_year")
+        category = loaded_dict.get("category", "unknown_category")
+        
+        do_plots(reponses_dict, hists_dict, met_dict, category, year)
 
-    # get year from dataset
-    year = ""
-    for dataset in total_datasets_list:
-        # dataset are of the shape name_year_yearsuffix or name_year
-        y = extract_year_tag(dataset)
+        return
+    
+    if args.array:
+        cat_col, total_datasets_list = get_columns_from_files(
+            inputfiles_data, "nominal", None, True, args.novars
+        )
 
-        year = ", ".join([year, y]) if year else y
+        # get year from dataset
+        year = ""
+        for dataset in total_datasets_list:
+            # dataset are of the shape name_year_yearsuffix or name_year
+            y = extract_year_tag(dataset)
 
-    print(f"Total datasets found: {total_datasets_list}" and f"Year: {year}")
-    main(cat_col, year)
+            year = ", ".join([year, y]) if year else y
+
+        print(f"Total datasets found: {total_datasets_list}")
+        print(f"Year: {year}")
+
+        for category, col_var in cat_col.items():
+            met_dict = {}
+            print(f"Processing category: {category}")
+            v_qT = col_var["ll_pt"]
+
+            u_dict = {}
+            for var in col_var:
+                coll = var.split("_")[0]
+                if (
+                    any(
+                        x in var
+                        for x in ["u_perp_predict", "u_paral_predict", "response"]
+                    )
+                    and coll in u_dict_names
+                ):
+
+                    if coll not in u_dict:
+                        u_dict[coll] = {}
+                    print(var)
+                    u_dict[coll][var] = col_var[var]
+                elif "weight" in var:
+                    weights = col_var[var]
+            
+            # build response info
+            reponses_dict, hists_dict = create_reponses_info(v_qT, u_dict, weights)
+            # build MET histograms
+            create_met_histos(col_var, category, met_dict)
+            
+            # save all the histograms
+            save_dict_to_file(
+                {
+                    "responses": reponses_dict,
+                    "hists": hists_dict,
+                    "met_histos": met_dict,
+                    "year": year,
+                    "category": category,
+                },
+                os.path.join(
+                    outputdir, f"histograms_{category.replace(' ','_')}.coffea"
+                ),
+            )
+            
+            # plot all the required plots
+            do_plots(reponses_dict, hists_dict, met_dict, category, year)
+            
+
+    else:
+        # read input variables
+        accumulator = load(inputfiles_data[0])
+
+        for var, histos_dict in accumulator["variables"].items():
+            for sample in histos_dict:
+                for dataset in histos_dict[sample]:
+                    print(f"Variable: {var}, Sample: {sample}", f"Dataset: {dataset}")
+                    hist_obj = histos_dict[sample][dataset]
+                    histo=hist_obj[{"cat": list(hist_obj.axes["cat"])[0]}][
+                        {"variation": list(hist_obj.axes["variation"])[0]}
+                    ]
+                    # breakpoint()
+
+        # input_2d_histograms=
 
     print("Finished plotting!")
+
+
+if __name__ == "__main__":
+
+    main()
