@@ -1,23 +1,17 @@
 import os
+from omegaconf import DictConfig
 
 from pocket_coffea.utils.configurator import Configurator
 from pocket_coffea.parameters.cuts import passthrough
 from pocket_coffea.lib.columns_manager import ColOut
 from pocket_coffea.lib.cut_functions import get_HLTsel
-from pocket_coffea.lib.categorization import CartesianSelection, MultiCut
-from pocket_coffea.parameters.histograms import (
-    met_hists,
-    muon_hists,
-    count_hist,
-    HistConf,
-    Axis,
-)
+
 from pocket_coffea.parameters import defaults
 import pocket_coffea.lib.calibrators.legacy.legacy_calibrators as legacy_cal
 from pocket_coffea.lib.calibrators.common.common import JetsCalibrator
 from pocket_coffea.lib.cut_functions import (
     get_HLTsel,
-    get_L1sel,
+    # get_L1sel,
     goldenJson,
     eventFlags,
     get_nPVgood,
@@ -25,15 +19,17 @@ from pocket_coffea.lib.cut_functions import (
 
 from configs.MET_studies.workflow import METProcessor
 import custom_cuts as cuts
-
+from output_quantities import get_tot_columns, get_tot_variables
 
 # Define the saving method
 SAVE_COLUMNS = True
 DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK = True
 SAVE_HISTOGRAMS = False
+
 if SAVE_HISTOGRAMS and (SAVE_COLUMNS or DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK):
     raise ValueError("You can either save histograms or columns, not both.")
-
+if not SAVE_HISTOGRAMS and not SAVE_COLUMNS:
+    raise ValueError("You have to save something, either histograms or columns.")
 
 localdir = os.path.dirname(os.path.abspath(__file__))
 
@@ -46,6 +42,7 @@ defaults.register_configuration_dir("config_dir", localdir + "/params")
 # adding object preselection
 parameters = defaults.merge_parameters_from_files(
     default_parameters,
+    # DictConfig({}),
     f"{localdir}/params/object_preselection.yaml",
     f"{localdir}/params/triggers.yaml",
     # f"{localdir}/params/jets_calibration_legacy_type1met.yaml",
@@ -70,33 +67,11 @@ common_cats = {
     "baseline": [passthrough],
 }
 
-
 # Define the columns to save
-met_vars = ["pt", "phi"]
-recoil_vars = ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]
-tot_cols = []
-for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
-    # for raw in ["Raw", ""]:
-    for raw in ["Raw"]:
-        for type1 in [
-            "",
-            "-Type1",
-            "-Type1JEC",
-            "-Type1CorrMET",
-            "-Type1CorrMETUncorrected",
-            "-Type1PNetCorrMET",
-            "-Type1PNetPlusNeutrinoCorrMET",
-        ]:
-
-            tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
-
-    tot_cols.append(ColOut(f"{recoil}PuppiMET", vars_col))
-    
-print("Total columns to be stored: ", tot_cols)
-
+tot_cols = get_tot_columns()
 
 # Define the variables to save
-
+tot_vars = get_tot_variables()
 
 
 cfg = Configurator(
@@ -110,9 +85,9 @@ cfg = Configurator(
         "filter": {
             "samples": [
                 (
-                    dataset
+                    # dataset
                     # "DYto2L-4Jets_MLL-50-v12"
-                    # "DYto2L-4Jets_MLL-50-v15"
+                    "DYto2L-4Jets_MLL-50-v15"
                     # "DYJetsToLL_M-50"
                     # "DYJetsToLL_M-50_local"
                 )
@@ -177,7 +152,7 @@ cfg = Configurator(
         #         },
         #     }
     },
-    variables={},
+    variables=tot_vars if SAVE_HISTOGRAMS else {},
     columns={
         "common": {
             "inclusive": (
