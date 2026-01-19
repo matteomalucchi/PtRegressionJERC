@@ -19,7 +19,7 @@ from pocket_coffea.lib.cut_functions import (
 
 from configs.MET_studies.workflow import METProcessor
 import custom_cuts as cuts
-from output_quantities import get_tot_columns, get_tot_variables
+from output_quantities import get_met_columns, get_met_variables
 
 # Define the saving method
 SAVE_COLUMNS = True
@@ -52,9 +52,9 @@ parameters = defaults.merge_parameters_from_files(
 
 
 ### Configuring the MET studies config ###
-year = "2024"
-# dataset = "DYJetsToLL_M-50"
-dataset = "DYto2L-4Jets_MLL-50-v15"
+year = "2022_preEE"
+dataset = "DYJetsToLL_M-50"
+# dataset = "DYto2L-4Jets_MLL-50-v15"
 option = "option_5"
 add_str = ""
 output_chunks_name = (
@@ -68,10 +68,10 @@ common_cats = {
 }
 
 # Define the columns to save
-tot_cols = get_tot_columns()
+met_cols = get_met_columns()
 
 # Define the variables to save
-tot_vars = get_tot_variables()
+met_vars = get_met_variables()
 
 
 cfg = Configurator(
@@ -152,7 +152,7 @@ cfg = Configurator(
         #         },
         #     }
     },
-    variables=tot_vars if SAVE_HISTOGRAMS else {},
+    variables=met_vars if SAVE_HISTOGRAMS else {},
     columns={
         "common": {
             "inclusive": (
@@ -161,7 +161,7 @@ cfg = Configurator(
                         ColOut("ll", ["mass", "pt", "eta", "phi"]),
                         ColOut("GenMET", ["pt", "phi"]),
                     ]
-                    + tot_cols
+                    + met_cols
                 )
                 if SAVE_COLUMNS
                 else []

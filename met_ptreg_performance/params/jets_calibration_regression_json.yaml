@@ -86,7 +86,7 @@ default_jets_calibration:
 
     AK4PFPuppiPNetRegression:
       2022_preEE:
-        json_path: "${path_to_JERC_regression_files}CCopyJERToPNet/opyJERToPNet//Run3Summer22_22Sep2023/jet_jerc.json.gz"
+        json_path: "${path_to_JERC_regression_files}/CopyJERToPNet/Run3Summer22_22Sep2023/jet_jerc.json.gz"
         jec_mc: Summer22_22Sep2023_V4_MC
         jec_data: Summer22_22Sep2023_RunCD_V4_DATA
         jer: Summer22_22Sep2023_JRV1_MC
@@ -495,54 +495,74 @@ jets_calibration:
         AK4PFPuppiLowPtMuonSubtr : "AK4PFPuppi"
         AK4PFPuppiMuonSubtr : "AK4PFPuppi"
   
+  merge_collections_for_variations:
+    2022_preEE:
+      AK4Jet: 
+        - AK4PFPuppi
+        - AK4PFPuppiPNetRegression
+        - AK4PFPuppiPNetRegressionPlusNeutrino
+        - AK4PFPuppiLowPtMuonSubtr
+        - AK4PFPuppiMuonSubtr
+    2022_postEE:
+      AK4Jet: 
+        - AK4PFPuppi
+        - AK4PFPuppiPNetRegression
+        - AK4PFPuppiPNetRegressionPlusNeutrino
+        - AK4PFPuppiLowPtMuonSubtr
+        - AK4PFPuppiMuonSubtr
+    2023_preBPix:
+      AK4Jet: 
+        - AK4PFPuppi
+        - AK4PFPuppiPNetRegression
+        - AK4PFPuppiPNetRegressionPlusNeutrino
+        - AK4PFPuppiLowPtMuonSubtr
+        - AK4PFPuppiMuonSubtr
+    2023_postBPix:
+      AK4Jet: 
+        - AK4PFPuppi
+        - AK4PFPuppiPNetRegression
+        - AK4PFPuppiPNetRegressionPlusNeutrino
+        - AK4PFPuppiLowPtMuonSubtr
+        - AK4PFPuppiMuonSubtr
+  
   sort_by_pt:
     2016_PreVFP:
-      AK4PFchs: True
-      AK8PFPuppi: True
+      AK4PFchs: False
+      AK8PFPuppi: False
     2016_PostVFP:
-      AK4PFchs: True
-      AK8PFPuppi: True  
+      AK4PFchs: False
+      AK8PFPuppi: False  
     "2017":
-      AK4PFchs: True
-      AK8PFPuppi: True
+      AK4PFchs: False
+      AK8PFPuppi: False
     "2018":
-      AK4PFchs: True
-      AK8PFPuppi: True    
+      AK4PFchs: False
+      AK8PFPuppi: False    
     2022_preEE:
-      AK4PFPuppi: True
-      AK8PFPuppi: True
-      AK4PFPuppiPNetRegression: True
-      AK4PFPuppiPNetRegressionPlusNeutrino: True
-      # AK4PFPuppiLowPtMuonSubtr: True
-      # AK4PFPuppiMuonSubtr: True
+      AK4PFPuppi: False
+      AK8PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
     2022_postEE:
-      AK4PFPuppi: True
-      AK8PFPuppi: True
-      AK4PFPuppiPNetRegression: True
-      AK4PFPuppiPNetRegressionPlusNeutrino: True
-      # AK4PFPuppiLowPtMuonSubtr: True
-      # AK4PFPuppiMuonSubtr: True
+      AK4PFPuppi: False
+      AK8PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
     2023_preBPix:
-      AK4PFPuppi: True
-      AK8PFPuppi: True
-      AK4PFPuppiPNetRegression: True
-      AK4PFPuppiPNetRegressionPlusNeutrino: True
-      # AK4PFPuppiLowPtMuonSubtr: True
-      # AK4PFPuppiMuonSubtr: True
+      AK4PFPuppi: False
+      AK8PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
     2023_postBPix:
-      AK4PFPuppi: True
-      AK8PFPuppi: True
-      AK4PFPuppiPNetRegression: True
-      AK4PFPuppiPNetRegressionPlusNeutrino: True
-      # AK4PFPuppiLowPtMuonSubtr: True
-      # AK4PFPuppiMuonSubtr: True
+      AK4PFPuppi: False
+      AK8PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
     "2024":
-      AK4PFPuppi: True
-      AK8PFPuppi: True
-      AK4PFPuppiPNetRegression: True
-      AK4PFPuppiPNetRegressionPlusNeutrino: True
-      # AK4PFPuppiLowPtMuonSubtr: True
-      # AK4PFPuppiMuonSubtr: True
+      AK4PFPuppi: False
+      AK8PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
 
   
   apply_jec_MC:  # this is needed to know which collection is corrected with which jet factory

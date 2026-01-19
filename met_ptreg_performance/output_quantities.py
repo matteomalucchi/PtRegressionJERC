@@ -49,10 +49,10 @@ bins_u = list(
 )
 
 
-def get_tot_columns():
+def get_met_columns():
     met_vars = ["pt", "phi"]
     recoil_vars = ["pt", "phi", "u_perp_predict", "u_paral_predict", "response"]
-    tot_cols = []
+    met_cols = []
     for recoil, vars_col in zip(["u", ""], [recoil_vars, met_vars]):
         # for raw in ["Raw", ""]:
         for raw in ["Raw"]:
@@ -66,21 +66,21 @@ def get_tot_columns():
                 "-Type1PNetPlusNeutrinoCorrMET",
             ]:
 
-                tot_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
+                met_cols.append(ColOut(f"{recoil}{raw}PuppiMET{type1}", vars_col))
 
-        tot_cols.append(ColOut(f"{recoil}PuppiMET", vars_col))
+        met_cols.append(ColOut(f"{recoil}PuppiMET", vars_col))
 
-    print("Total columns to be stored: ", tot_cols)
+    print("Total columns to be stored: ", met_cols)
 
-    return tot_cols
+    return met_cols
 
 
-def get_tot_variables():
-    tot_vars = {}
+def get_met_variables():
+    met_vars = {}
     for binning_variable in ["nPV", "qT"]:
         for variable in ["u_perp_predict", "u_paral_predict", "response"]:
             # define 2D histograms with binning_variable and the variable
-            tot_vars[f"{variable}_vs_{binning_variable}"] = HistConf(
+            met_vars[f"{variable}_vs_{binning_variable}"] = HistConf(
                 axes=[
                     Axis(
                         coll="PV" if binning_variable == "nPV" else "ll",
@@ -103,8 +103,8 @@ def get_tot_variables():
                 ],
             )
 
-    # print("Total variables to be stored: ", tot_vars)
-    return tot_vars
+    # print("Total variables to be stored: ", met_vars)
+    return met_vars
 
     # # define 2D histograms with PV_npvs, ll_pt and the mean accumulator of the variable
     # tot_vars[variable] = HistConf(

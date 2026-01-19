@@ -233,7 +233,7 @@ class METProcessor(BaseProcessorABC):
             "JetPNetMuonSubtr",
             "JetPNetPlusNeutrinoMuonSubtr",
         ]:
-            jets = self.events[jet_name]
+            jets = copy.copy(self.events[jet_name])
             if "PNet" in jet_name:
                 mask_regressed = ak.nan_to_num(jets.pt, nan=-1) > 0
                 if self.jet_regressed_option == "option_1":
