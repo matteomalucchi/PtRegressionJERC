@@ -1,6 +1,8 @@
 # MC Truth corrections for pT regression
 
-Repository to compute MC Truth corrections for regressed pT jets, structured as an analysis configurations for a specific development branch from a fork [PocketCoffea](https://github.com/matteomalucchi/PocketCoffea/tree/jme-pnet-reg).
+Repository to compute MC Truth corrections and JER MC for regressed pT jets.
+
+This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/matteomalucchi/PocketCoffea/tree/jme-pnet-reg) and was originally hosted [here](https://github.com/matteomalucchi/AnalysisConfigs/tree/main/configs/jme).
 
 ## Setup
 
@@ -29,8 +31,13 @@ source pocket_coffea_env/bin/activate
 # Install in EDITABLE mode
 pip install -e .[dev]
 
-cd ../AnalysisConfigs
+cd ../ 
+git clone git@github.com:matteomalucchi/PtRegressionJERC.git
+cd PtRegressionJERC
 pip install -e .
+
+# Install the HEPPlotter class
+pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
 ```
 
 After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
@@ -62,8 +69,13 @@ cd PocketCoffea
 # For developers
 pip install -e .[dev,docs]
 
-cd ../AnalysisConfigs
+cd ../ 
+git clone git@github.com:matteomalucchi/PtRegressionJERC.git
+cd PtRegressionJERC
 pip install -e .
+
+# Install the HEPPlotter class
+pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
 ```
 
 After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
@@ -170,3 +182,9 @@ python plot_summary_reponse.py -d <dir_name>
 ```
 
 This is useful to plot the closure test of the MC Truth corrections in a inclusive way.
+
+## Contributors
+
+- [Matteo Malucchi](https://github.com/matteomalucchi)
+- [Jessy Daniel](https://github.com/jessy-daniel)
+- [Jason Guo](https://github.com/erfz)
