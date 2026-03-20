@@ -3,8 +3,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 
-from configs.jme.response_plot.pol_functions import *
-from configs.jme.params.binning import eta_bins as default_eta_bins, eta_bins_upart
+from response_plot.pol_functions import *
+from params.binning import eta_bins as default_eta_bins, eta_bins_upart
 
 
 def string_to_pol_function(string):

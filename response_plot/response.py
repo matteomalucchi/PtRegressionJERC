@@ -24,14 +24,14 @@ import scipy.stats as stats
 # ROOT.gROOT.SetBatch(True)
 
 
-from configs.jme.response_plot.pol_functions import *
-from configs.jme.response_plot.fit_functions_standard_gaus import *
-from configs.jme.response_plot.write_l2rel import write_l2rel_txt
-from configs.jme.response_plot.confidence import *
-from configs.jme.response_plot.histograms_to_plot import *
+from pol_functions import *
+from fit_functions_standard_gaus import *
+from write_l2rel import write_l2rel_txt
+from confidence import *
+from histograms_to_plot import *
 
-# sys.path.append("../")
-from configs.jme.params.binning import *
+sys.path.append("../")
+from params.binning import *
 
 hep.style.use("CMS")
 

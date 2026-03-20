@@ -7,9 +7,9 @@ from pocket_coffea.utils.configurator import Configurator
 from pocket_coffea.lib.hist_manager import Axis
 from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
 
-from configs.jme.custom_cut_functions import *
-from configs.jme.custom_functions import *
-from configs.jme.params.binning import pt_bins, eta_bins, eta_bins_upart
+from custom_cut_functions import *
+from custom_functions import *
+from params.binning import pt_bins, eta_bins, eta_bins_upart
 
 
 flav_dict = (

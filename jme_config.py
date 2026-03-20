@@ -58,9 +58,13 @@ parameters = defaults.merge_parameters_from_files(
 )
 
 sample_name = (
-    ("QCD_PT-15to7000_FlatPU"
-    if int(os.environ.get("PNET", 0)) == 1)
-    else ("QCD_PT-15to7000_JMENano_Summer24" if int(os.environ.get("UPART", 0)) == 1) else "QCD_PT-15to7000")
+    "QCD_PT-15to7000_FlatPU"
+    if int(os.environ.get("PNET", 0)) == 1
+    else (
+        "QCD_PT-15to7000_JMENano_Summer24"
+        if int(os.environ.get("UPART", 0)) == 1
+        else "QCD_PT-15to7000"
+    )
 )
 
 cfg = Configurator(
@@ -242,7 +246,6 @@ cfg = Configurator(
                         for j in range(len(pt_bins) - 1)  # for each pt bin
                     ]
                     # + [ColOut(f"MatchedJets", ["Response", "pt", "eta"])],
-
                 }
             },
         },
