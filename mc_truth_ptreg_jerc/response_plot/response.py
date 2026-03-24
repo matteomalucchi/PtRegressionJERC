@@ -10,11 +10,8 @@ import sys
 from coffea.util import load
 import numpy as np
 import matplotlib.pyplot as plt
-import argparse
 import mplhep as hep
 from multiprocessing import Pool
-import multiprocessing as mpr
-from functools import partial
 import functools
 import json
 from scipy.optimize import curve_fit
@@ -29,129 +26,10 @@ from mc_truth_ptreg_jerc.response_plot.fit_functions_standard_gaus import *
 from mc_truth_ptreg_jerc.response_plot.write_l2rel import write_l2rel_txt
 from mc_truth_ptreg_jerc.response_plot.confidence import *
 from mc_truth_ptreg_jerc.response_plot.histograms_to_plot import *
-
+from mc_truth_ptreg_jerc.response_plot.args_response import args
 from mc_truth_ptreg_jerc.params.binning import *
 
 hep.style.use("CMS")
-
-parser = argparse.ArgumentParser(description="Run the jme analysis")
-parser.add_argument(
-    "-u",
-    "--unbinned",
-    help="Binned or unbinned",
-    action="store_true",
-    default=False,
-)
-parser.add_argument(
-    "-l",
-    "--load",
-    action="store_true",
-    help="Load medians from file",
-    default=False,
-)
-parser.add_argument(
-    "-d",
-    "--dir",
-    type=str,
-    help="Input dir",
-)
-parser.add_argument(
-    "--cartesian",
-    action="store_true",
-    help="Run cartesian multicuts",
-    default=False,
-)
-parser.add_argument(
-    "--histo",
-    action="store_true",
-    help="Plot the histograms",
-    default=False,
-)
-parser.add_argument(
-    "--full",
-    action="store_true",
-    help="Run full cartesian analysis in all eta bins and all flavours sequentially",
-    default=False,
-)
-parser.add_argument(
-    "--test",
-    action="store_true",
-    help="Run test",
-    default=False,
-)
-parser.add_argument(
-    "--central",
-    action="store_true",
-    help="Run central eta bin",
-    default=False,
-)
-parser.add_argument(
-    "-a",
-    "--abs-eta-inclusive",
-    action="store_true",
-    help="Run over inclusive abs eta bins",
-    default=False,
-)
-parser.add_argument(
-    "-n",
-    "--num-processes",
-    type=int,
-    help="Number of processes",
-    default=16,
-)
-parser.add_argument(
-    "-p",
-    "--num-params",
-    type=int,
-    help="Num param fit polynomial + 2 for the jet pt range. This is forced to 13 for extendedPT for uparT and PNET",
-    default=9,
-)
-parser.add_argument(
-    "--no-plot",
-    action="store_true",
-    help="Do not plot",
-    default=False,
-)
-parser.add_argument(
-    "-c",
-    "--choose-plot",
-    action="store_true",
-    help="Choose the plot",
-    default=False,
-)
-parser.add_argument(
-    "--flav",
-    help="Flavour",
-    type=str,
-    default="inclusive",
-)
-parser.add_argument(
-    "-y",
-    "--year",
-    help="Year",
-    type=str,
-    default="",
-)
-parser.add_argument(
-    "--all-flavs",
-    help="Do all flavours",
-    action="store_true",
-    default=False,
-)
-parser.add_argument(
-    "--upart",
-    help="Use UparT Regression instead of PNet one",
-    action="store_true",
-    default=False,
-)
-parser.add_argument(
-    "--ptmin-fit-inv-median",
-    help="Minimum pT for fit in inv median",
-    type=float,
-    default=8.0,       #17.0 for PNET, 15.0 for UparT ?
-)
-
-args = parser.parse_args()
 
 
 # set global variables
@@ -171,13 +49,13 @@ HISTO_LOG = False
 DENSITY = False
 PDF = False
 VERSION = "V3"
-
+JOIN_RESOLUTION_WITH_NEUTRINOS = True
 
 if "closure" in args.dir:
     FIT = False
     CLOSURE = True
 
-#if "extendedPT" in args.dir:
+# if "extendedPT" in args.dir:
 #    print(f"num_params {args.num_params} too low for standard gaus fit for extendedPT + 2 for jet PT range, setting to 13")
 #    args.num_params = 13  # 13 for standard gaus fit
 
@@ -219,19 +97,25 @@ if DP_NOTE_PLOTS:
         year = "2022"
 
 
-pt_bins = pt_bins_all if "pnetreg15" in args.dir else (pt_bins_extended if "extendedPT" in args.dir else pt_bins_reduced)
+pt_bins = (
+    pt_bins_all
+    if "pnetreg15" in args.dir
+    else (pt_bins_extended if "extendedPT" in args.dir else pt_bins_reduced)
+)
 
-if 'extendedPT' in args.dir:
+if "extendedPT" in args.dir:
     num_params = 13  # 13 for standard gaus fit for uparT and pol10 for PNet
 else:
     num_params = args.num_params
 
 localdir = os.path.dirname(os.path.abspath(__file__))
 
-if args.full and (args.central or args.abs_eta_inclusive or args.all_flavs) and args.upart:
-    flavs = {
-        ("inclusive",): ["o"]
-    }
+if (
+    args.full
+    and (args.central or args.abs_eta_inclusive or args.all_flavs)
+    and args.upart
+):
+    flavs = {("inclusive",): ["o"]}
 elif args.full and (args.central or args.abs_eta_inclusive or args.all_flavs):
     flavs = {
         ("inclusive",): ["o"],
@@ -485,7 +369,7 @@ def get_info_from_histogram(
 
         rebinned_bins = list(rebinned_bins)
         rebinned_values = list(rebinned_values)
-    #breakpoint()
+    # breakpoint()
     if args.histo:
         histogram_dict_el[variable][i].append((rebinned_values, rebinned_bins))
     if "Response" in variable:
@@ -885,7 +769,11 @@ else:
                                     # print(histo)
                                     categories = list(histo.axes["cat"])
 
-                                    categories=[category for category in categories if "eta" in category]
+                                    categories = [
+                                        category
+                                        for category in categories
+                                        if "eta" in category
+                                    ]
 
                                     # order the categories so that the ranges in eta are increasing
                                     categories = sorted(
@@ -894,7 +782,7 @@ else:
                                             x.split("eta")[1].split("to")[0]
                                         ),
                                     )
-                                    
+
                                     variations = list(histo.axes["variation"])
                                     lenght = len(categories) if not args.test else 1
 
@@ -975,8 +863,8 @@ else:
 
                                                 # HERE
                                                 # remove the first bin which is a peak to zero in the response
-                                                #bins = bins[2:]
-                                                #values = values[2:]
+                                                # bins = bins[2:]
+                                                # values = values[2:]
 
                                                 # sum the values of the unbinned histogram
                                                 if (
@@ -1402,7 +1290,12 @@ def plot_median_resolution(eta_bin, plot_type):
             [lambda x: "Neutrino" in x, lambda x: "Neutrino" not in x],
             ["_neutrino", ""],
         )
-        if ("resolution" in plot_type or "width" in plot_type)
+        # we separate the resolution plots for neutrino and non-neutrino
+        # to consider the separately the jets matched to the gen-jet w/ or w/o neutrinos
+        if (
+            ("resolution" in plot_type or "width" in plot_type)
+            and not JOIN_RESOLUTION_WITH_NEUTRINOS
+        )
         else zip([lambda x: True], [""])
     ):
         for flav_group in plot_dict[eta_sign].keys():
@@ -1554,7 +1447,9 @@ def plot_median_resolution(eta_bin, plot_type):
                     )
 
                     # Fit the inverse median
-                    if "inverse" in plot_type and ("PNet" in variable or "UparT" in variable):
+                    if "inverse" in plot_type and (
+                        "PNet" in variable or "UparT" in variable
+                    ):
                         mask_nan = (
                             ~np.isnan(plot_array)
                             & ~np.isnan(err_plot_array)
@@ -1595,7 +1490,7 @@ def plot_median_resolution(eta_bin, plot_type):
                                     f"{eta_sign} {flav} {correct_eta_bins[eta_bin]} ({index}) {variable}",
                                     variables_plot_settings,
                                     args.ptmin_fit_inv_median,
-                                    )
+                                )
                             else:
                                 fit_results = fit_inv_median_pol(
                                     ax,
@@ -1607,7 +1502,7 @@ def plot_median_resolution(eta_bin, plot_type):
                                     variable,
                                     y_pos,
                                     f"{eta_sign} {flav} {correct_eta_bins[eta_bin]} ({index}) {variable}",
-                                    )
+                                )
                             y_pos += -0.05
                             tot_fit_results[f"{flav}_{variable}"] = fit_results
                             if fit_results == {}:
@@ -1615,9 +1510,9 @@ def plot_median_resolution(eta_bin, plot_type):
                                     f"fit failed {flav} {variable} {eta_sign} {correct_eta_bins[eta_bin]}"
                                 )
 
-                    if ("ResponsePNetReg" in variable or "ResponseUparTReg" in variable) and (
-                        "resolution" in plot_type or "width" in plot_type
-                    ):
+                    if (
+                        "ResponsePNetReg" in variable or "ResponseUparTReg" in variable
+                    ) and ("resolution" in plot_type or "width" in plot_type):
                         # plot ratio pnreg / jec
                         jec = (
                             plot_dict[eta_sign][flav_group][flav]["ResponseJEC"][
@@ -1730,7 +1625,9 @@ def plot_median_resolution(eta_bin, plot_type):
 
             # ax.*.grid(color="gray", linestyle=":", linewidth=0.4, which="both")
             if "resolution" in plot_type or "width" in plot_type:
-                ax_ratio.set_ylabel(f"1 - {('UparT' if args.upart else 'PNet')} / JEC", loc="bottom")  # 1-PNet/Standard
+                ax_ratio.set_ylabel(
+                    f"1 - {('UparT' if args.upart else 'PNet')} / JEC", loc="bottom"
+                )  # 1-PNet/Standard
                 # ax.*.grid(color="gray", linestyle=":", linewidth=0.4, which="both")
 
             # create string for flavour
