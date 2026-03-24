@@ -2,7 +2,7 @@
 
 Repository to compute MC Truth corrections and JER MC for regressed pT jets.
 
-This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/matteomalucchi/PocketCoffea/tree/jme-pnet-reg) and was originally hosted [here](https://github.com/matteomalucchi/AnalysisConfigs/tree/main/configs/jme).
+This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/matteomalucchi/PocketCoffea/tree/jme-pnet-reg) and was originally hosted [here](https://github.com/matteomalucchi/AnalysisConfigs/tree/legacy-jme-config/configs/jme).
 
 ## Setup
 
@@ -55,7 +55,7 @@ alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
 
 If instead you are using a different system, where for example you want to install the environment in micromamba, you can do the following:
 
-```bash
+<!-- ```bash
 curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
 ./bin/micromamba shell init -s bash -p /work/$USER/micromamba # or  ./bin/micromamba shell init -s bash -r ~/micromamba
 source ~/.bashrc
@@ -76,7 +76,27 @@ pip install -e .
 
 # Install the HEPPlotter class
 pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
+``` -->
+
+
+
+```bash
+# Clone PocketCoffea
+# Clone the fork and checkout the desired branch
+git clone --branch jme-pnet-reg https://github.com/matteomalucchi/PocketCoffea.git
+
+# Clone PtRegressionJERC
+git git@github.com:matteomalucchi/PtRegressionJERC.git
+
+# Create a local environment and install the packages
+cd PtRegressionJERC
+micromamba env create -f pocket-coffea-environment.yml
+micromamba activate pocket-coffea-env
+
+# Install the HEPPlotter class
+pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
 ```
+
 
 After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
 On your system, it can be done by adding the following line to your `~/.bashrc`:
@@ -84,6 +104,18 @@ On your system, it can be done by adding the following line to your `~/.bashrc`:
 ```bash
 alias pocket_coffea='micromamba activate pocket-coffea'
 ```
+
+### Update HEPPlotter
+
+> [!IMPORTANT]
+> To Install the `HEPPlotter` class you can use
+>
+> ```bash
+> pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
+> ```
+>
+> This command should be executed every time you want to pull from the AnalysisConfigs repository and update the `HEPPlotter`.
+> If it doesn't update, you should first uninstall it with `pip uninstall configs` and then install it again with the command above.
 
 ## Activate the environment
 
@@ -111,20 +143,28 @@ pocket_coffea
 To run this over the full dataset for a particular year in each $\eta$ and $p_T$ bin, you can use the following command:
 
 ```bash
-python exec.py --full -pnet --dir <dir_name> -y <year> [--lxplus]
+python exec.py --full [-pnet] [-upart] --dir <dir_name> -y <year> [--lxplus]
 ```
 
 Where `<dir_name>` is the name of the directory where you want to save the results, and `<year>` is the year you want to run the analysis for. The `--lxplus` flag is used to indicate that you are running this on `lxplus` and it will use the `pocket_coffea_env` environment.
 
 Year can be set to:
 
+- 2016_PreVFP
+- 2016_PostVFP
+- 2017
+- 2018
 - 2022_preEE
 - 2022_postEE
 - 2023_preBPix
 - 2023_postBPix
+- 2024
+- 2025
 
 This will save the results in the `dir_name` directory inside the
-`output_all.coffea` file. If running on `lxplus`, there will be an output file for each worker in the `dir_name` directory and you can merge them using:
+`output_all.coffea` file. 
+
+If running on `lxplus`, there will be an output file for each worker in the `dir_name` directory and you can merge them using:
 
 ```bash
 cd <dir_name>
