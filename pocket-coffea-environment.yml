@@ -25,4 +25,4 @@ dependencies:
       - ipykernel
       # Put the path to your PocketCoffea repository
       - -e ../PocketCoffea
-      - -r requirements.txt
+      - -e ./

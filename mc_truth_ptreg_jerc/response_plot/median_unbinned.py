@@ -7,8 +7,7 @@ import argparse
 import sys
 import mplhep as hep
 
-sys.path.append("../")
-from params.binning import *
+from mc_truth_ptreg_jerc.params.binning import *
 
 parser = argparse.ArgumentParser(description="Run the jme analysis")
 parser.add_argument(

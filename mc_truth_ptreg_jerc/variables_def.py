@@ -1,6 +1,7 @@
 from pocket_coffea.parameters.histograms import HistConf, Axis
-from params.binning import *
-from workflow import *
+
+from mc_truth_ptreg_jerc.params.binning import *
+from mc_truth_ptreg_jerc.workflow import *
 
 
 def get_variables_dict(cuts_names_eta, cuts_names_reco_eta, cuts_names_eta_neutrino):

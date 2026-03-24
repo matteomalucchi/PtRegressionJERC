@@ -17,9 +17,9 @@ from pocket_coffea.lib.cut_functions import (
     get_nPVgood,
 )
 
-from configs.MET_studies.workflow_dummy import METProcessor
-import custom_cuts as cuts
-from output_quantities import get_met_columns, get_met_variables
+from met_ptreg_performance.workflow_dummy import METProcessor
+import met_ptreg_performance.custom_cuts as cuts
+from met_ptreg_performance.output_quantities import get_met_columns, get_met_variables
 
 # Define the saving method
 SAVE_COLUMNS = True

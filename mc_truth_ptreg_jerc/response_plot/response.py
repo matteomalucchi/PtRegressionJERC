@@ -24,14 +24,13 @@ import scipy.stats as stats
 # ROOT.gROOT.SetBatch(True)
 
 
-from pol_functions import *
-from fit_functions_standard_gaus import *
-from write_l2rel import write_l2rel_txt
-from confidence import *
-from histograms_to_plot import *
+from mc_truth_ptreg_jerc.response_plot.pol_functions import *
+from mc_truth_ptreg_jerc.response_plot.fit_functions_standard_gaus import *
+from mc_truth_ptreg_jerc.response_plot.write_l2rel import write_l2rel_txt
+from mc_truth_ptreg_jerc.response_plot.confidence import *
+from mc_truth_ptreg_jerc.response_plot.histograms_to_plot import *
 
-sys.path.append("../")
-from params.binning import *
+from mc_truth_ptreg_jerc.params.binning import *
 
 hep.style.use("CMS")
 
@@ -1840,7 +1839,7 @@ def plot_median_resolution(eta_bin, plot_type):
                     ]
                 for plot_dir in plots_dir:
                     fig.savefig(
-                        f"{plot_dir}/{plot_type}_{'JetPt' if 'jet_pt' in plot_type else 'Response'}_{flav_str}_{neutrino_str}_eta{correct_eta_bins[eta_bin]}to{correct_eta_bins[eta_bin+1]}.{'pdf' if PDF else 'png'}",
+                        f"{plot_dir}/{plot_type}_{'JetPt' if 'jet_pt' in plot_type else 'Response'}_{flav_str}{neutrino_str}_eta{correct_eta_bins[eta_bin]}to{correct_eta_bins[eta_bin+1]}.{'pdf' if PDF else 'png'}",
                         bbox_inches="tight",
                         dpi=300,
                     )
@@ -1854,7 +1853,7 @@ def plot_median_resolution(eta_bin, plot_type):
 
             else:
                 fig.savefig(
-                    f"{plots_dir}/{plot_type}_{'JetPt' if 'jet_pt' in plot_type else 'Response'}_{flav_str}_{neutrino_str}_eta{correct_eta_bins[eta_bin]}to{correct_eta_bins[eta_bin+1]}.{'pdf' if PDF else 'png'}",
+                    f"{plots_dir}/{plot_type}_{'JetPt' if 'jet_pt' in plot_type else 'Response'}_{flav_str}{neutrino_str}_eta{correct_eta_bins[eta_bin]}to{correct_eta_bins[eta_bin+1]}.{'pdf' if PDF else 'png'}",
                     bbox_inches="tight",
                     dpi=300,
                 )

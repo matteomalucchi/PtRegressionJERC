@@ -30,7 +30,7 @@ Year can be set to:
 - 2025
 
 This will save the results in the `dir_name` directory inside the
-`output_all.coffea` file. 
+`output_all.coffea` file.
 
 If running on `lxplus`, there will be an output file for each worker in the `dir_name` directory and you can merge them using:
 
@@ -80,7 +80,7 @@ python exec.py --full -pnet --dir <dir_name> -y <year> --closure --abs-eta-inclu
 ```
 
 This will run the analysis applying the newly derived corrections which have to be specified in the config file.
-Once this is done, you can run the other steps of the anlaysis to obtain the final plots.
+Once this is done, you can run the other steps of the analysis to obtain the final plots.
 
 To plot all eta bins on the same plot you can use the following command:
 

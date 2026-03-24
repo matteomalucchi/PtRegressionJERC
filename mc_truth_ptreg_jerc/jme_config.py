@@ -1,3 +1,5 @@
+import os
+
 from pocket_coffea.utils.configurator import Configurator
 from pocket_coffea.lib.cut_functions import (
     get_nObj_eq,
@@ -11,24 +13,18 @@ from pocket_coffea.lib.cut_functions import (
 from pocket_coffea.parameters.histograms import *
 from pocket_coffea.parameters.cuts import passthrough
 from pocket_coffea.lib.columns_manager import ColOut
+# Loading default parameters
+from pocket_coffea.parameters import defaults
 
-import workflow
-from workflow import QCDBaseProcessor
+import mc_truth_ptreg_jerc.workflow
+from mc_truth_ptreg_jerc.workflow import QCDBaseProcessor
+import mc_truth_ptreg_jerc.custom_cut_functions
+from mc_truth_ptreg_jerc.custom_cut_functions import *
+from mc_truth_ptreg_jerc.params.binning import *
 
-import custom_cut_functions
-
-# import custom_cuts
-from custom_cut_functions import *
-from params.binning import *
-
-# from custom_cuts import *
-# from params.binning import bins
-import os
 
 localdir = os.path.dirname(os.path.abspath(__file__))
 
-# Loading default parameters
-from pocket_coffea.parameters import defaults
 
 default_parameters = defaults.get_default_parameters()
 defaults.register_configuration_dir("config_dir", localdir + "/params")

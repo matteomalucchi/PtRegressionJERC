@@ -4,8 +4,7 @@ import os
 import mplhep as hep
 import sys
 
-sys.path.append("../")
-from params.binning import *
+from mc_truth_ptreg_jerc.params.binning import *
 
 dir_median_diff = "median_diff"
 

@@ -2,19 +2,19 @@ import awkward as ak
 import numpy as np
 import vector
 import copy
-
+import sys
 vector.register_awkward()
 
 from pocket_coffea.workflows.base import BaseProcessorABC
 from pocket_coffea.utils.configurator import Configurator
 from pocket_coffea.lib.jets import met_correction_after_jec
 from pocket_coffea.lib.leptons import lepton_selection, get_dilepton
-from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
 
-from configs.jme.workflow import QCDBaseProcessor
-from configs.jme.custom_cut_functions import jet_selection_nopu
-from utils.basic_functions import add_fields
-from configs.MET_studies.custom_object_preselections import (
+from utils_configs.basic_functions import add_fields
+from utils_configs.custom_cut_functions import custom_jet_selection
+
+from mc_truth_ptreg_jerc.workflow import QCDBaseProcessor
+from met_ptreg_performance.custom_object_preselections import (
     jet_type1_selection,
     muon_selection_custom,
     low_pt_jet_type1_selection,
@@ -152,8 +152,8 @@ class METProcessor(BaseProcessorABC):
             self.events["JetGood"] = copy.copy(self.events["Jet"])
         else:
             # keep only jets with pt_raw > 15 GeV and |eta| < 4.7
-            self.events["JetGood"] = jet_selection_nopu(
-                self.events, "Jet", self.params, "pt_raw"
+            self.events["JetGood"] = custom_jet_selection(
+                self.events, "Jet",  "Jet", self.params, self._year, pt_type="pt_raw", pt_cut_name="pt_raw"
             )
             if self.only_physical_jet:
                 physisical_jet_mask = (
@@ -480,7 +480,6 @@ class METProcessor(BaseProcessorABC):
             self.events[f"u{MET_coll}"] = ak.with_field(
                 self.events[f"u{MET_coll}"], response, "response"
             )
-        breakpoint()
 
     def count_objects(self, variation):
         self.events["nMuonGood"] = ak.num(self.events.MuonGood)

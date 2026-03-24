@@ -11,9 +11,9 @@ from workflow import *
 from cuts import *
 from custom_functions import *
 
-from custom_cut_functions import *
-from params.binning import *
-from variables_def import get_variables_dict
+from mc_truth_ptreg_jerc.custom_cut_functions import *
+from mc_truth_ptreg_jerc.params.binning import *
+from mc_truth_ptreg_jerc.variables_def import get_variables_dict
 
 
 localdir = os.path.dirname(os.path.abspath(__file__))

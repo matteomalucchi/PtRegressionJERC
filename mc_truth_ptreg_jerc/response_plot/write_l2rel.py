@@ -1,8 +1,7 @@
 import json
 import sys
 
-sys.path.append("../")
-from params.binning import *
+from mc_truth_ptreg_jerc.params.binning import *
 
 def create_pol_string(num_params):
     pol_string = "[0]"

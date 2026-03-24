@@ -3,7 +3,7 @@ import os
 
 from pocket_coffea.lib.cut_definition import Cut
 
-import custom_cut_functions as cf
+import mc_truth_ptreg_jerc.custom_cut_functions as cf
 
 
 def get_ptbin(pt_low, pt_high, name=None):

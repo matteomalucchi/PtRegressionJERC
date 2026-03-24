@@ -1,15 +1,13 @@
 import awkward as ak
-from time import sleep
 import os
 
 from pocket_coffea.workflows.base import BaseProcessorABC
 from pocket_coffea.utils.configurator import Configurator
-from pocket_coffea.lib.hist_manager import Axis
 from pocket_coffea.lib.deltaR_matching import object_matching, deltaR_matching_nonunique
 
-from custom_cut_functions import *
-from custom_functions import *
-from params.binning import pt_bins, eta_bins, eta_bins_upart
+from mc_truth_ptreg_jerc.custom_cut_functions import *
+from mc_truth_ptreg_jerc.custom_functions import *
+from mc_truth_ptreg_jerc.params.binning import pt_bins, eta_bins, eta_bins_upart
 
 
 flav_dict = (
