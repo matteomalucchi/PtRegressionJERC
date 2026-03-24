@@ -1,8 +1,8 @@
-# MET Studies for PNet regressed pT jets
+# MET Studies for regressed pT jets
 
-Repository to compute MET Type-1 corrections for PNet regressed pT jets, structured as an analysis configurations for a specific development branch from a fork [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main).
+Repository to compute the response and resolution of MET as well as the effect of the Type-1 correction derived for PNet regressed pT jets.
 
-The response and resolution of MET as well as the effect of the Type-1 correction derived for PNet regressed pT jets are studied.
+This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) and was originally hosted [here](https://github.com/matteomalucchi/AnalysisConfigs/tree/legacy-met-config/configs/MET_studies).
 
 ## Workflow
 
