@@ -254,6 +254,7 @@ cfg = Configurator(
             )
         ),
     },
+    calibrators=[],
     skim=[],
     preselections=[],
     categories=CartesianSelection(multicuts=multicuts, common_cats=common_cats),

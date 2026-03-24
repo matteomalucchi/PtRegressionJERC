@@ -189,7 +189,14 @@ class QCDBaseProcessor(BaseProcessorABC):
         if self._isMC:
             # PV_dz_mask = abs(self.events.PV.z - self.events.GenVtx.z) < 0.2
             # self.events = self.events[PV_dz_mask]
-
+            
+            if "pt_raw" not in self.events["Jet"].fields:
+                self.events["Jet"] = ak.with_field(
+                    self.events["Jet"],
+                    self.events["Jet"].pt * (1 - self.events["Jet"].rawFactor),
+                    "pt_raw",
+                )
+                
             self.events["JetGood"] = ak.with_field(
                 self.events.Jet,
                 self.events.Jet.pt_raw,
