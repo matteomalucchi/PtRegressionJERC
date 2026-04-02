@@ -26,6 +26,7 @@ from met_ptreg_performance.plot_config import (
     N_bins,
     R_bin_edges,
     u_bin_edges,
+    response_axis_range,
 )
 import met_ptreg_performance.helpers as helpers
 
@@ -96,8 +97,14 @@ BIN_VARIABLES = {
         "bin_edges": qT_bins,
         "label": r"Z q$_{\mathrm{T}}$ [GeV]",
         "name_plot": "Z_qT",
+        "N_bins": N_bins,
     },
-    "PV_npvs": {"bin_edges": PV_bins, "label": "#PV", "name_plot": "nPV"},
+    "PV_npvs": {
+        "bin_edges": PV_bins,
+        "label": "#PV",
+        "name_plot": "nPV",
+        "N_bins": 80,
+    },
 }
 
 MASK = False
@@ -105,8 +112,8 @@ MASK = False
 outputdir = args.output if args.output else "plots_MET"
 
 # Create output directories if it does not exist
-met_histograms_dir = os.path.join(outputdir, "met_histograms")
-os.makedirs(met_histograms_dir, exist_ok=True)
+inclusive_histograms_dir = os.path.join(outputdir, "inclusive_histograms")
+os.makedirs(inclusive_histograms_dir, exist_ok=True)
 
 # Response curves directories
 response_dir = os.path.join(outputdir, "response_curves")
@@ -566,7 +573,7 @@ def create_responses_info(bin_var_arrays, u_dict, weights, bin_vars):
     return responses_dict, hists_dict
 
 
-def create_met_histos(col_var, category):
+def create_inclusive_histos(col_var, category):
     """
     Build MET comparison histograms for a given category.
 
@@ -577,7 +584,7 @@ def create_met_histos(col_var, category):
     category : str
         Category name (e.g. event selection).
     """
-    met_dict = {}
+    inclusive_histo_dict = {}
     for quantity_name, var_dict in total_var_dict.items():
         hist_1d_dict = {}
         ref_var = var_dict["reference"]
@@ -605,18 +612,16 @@ def create_met_histos(col_var, category):
                 },
             }
 
-        # Output name
-        output_name = os.path.join(met_histograms_dir, f"{category}_{quantity_name}")
-
         info = {
             "series_dict": hist_1d_dict,
-            "output_base": output_name,
-            "xlabel": var_dict["plot_name"],
+            "output_base": f"{category}_{quantity_name}",
+            "xlabel": var_dict["label"],
             "ylabel": "Events",
             "y_log": var_dict["log"],
             "ratio_label": var_dict.get("ratio_label", "Ratio"),
+            "legend": True,
         }
-        met_dict[quantity_name] = info
+        inclusive_histo_dict[quantity_name] = info
 
     # Add histograms of the difference between PuppiMET_pt and RawPuppiMET-Type1CorrMET_pt/RawPuppiMET-Type1CorrMETUncorrected_pt
     met_diff = {}
@@ -639,7 +644,9 @@ def create_met_histos(col_var, category):
         "RawPuppiMET-Type1CorrMETUncorrected_pt",
     ]:
         rel_diff_perc = (
-            (met_diff["PuppiMET_pt"] - met_diff[met_type1]) / met_diff["PuppiMET_pt"] * 100
+            (met_diff["PuppiMET_pt"] - met_diff[met_type1])
+            / met_diff["PuppiMET_pt"]
+            * 100
         )
         hist_diff = Hist.new.Reg(
             1000,
@@ -667,20 +674,79 @@ def create_met_histos(col_var, category):
             }
         }
 
-        met_dict[f"met_diff_PuppiMET_{met_type1.replace('_pt', '')}"] = {
+        inclusive_histo_dict[f"met_diff_PuppiMET_{met_type1.replace('_pt', '')}"] = {
             "series_dict": hist_diff_dict,
-            "output_base": os.path.join(
-                met_histograms_dir,
-                f"{category}_met_diff_PuppiMET_{met_type1.replace('_pt', '')}",
-            ),
+            "output_base": f"{category}_met_diff_PuppiMET_{met_type1.replace('_pt', '')}",
             "xlabel": "MET $p_{T}$ relative difference [%]",
             "ylabel": "Events",
             "y_log": True,
             # "set_ylim": False,
             "ratio_label": "Ratio",
+            "legend": True,
         }
 
-    return met_dict
+    for bin_var in BIN_VARIABLES:
+        # Variable bins
+        hist_bin_var = Hist.new.Var(
+            BIN_VARIABLES[bin_var]["bin_edges"],
+            name=bin_var,
+            flow=False,
+        ).Weight()
+        hist_bin_var.fill(col_var[bin_var], weight=col_var["weight"])
+
+        bin_var_dict = {
+            bin_var: {
+                "data": hist_bin_var,
+                "style": {
+                    "is_reference": False,
+                    "legend_name": f"{BIN_VARIABLES[bin_var]['label']}",
+                },
+            }
+        }
+
+        inclusive_histo_dict[f"{bin_var}_VarBin"] = {
+            "series_dict": bin_var_dict,
+            "output_base": f"{category}_{bin_var}_VarBin",
+            "xlabel": BIN_VARIABLES[bin_var]["label"],
+            "ylabel": "Events",
+            "y_log": True,
+            # "set_ylim": False,
+            "ratio_label": "Ratio",
+            "legend": False,
+        }
+
+        # Regular bins
+        hist_bin_reg = Hist.new.Reg(
+            BIN_VARIABLES[bin_var]["N_bins"],
+            BIN_VARIABLES[bin_var]["bin_edges"][0],
+            BIN_VARIABLES[bin_var]["bin_edges"][-1],
+            name=bin_var,
+            flow=False,
+        ).Weight()
+        hist_bin_reg.fill(col_var[bin_var], weight=col_var["weight"])
+
+        bin_var_dict = {
+            bin_var: {
+                "data": hist_bin_reg,
+                "style": {
+                    "is_reference": False,
+                    "legend_name": f"{BIN_VARIABLES[bin_var]['label']}",
+                },
+            }
+        }
+
+        inclusive_histo_dict[f"{bin_var}_RegBin"] = {
+            "series_dict": bin_var_dict,
+            "output_base": f"{category}_{bin_var}_RegBin",
+            "xlabel": BIN_VARIABLES[bin_var]["label"],
+            "ylabel": "Events",
+            "y_log": True,
+            # "set_ylim": False,
+            "ratio_label": "Ratio",
+            "legend": False,
+        }
+
+    return inclusive_histo_dict
 
 
 def plot_responses(responses_dict, cat, year, hists_dict=None):
@@ -709,22 +775,31 @@ def plot_responses(responses_dict, cat, year, hists_dict=None):
 
     # ---- 1. Original 1D response graphs from responses_dict ----------------
     for var_name in responses_dict:
-        y_label, x_labels = helpers.extract_labels(
+        labels = helpers.extract_labels(
             var_name, response_var_name_dict, BIN_VARIABLES
         )
-        x_label = x_labels[0] if isinstance(x_labels, list) else x_labels
+        x_label = labels[0]
+        y_label = labels[-1]
+        ylim_values = [
+            response_axis_range[v] for v in response_axis_range.keys() if v in var_name
+        ][0]
 
         p = (
             HEPPlotter()
-            .set_plot_config(lumitext=f"{year} (13.6 TeV)")
-            .set_options(split_legend=False, set_ylim=False)
+            .set_plot_config(figsize=(12, 12), lumitext=f"{year} (13.6 TeV)")
+            .set_options(
+                split_legend=False,
+                set_ylim=True,
+                ylim_bottom_value=ylim_values[0],
+                ylim_top_value=ylim_values[1],
+            )
             .set_output(f"{response_dir}/{cat}_{var_name}")
             .set_data(responses_dict[var_name], plot_type="graph")
             .set_labels(x_label, y_label)
         )
-        if "R" in var_name and "mean" in var_name:
+        if "R_mean" in var_name:
             p = p.add_line(orientation="h", y=1.0, color="black", linestyle="--")
-        
+
         plotters.append(p)
 
     # ---- 2. 2D profile slices → 1D response graphs -------------------------
@@ -738,9 +813,15 @@ def plot_responses(responses_dict, cat, year, hists_dict=None):
             ):
                 continue
 
-            y_label, x_labels = helpers.extract_labels(
+            labels = helpers.extract_labels(
                 var_name, response_var_name_dict, BIN_VARIABLES
             )
+
+            ylim_values = [
+                response_axis_range[v]
+                for v in response_axis_range.keys()
+                if v in var_name
+            ][0]
 
             # Use axes from the first valid profile (all met_types share the same axes)
             h_ref = next(
@@ -766,9 +847,9 @@ def plot_responses(responses_dict, cat, year, hists_dict=None):
                 # Derive y-label from the metric part of var_name
                 metric_part = var_name.split("_")[1] if "_" in var_name else var_name
                 y_label_metric = (
-                    y_label
-                    if y_label not in response_var_name_dict
-                    else response_var_name_dict.get(metric_part, y_label)
+                    labels[-1]
+                    if labels[-1] not in response_var_name_dict
+                    else response_var_name_dict.get(metric_part, labels[-1])
                 )
 
                 for bin_idx in range(len(fixed_ax)):
@@ -802,7 +883,12 @@ def plot_responses(responses_dict, cat, year, hists_dict=None):
                             lumitext_font_size=20,
                             cmstext_font_size=20,
                         )
-                        .set_options(split_legend=False, set_ylim=False)
+                        .set_options(
+                            split_legend=False,
+                            set_ylim=True,
+                            ylim_bottom_value=ylim_values[0],
+                            ylim_top_value=ylim_values[1],
+                        )
                         .set_output(output)
                         .set_data(graph_dict, plot_type="graph")
                         .set_labels(free_ax_label, y_label_metric)
@@ -849,10 +935,10 @@ def plot_2d_response_histograms(hists_dict, cat, year):
 
     plotters = []
 
+    plotted_bin_vars = False
+
     for var_name in hists_dict:
-        y_label, x_labels = helpers.extract_labels(
-            var_name, response_var_name_dict, BIN_VARIABLES
-        )
+        labels = helpers.extract_labels(var_name, response_var_name_dict, BIN_VARIABLES)
 
         for met_type in hists_dict[var_name]:
             hist = hists_dict[var_name][met_type]
@@ -861,6 +947,11 @@ def plot_2d_response_histograms(hists_dict, cat, year):
             # Profile objects — convert each 2-axis slice to a Hist2D
             # ----------------------------------------------------------------
             if helpers.is_profile(hist):
+                cbar_values = [
+                    response_axis_range[v]
+                    for v in response_axis_range.keys()
+                    if v in var_name
+                ][0]
 
                 n_axes = len(hist.axes)
                 if n_axes < 2:
@@ -904,19 +995,27 @@ def plot_2d_response_histograms(hists_dict, cat, year):
                             lumitext_font_size=20,
                             cmstext_font_size=20,
                         )
-                        .set_options(legend=False, cbar_log=False)
+                        .set_options(
+                            legend=False,
+                            cbar_lim_bottom_value=cbar_values[0],
+                            cbar_lim_top_value=cbar_values[1],
+                            cbar_log=cbar_values[2],
+                        )
                         .set_output(output)
                         .set_data(series_dict, plot_type="2d")
-                        .set_labels(x_labels[0], x_labels[1], y_label)
+                        .set_labels(labels[0], labels[1], labels[2])
                     )
                     plotters.append(p)
 
+                # exit from this iteration of the loop
+                # because we've already plotted all 2D slices
                 continue
 
             # ----------------------------------------------------------------
             # Regular Hist objects — slice/project all dims beyond the 2D plane
             # ----------------------------------------------------------------
-            for it, (y_idx, x_idx) in enumerate(zip([-1, -1], [-3, -2])):
+            for y_idx, x_idx in zip([-1, -1, -2], [-3, -2, -3]):
+
                 # y is the response axis
                 y_axis_name = hist.axes[y_idx].name
                 # x is the bin variable axis
@@ -930,20 +1029,32 @@ def plot_2d_response_histograms(hists_dict, cat, year):
                     suffix,
                     mode,
                 ) in helpers.iter_slice_combinations(hist, free_axes):
+
+                    # Skip slices that are not requested
+                    if mode == "slice" and (not args.slice  or y_idx != -1):
+                        continue
+
+                    # plot bin vars only once
+                    if not plotted_bin_vars and y_idx != -1:
+                        plotted_bin_vars = True
+                        print("Plotting bin variables")
+                    elif plotted_bin_vars and y_idx != -1:
+                        continue
+
                     h_2d = hist[slice_dict] if slice_dict else hist
 
                     extra_label = (
-                        ("   " + ",  ".join(label_parts)) if label_parts else ""
+                        (("   " + ",  ".join(label_parts)) if label_parts else "")
+                        if y_idx == -1
+                        else ""
                     )
                     out_suffix = f"_{suffix}" if suffix else ""
                     output = f"{histograms_2d_histo_dir}/2d_histo_{cat}_{var_name}_{met_type}{out_suffix}"
 
                     if mode == "project":
                         h_2d = h_2d.project(*free_axes)
-                    
-                    # Skip slices that are not requested
-                    if not args.slice and mode == "slice":
-                        continue
+
+                    print(f"Plotting {output}")
 
                     series_dict = {
                         f"{var_name} {met_type}": {
@@ -951,19 +1062,24 @@ def plot_2d_response_histograms(hists_dict, cat, year):
                             "style": {"label": f"{var_name} {met_type}"},
                         }
                     }
+                    lumitext = (
+                        f"{met_type}{extra_label}     {year} (13.6 TeV)"
+                        if y_idx == -1
+                        else f"{year} (13.6 TeV)"
+                    )
 
                     p = (
                         HEPPlotter()
                         .set_plot_config(
                             figsize=(15, 14),
-                            lumitext=f"{met_type}{extra_label}     {year} (13.6 TeV)",
+                            lumitext=lumitext,
                             lumitext_font_size=20,
                             cmstext_font_size=20,
                         )
                         .set_options(legend=False, cbar_log=True)
                         .set_output(output)
                         .set_data(series_dict, plot_type="2d")
-                        .set_labels(x_labels[it], y_label)
+                        .set_labels(labels[x_idx], labels[y_idx])
                     )
                     plotters.append(p)
 
@@ -999,7 +1115,7 @@ def plot_1d_response_histograms(hists_dict, cat, year):
 
     for var_name in hists_dict:
         hist_1d_dict = {}
-        var_label, _ = helpers.extract_labels(
+        var_label = helpers.extract_labels(
             var_name, response_var_name_dict, BIN_VARIABLES
         )
 
@@ -1071,7 +1187,7 @@ def plot_1d_response_histograms(hists_dict, cat, year):
                     cmstext_font_size=20,
                 )
                 .set_output(output_name)
-                .set_labels(var_label, "Events")
+                .set_labels(var_label[0], "Events")
                 .set_options(y_log=False, split_legend=False, set_ylim_ratio=0.5)
                 .set_data(hist_met_dict, plot_type="1d")
                 .add_line(
@@ -1095,45 +1211,51 @@ def plot_1d_response_histograms(hists_dict, cat, year):
             p.run()
 
 
-def plot_histo_met(met_dict, year):
+def plot_inclusive_histos(inclusive_histo_dict, year):
     """
     Plot MET histograms using either multiprocessing or sequential execution.
 
     Parameters
     ----------
-    met_dict : dict
+    inclusive_histo_dict : dict
         Dictionary of histogram plotting configurations.
     year : str
         Year string for labeling.
     """
 
     plotters = []
-    for info in met_dict.values():
+    for info in inclusive_histo_dict.values():
         p = (
             HEPPlotter()
             .set_plot_config(figsize=(14, 14), lumitext=f"{year} (13.6 TeV)")
-            .set_output(info["output_base"])
+            .set_output(
+                os.path.join(
+                    inclusive_histograms_dir, os.path.basename(info["output_base"])
+                )
+            )
             .set_labels(info["xlabel"], info["ylabel"], ratio_label=info["ratio_label"])
             .set_options(
                 y_log=info["y_log"],
                 set_ylim=info.get("set_ylim", True),
                 split_legend=False,
                 set_ylim_ratio=0.5,
+                legend=info.get("legend", True),
             )
             .set_data(info["series_dict"], plot_type="1d")
         )
         plotters.append(p)
+
     if args.workers > 1:
-        print(f"Plotting MET histograms in parallel")
+        print(f"Plotting inclusive histograms in parallel")
         with Pool(args.workers) as pool:
             pool.map(helpers.run_plot, plotters)
     else:
         for p in plotters:
-            print(f"Plotting MET histogram  {p.output_base.split('/')[-1]}")
+            print(f"Plotting inclusive histogram  {p.output_base.split('/')[-1]}")
             p.run()
 
 
-def do_plots(responses_dict, hists_dict, met_dict, category, year):
+def do_plots(responses_dict, hists_dict, inclusive_histo_dict, category, year):
     """Plot all the required plots.
 
     Parameters
@@ -1142,7 +1264,7 @@ def do_plots(responses_dict, hists_dict, met_dict, category, year):
         Response summary information from `create_responses_info`.
     hists_dict : dict
         Histogram dictionary from `create_responses_info`.
-    met_dict : dict
+    inclusive_histo_dict : dict
         Dictionary of histogram plotting configurations.
     category : str
         Category name.
@@ -1160,7 +1282,7 @@ def do_plots(responses_dict, hists_dict, met_dict, category, year):
     # plot response curves
     plot_responses(responses_dict, category, year, hists_dict)
     # plot MET histograms
-    plot_histo_met(met_dict, year)
+    plot_inclusive_histos(inclusive_histo_dict, year)
 
 
 def main():
@@ -1176,11 +1298,15 @@ def main():
         loaded_dict = load(args.load)
         responses_dict = loaded_dict["responses"]
         hists_dict = loaded_dict["hists"]
-        met_dict = loaded_dict["met_histos"]
+        try:
+            inclusive_histo_dict = loaded_dict["inclusive_histos"]
+        except KeyError:
+            inclusive_histo_dict = loaded_dict["met_histos"]
+            
         year = loaded_dict.get("year", "unknown_year")
         category = loaded_dict.get("category", "unknown_category")
 
-        do_plots(responses_dict, hists_dict, met_dict, category, year)
+        do_plots(responses_dict, hists_dict, inclusive_histo_dict, category, year)
         print("Finished plotting!")
 
         return
@@ -1243,15 +1369,21 @@ def main():
             responses_dict |= new_responses_dict
             hists_dict |= new_hists_dict
 
+            # add the bin_var_arrays
+            for bin_var in BIN_VARIABLES.keys():
+                col_var[bin_var] = bin_var_arrays[
+                    list(BIN_VARIABLES.keys()).index(bin_var)
+                ]
+
             # build MET histograms
-            met_dict = create_met_histos(col_var, category)
+            inclusive_histo_dict = create_inclusive_histos(col_var, category)
 
             # save all the histograms
             helpers.save_dict_to_file(
                 {
                     "responses": responses_dict,
                     "hists": hists_dict,
-                    "met_histos": met_dict,
+                    "inclusive_histos": inclusive_histo_dict,
                     "year": year,
                     "category": category,
                 },
@@ -1261,7 +1393,7 @@ def main():
             )
 
             # plot all the required plots
-            do_plots(responses_dict, hists_dict, met_dict, category, year)
+            do_plots(responses_dict, hists_dict, inclusive_histo_dict, category, year)
 
     else:
         raise ValueError("Not implemented")

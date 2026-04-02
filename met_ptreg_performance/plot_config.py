@@ -65,7 +65,7 @@ u_dict_names = {f"u{met}": infos for met, infos in met_dict_names.items()}
 
 total_var_dict = {
     "MET_comparison_pt": {
-        "plot_name": r"MET $p_{\mathrm{T}}$ [GeV]",
+        "label": r"MET $p_{\mathrm{T}}$ [GeV]",
         "variables": [met + "_pt" for met in met_dict_names],
         "range": (0, 200),
         "log": True,
@@ -74,7 +74,7 @@ total_var_dict = {
         "colors": [style["color"] for style in met_dict_names.values()],
     },
     "MET_comparison_phi": {
-        "plot_name": r"MET $\phi$",
+        "label": r"MET $\phi$",
         "variables": [met + "_phi" for met in met_dict_names],
         "range": (-3.14, 3.14),
         "log": False,
@@ -83,7 +83,7 @@ total_var_dict = {
         "colors": [style["color"] for style in met_dict_names.values()],
     },
     "hadronic_recoil_comparison_pt": {
-        "plot_name": r"u $p_{\mathrm{T}}$ [GeV]",
+        "label": r"u $p_{\mathrm{T}}$ [GeV]",
         "variables": ["u" + met + "_pt" for met in met_dict_names],
         "range": (0, 200),
         "log": True,
@@ -92,7 +92,7 @@ total_var_dict = {
         "colors": [style["color"] for style in met_dict_names.values()],
     },
     "hadronic_recoil_comparison_phi": {
-        "plot_name": r"u $\phi$",
+        "label": r"u $\phi$",
         "variables": ["u" + met + "_phi" for met in met_dict_names],
         "range": (-3.14, 3.14),
         "log": False,
@@ -101,7 +101,7 @@ total_var_dict = {
         "colors": [style["color"] for style in met_dict_names.values()],
     },
     "response_comparison": {
-        "plot_name": r"$-u_{||}/q_{T}$",
+        "label": r"$-u_{||}/q_{T}$",
         "variables": ["u" + met + "_response" for met in met_dict_names],
         "range": (-2, 2),
         "log": True,
@@ -110,7 +110,7 @@ total_var_dict = {
         "colors": [style["color"] for style in met_dict_names.values()],
     },
     "u_paral_predict_comparison": {
-        "plot_name": r"$u_{||}+q_{T}$ [GeV]",
+        "label": r"$u_{||}+q_{T}$ [GeV]",
         "variables": ["u" + met + "_u_paral_predict" for met in met_dict_names],
         "range": (-200, 200),
         "log": True,
@@ -119,7 +119,7 @@ total_var_dict = {
         "colors": [style["color"] for style in met_dict_names.values()],
     },
     "u_perp_predict_comparison": {
-        "plot_name": r"$u_{\perp}$ [GeV]",
+        "label": r"$u_{\perp}$ [GeV]",
         "variables": ["u" + met + "_u_perp_predict" for met in met_dict_names],
         "range": (-200, 200),
         "log": True,
@@ -130,7 +130,7 @@ total_var_dict = {
 }
 met_hadronic_recoil_dict = {
     f"{met}_pt": {
-        "plot_name": met + r" $p_{\mathrm{T}}$ [GeV]",
+        "label": met + r" $p_{\mathrm{T}}$ [GeV]",
         "variables": [f"{met}_pt", f"u{met}_pt"],
         "range": (0, 200),
         "log": True,
@@ -243,3 +243,23 @@ N_bins = 40
 
 R_bin_edges = np.linspace(-2, 2, N_bins)
 u_bin_edges = np.linspace(-200, 200, N_bins)
+
+# Axis ranges
+# lower bound, upper bound, log scale in 2d plot
+response_axis_range={
+    "R_mean": (0.3, 1.1, False),
+    "R_quantile_resolution": (0.1, 12, True),
+    "R_stddev": (0.1, 33, True),
+    "u_paral_mean": (-10, 45, False),
+    "u_paral_quantile_resolution": (10, 70, False),
+    "u_paral_stddev": (10, 70, False),
+    "u_paral_scaled_mean": (-10, 45, False),
+    "u_paral_scaled_quantile_resolution": (10, 70, False),
+    "u_paral_scaled_stddev": (10, 70, False),
+    "u_perp_mean": (-0.1, 1, False),
+    "u_perp_quantile_resolution": (10, 40, False),
+    "u_perp_stddev": (10, 40, False),
+    "u_perp_scaled_mean": (-0.1, 1, False),
+    "u_perp_scaled_quantile_resolution": (10, 40, False),
+    "u_perp_scaled_stddev": (10, 40, False),
+}

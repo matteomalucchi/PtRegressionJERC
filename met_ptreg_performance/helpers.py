@@ -213,11 +213,8 @@ def extract_labels(var_name, response_var_name_dict, bin_variables):
 
     Returns
     -------
-    y_label : str
-        Label for the y (response) variable.
-    x_labels : list of str
-        Labels for each binning dimension, in the same order as they appear
-        in the key (i.e. innermost/last binning axis first.
+    labels : list of str
+        Axis labels
     """
     parts = var_name.split("VS")
     y_var_name   = parts[0]
@@ -242,7 +239,7 @@ def extract_labels(var_name, response_var_name_dict, bin_variables):
             # Fallback: use the raw name if not found in BIN_VARIABLES
             x_labels.append(x_var_name)
 
-    return y_label, x_labels
+    return x_labels + [y_label]
 
 def save_dict_to_file(dict_to_save, output_path):
     """Save multiple dictionaries to a single coffea file.
