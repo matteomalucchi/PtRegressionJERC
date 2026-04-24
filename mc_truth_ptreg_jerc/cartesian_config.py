@@ -6,10 +6,11 @@ from pocket_coffea.lib.categorization import CartesianSelection, MultiCut
 from pocket_coffea.parameters import defaults
 import os
 
-from workflow import *
+from mc_truth_ptreg_jerc.workflow import *
+from mc_truth_ptreg_jerc.cuts import *
+from mc_truth_ptreg_jerc.custom_functions import get_closure_function_information
+from mc_truth_ptreg_jerc.params.l2relative_txt import get_corr_file
 
-from cuts import *
-from custom_functions import *
 
 from mc_truth_ptreg_jerc.custom_cut_functions import *
 from mc_truth_ptreg_jerc.params.binning import *
@@ -39,94 +40,44 @@ else:
     eta_bins = eta_bins_upart
 
 
-mc_truth_corr_pnetreg = None
-corr_files_pnetreg = {
-    "2016_PreVFP": f"{localdir}/params/Summer20UL16APV_V1_MC_L2Relative_AK4PFPNet.txt",
-    "2016_PostVFP": f"{localdir}/params/Summer20UL16_V1_MC_L2Relative_AK4PFPNet.txt",
-    "2017": f"{localdir}/params/Summer20UL17_V1_MC_L2Relative_AK4PFPNet.txt",
-    "2017": f"{localdir}/params/Summer20UL17_V1_MC_L2Relative_AK4PFPNet.txt",
-    "2018": f"{localdir}/params/Summer20UL18_V1_MC_L2Relative_AK4PFPNet.txt",
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2024": f"{localdir}/params/Summer24Run3_V3_MC_L2Relative_AK4PFPNet.txt",
-    "2025": f"{localdir}/params/Winter25Run3_V3_MC_L2Relative_AK4PFPNet.txt",
-}
+
+# Loading the L2 Relative (MC truth) corrections
+param_path = localdir + "/params"
+(
+    corr_files_pnetreg,
+    corr_files_upartreg,
+    corr_files_pnetreg_neutrino,
+    corr_files_upartreg_neutrino,
+    corr_files,
+) = get_corr_file(param_path)
+
 if int(os.environ.get("CLOSURE", 0)) == 1:
+
     print(f"Performing closure test with {corr_files_pnetreg[year]}")
     mc_truth_corr_pnetreg = get_closure_function_information(corr_files_pnetreg[year])
 
-mc_truth_corr_upartreg = None
-corr_files_upartreg = {
-    "2016_PreVFP": f"{localdir}/params/Summer20UL16APV_V1_MC_L2Relative_AK4PFUparT.txt",
-    "2016_PostVFP": f"{localdir}/params/Summer20UL16_V1_MC_L2Relative_AK4PFUparT.txt",
-    "2017": f"{localdir}/params/Summer20UL17_V1_MC_L2Relative_AK4PFUparT.txt",
-    "2018": f"{localdir}/params/Summer20UL18_V1_MC_L2Relative_AK4PFUparT.txt",
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFUparT.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFUparT.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFUparT.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFUparT.txt",
-    "2024": f"{localdir}/params/Summer24Run3_V3_MC_L2Relative_AK4PFUparT.txt",
-    "2025": f"{localdir}/params/Winter25Run3_V3_MC_L2Relative_AK4PFUparT.txt",
-}
-if int(os.environ.get("CLOSURE", 0)) == 1:
     print(f"Performing closure test with {corr_files_upartreg[year]}")
     mc_truth_corr_upartreg = get_closure_function_information(corr_files_upartreg[year])
 
-mc_truth_corr_pnetreg_neutrino = None
-corr_files_pnetreg_neutrino = {
-    "2016_PreVFP": f"{localdir}/params/Summer20UL16APV_V1_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2016_PostVFP": f"{localdir}/params/Summer20UL16_V1_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2017": f"{localdir}/params/Summer20UL17_V1_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2018": f"{localdir}/params/Summer20UL18_V1_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2024": f"{localdir}/params/Summer24Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-    "2025": f"{localdir}/params/Winter25Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
-}
-if int(os.environ.get("CLOSURE", 0)) == 1:
     print(f"Performing closure test with {corr_files_pnetreg_neutrino[year]}")
     mc_truth_corr_pnetreg_neutrino = get_closure_function_information(
         corr_files_pnetreg_neutrino[year]
     )
 
-mc_truth_corr_upartreg_neutrino = None
-corr_files_upartreg_neutrino = {
-    "2016_PreVFP": f"{localdir}/params/Summer20UL16APV_V1_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2016_PostVFP": f"{localdir}/params/Summer20UL16_V1_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2017": f"{localdir}/params/Summer20UL17_V1_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2018": f"{localdir}/params/Summer20UL18_V1_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EERun3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2024": f"{localdir}/params/Summer24Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-    "2025": f"{localdir}/params/Winter25Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
-}
-if int(os.environ.get("CLOSURE", 0)) == 1:
     print(f"Performing closure test with {corr_files_upartreg_neutrino[year]}")
     mc_truth_corr_upartreg_neutrino = get_closure_function_information(
         corr_files_upartreg_neutrino[year]
     )
 
-mc_truth_corr = None
-corr_files = {
-    "2016_PreVFP": f"{localdir}/params/Summer20UL16APV_V1_MC_L2Relative_AK4PFPuppi.txt",
-    "2016_PostVFP": f"{localdir}/params/Summer20UL16_V1_MC_L2Relative_AK4PFPuppi.txt",
-    "2017": f"{localdir}/params/Summer20UL17_V1_MC_L2Relative_AK4PFPuppi.txt",
-    "2018": f"{localdir}/params/Summer20UL18_V1_MC_L2Relative_AK4PFPuppi.txt",
-    "2022_preEE": f"{localdir}/params/Summer22Run3_V1_MC_L2Relative_AK4PUPPI.txt",
-    "2022_postEE": f"{localdir}/params/Summer22EEVetoRun3_V1_MC_L2Relative_AK4PUPPI.txt",
-    "2023_preBPix": f"{localdir}/params/Summer23Run3_V1_MC_L2Relative_AK4PUPPI.txt",
-    "2023_postBPix": f"{localdir}/params/Summer23BPixRun3_V3_MC_L2Relative_AK4PUPPI.txt",
-    "2024": f"{localdir}/params/Summer24Prompt24_V1_MC_L2Relative_AK4PFPuppi.txt",
-    "2025": f"{localdir}/params/Winter25Prompt25_V1_MC_L2Relative_AK4PFPuppi.txt",
-}
+else:
+    mc_truth_corr_pnetreg = None
+    mc_truth_corr_pnetreg_neutrino = None
+    mc_truth_corr_upartreg = None
+    mc_truth_corr_upartreg_neutrino = None
+
 print(f"Reapplying corrections {corr_files[year]}")
 mc_truth_corr = get_closure_function_information(corr_files[year])
+
 
 cuts_eta = []
 cuts_names_eta = []
@@ -163,13 +114,15 @@ else:
         cuts_names_reco_eta.append(f"MatchedJetsNeutrino_reco_eta{eta_low}to{eta_high}")
 
 
-variables_dict=get_variables_dict(cuts_names_eta, cuts_names_reco_eta, cuts_names_eta_neutrino)
+variables_dict = get_variables_dict(
+    cuts_names_eta, cuts_names_reco_eta, cuts_names_eta_neutrino
+)
 
 # samples_dict = {
-    # "2022_preEE": "QCD_PT-15to7000_JMENano_Summer22",
-    # "2022_postEE": "QCD_PT-15to7000_JMENano_Summer22EE",
-    # "2023_preBPix": "QCD_PT-15to7000_JMENano_Summer23",
-    # "2023_postBPix": "QCD_PT-15to7000_JMENano_Summer23BPix",
+# "2022_preEE": "QCD_PT-15to7000_JMENano_Summer22",
+# "2022_postEE": "QCD_PT-15to7000_JMENano_Summer22EE",
+# "2023_preBPix": "QCD_PT-15to7000_JMENano_Summer23",
+# "2023_postBPix": "QCD_PT-15to7000_JMENano_Summer23BPix",
 # }
 
 samples_dict = {
@@ -181,8 +134,8 @@ samples_dict = {
     "2022_postEE": "QCD_PT-15to7000_JMENanov15_Summer22EE",
     "2023_preBPix": "QCD_PT-15to7000_JMENanov15_Summer23",
     "2023_postBPix": "QCD_PT-15to7000_JMENanov15_Summer23BPix",
-    "2024" : "QCD_PT-15to7000_JMENano_Summer24",
-    "2025" : "QCD_PT-15to7000_JMENano_Winter25",
+    "2024": "QCD_PT-15to7000_JMENano_Summer24",
+    "2025": "QCD_PT-15to7000_JMENano_Winter25",
 }
 samples_PNetReg15_dict = {
     "2022_preEE": "QCD_PT-15to7000_PNetReg15_JMENano_Summer22",
@@ -209,7 +162,7 @@ cfg = Configurator(
     parameters=parameters,
     datasets={
         "jsons": [
-            #f"{localdir}/datasets/QCD.json",
+            # f"{localdir}/datasets/QCD.json",
             f"{localdir}/datasets/QCD_redirector.json",
             f"{localdir}/datasets/QCD_PNetReg15.json",
         ],
@@ -245,14 +198,10 @@ cfg = Configurator(
                 int(os.environ.get("PNETREG15", 0)) == 1
                 or int(os.environ.get("SPLITPNETREG15", 0)) == 1
             )
-            else
-            (0
-            if (
-                int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1
-            )
-            else 50
-            )
+            else (0 if (int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1) else 50)
         ),
+        "pnet": False,
+        "upart": False,
     },
     calibrators=[],
     skim=[],
@@ -264,8 +213,7 @@ cfg = Configurator(
     # },
     weights={
         "common": {
-            "inclusive": [
-            ],
+            "inclusive": [],
             "bycategory": {},
         },
         "bysample": {},
@@ -280,6 +228,5 @@ cfg = Configurator(
         }
     },
     variables=variables_dict,
-    columns={
-    },
+    columns={},
 )
