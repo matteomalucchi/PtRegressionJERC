@@ -146,7 +146,6 @@ output
 # My stuff
 *.out
 *out*/
-*.png
 *slurm*
 *.pkl.gz
 *.code-workspace
@@ -161,3 +160,9 @@ __*[0-9]*.py
 
 # Ignoring ctag file
 tags
+
+
+# Plots
+*.png
+*.pdf
+*.svg
