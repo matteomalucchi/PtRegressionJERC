@@ -42,7 +42,7 @@ print(f"\n flavour: {flavour}")
 class QCDBaseProcessor(BaseProcessorABC):
     def __init__(self, cfg: Configurator):
         super().__init__(cfg)
-        
+
         self.mc_truth_corr_pnetreg = self.workflow_options["mc_truth_corr_pnetreg"]
         self.mc_truth_corr_pnetreg_neutrino = self.workflow_options[
             "mc_truth_corr_pnetreg_neutrino"
@@ -55,6 +55,8 @@ class QCDBaseProcessor(BaseProcessorABC):
         self.DeltaR_matching = self.workflow_options["DeltaR_matching"]
         self.SetRegResponseToZero = self.workflow_options["SetRegResponseToZero"]
         self.GenJetPtCut = self.workflow_options["GenJetPtCut"]
+        self.pnet = self.workflow_options["pnet"]
+        self.upart = self.workflow_options["upart"]
 
     def add_neutrinos_to_genjets(self, genjets, neutrinos):
         neutrinos_matched = deltaR_matching_nonunique(genjets, neutrinos, 0.4)
@@ -125,76 +127,17 @@ class QCDBaseProcessor(BaseProcessorABC):
 
         return genjets_with_neutrinos
 
-    def get_mc_truth_corr(self, corr_dict, eta, phi, pt, pnetreg=True, upartreg=False):
-        corr = ak.ones_like(eta)
-
-        function_string = corr_dict["function_string"]
-        corrections_eta_bins = corr_dict["corrections_eta_bins"]
-        corrections_phi_bins = corr_dict["corrections_phi_bins"]
-        num_params = corr_dict["num_params"]
-        jet_pt = corr_dict["jet_pt"]
-        params = corr_dict["params"]
-
-        if function_string=="((x<[10])*([9])+(x>=[10])*([0]+([1]/(pow(log10(x),2)+[2]))+([3]*exp(-([4]*((log10(x)-[5])*(log10(x)-[5])))))+([6]*exp(-([7]*((log10(x)-[8])*(log10(x)-[8])))))))":
-            corr_function = standard_gaus_function
-        elif pnetreg or upartreg:
-            corr_function = string_to_pol_function(function_string)
-        else:
-            corr_function = standard_gaus_function
-            if not all(n == 13 for n in num_params):
-                # parse older function string format used in Run 2
-                # where the pt threshold is given explicitly in the formula, not as a parameter
-                # e.g. "((x<14)*([9]))+((x>=14)*([0]+([1]/(pow(log10(x),2)+[2]))+([3]*exp(-([4]*((log10(x)-[5])*(log10(x)-[5])))))+([6]*exp(-([7]*((log10(x)-[8])*(log10(x)-[8])))))))"
-                if all(n == 12 for n in num_params):
-                    num_params = [n+1 for n in num_params]
-                    x_lessthan_idx = function_string.find("x<")
-                    x_lessthan_closingparenthesis = function_string.find(")", x_lessthan_idx)
-                    params = [[*p, float(function_string[x_lessthan_idx + 2 : x_lessthan_closingparenthesis])] for p in params]
-                else:
-                    raise ValueError(f"Invalid number of parameters for standard_gaus_function evaluation.")
-
-        pt = ak.values_astype(pt, "float64")
-
-        for i in range(len(corrections_eta_bins[0])):
-            mask_bins = (corrections_eta_bins[0][i] <= eta) & (
-                eta < corrections_eta_bins[1][i]
-            )
-            if corrections_phi_bins:
-                mask_bins = (
-                    mask_bins
-                    & (corrections_phi_bins[0][i] <= phi)
-                    & (phi < corrections_phi_bins[1][i])
-                )
-            mask_pt = (jet_pt[0][i] <= pt) & (pt < jet_pt[1][i])
-            corr = ak.where(
-                mask_bins,
-                ak.where(
-                    mask_pt,
-                    corr_function(pt, *params[i]),
-                    ak.where(
-                        pt < jet_pt[0][i],
-                        corr_function(jet_pt[0][i], *params[i]),
-                        corr_function(jet_pt[1][i], *params[i]),
-                    ),
-                ),
-                corr,
-            )
-
-        return corr
-
     def apply_object_preselection(self, variation):
 
         if self._isMC:
-            # PV_dz_mask = abs(self.events.PV.z - self.events.GenVtx.z) < 0.2
-            # self.events = self.events[PV_dz_mask]
-            
+
             if "pt_raw" not in self.events["Jet"].fields:
                 self.events["Jet"] = ak.with_field(
                     self.events["Jet"],
                     self.events["Jet"].pt * (1 - self.events["Jet"].rawFactor),
                     "pt_raw",
                 )
-                
+
             self.events["JetGood"] = ak.with_field(
                 self.events.Jet,
                 self.events.Jet.pt_raw,
@@ -221,8 +164,10 @@ class QCDBaseProcessor(BaseProcessorABC):
                 eta_mask = (self.events.JetGood.eta > eta_bins_used[0]) & (
                     self.events.JetGood.eta < eta_bins_used[-1]
                 )
-            
-            pt_mask = self.events.JetGood.ptRaw > (0 if int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1 else 8)
+
+            pt_mask = self.events.JetGood.ptRaw > (
+                0 if int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1 else 8
+            )
 
             self.events["JetGood"] = self.events.JetGood[
                 physisical_jet_mask & eta_mask & pt_mask
@@ -242,7 +187,7 @@ class QCDBaseProcessor(BaseProcessorABC):
             if flavour != "inclusive":
                 if flav_def[flavour] == 4 or flav_def[flavour] == 5:
                     self.mask_flav = (
-                        abs(self.events["GenJetGood"].partonFlavour)#hadronFlavour
+                        abs(self.events["GenJetGood"].partonFlavour)  # hadronFlavour
                         == flav_def[flavour]
                     )
                 elif flav_def[flavour] == 21:
@@ -359,7 +304,7 @@ class QCDBaseProcessor(BaseProcessorABC):
             )
 
             if self.mc_truth_corr:
-                mc_truth_corr_factor = self.get_mc_truth_corr(
+                mc_truth_corr_factor = get_mc_truth_corr(
                     self.mc_truth_corr,
                     self.events.MatchedJets.RecoEta,
                     self.events.MatchedJets.RecoPhi,
@@ -413,7 +358,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                     "RecoPhi",
                 )
 
-            if int(os.environ.get("PNET", 0)) == 1:
+            if int(os.environ.get("PNET", 0)) == 1 or self.pnet:
                 # PNetReg
                 self.events[f"MatchedJets"] = ak.with_field(
                     self.events.MatchedJets,
@@ -464,7 +409,10 @@ class QCDBaseProcessor(BaseProcessorABC):
                         ),
                         "JetPtPNetReg",
                     )
-                elif int(os.environ.get("PNETREG15", 0)) == 0 and int(os.environ.get("EXTENDED_PT_BINS", 0)) == 0: # Issues with PNET under 15 GeV
+                elif (
+                    int(os.environ.get("PNETREG15", 0)) == 0
+                    and int(os.environ.get("EXTENDED_PT_BINS", 0)) == 0
+                ):  # Issues with PNET under 15 GeV
                     self.events[f"MatchedJets"] = ak.with_field(
                         self.events.MatchedJets,
                         ak.where(
@@ -508,7 +456,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                 )
 
                 # PNetRegNeutrino
-                if int(os.environ.get("NEUTRINO", 1)) == 1:
+                if int(os.environ.get("NEUTRINO", 1)) == 1 or self.pnet:
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
                         self.events.JetNeutrinoMatched.pt_raw,
@@ -520,41 +468,44 @@ class QCDBaseProcessor(BaseProcessorABC):
                         / self.events.GenJetNeutrinoMatched.pt,
                         "ResponseRaw",
                     )
-                    if int(os.environ.get("CLOSURE", 0)) == 1:
-                        if self.mc_truth_corr:
-                            mc_truth_corr_factor = self.get_mc_truth_corr(
-                                self.mc_truth_corr,
-                                self.events.MatchedJetsNeutrino.RecoEta,
-                                self.events.MatchedJetsNeutrino.RecoPhi,
-                                self.events.MatchedJetsNeutrino.JetPtRaw,
-                                pnetreg=False,
-                            )
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.MatchedJetsNeutrino.JetPtRaw * mc_truth_corr_factor,
-                                "JetPtJEC",
-                            )
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.MatchedJetsNeutrino.ResponseRaw * mc_truth_corr_factor,
-                                "ResponseJEC",
-                            )
-                            # self.events[f"MatchedJets"] = ak.with_field(
-                            #     self.events.MatchedJets,
-                            #     mc_truth_corr_factor,
-                            #     "MCTruthCorrPNetReg",
-                            # )
-                        else:
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.JetNeutrinoMatched.pt,
-                                "JetPtJEC",
-                            )
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.JetNeutrinoMatched.pt / self.events.GenJetNeutrinoMatched.pt,
-                                "ResponseJEC",
-                            )
+                    # if int(os.environ.get("CLOSURE", 0)) == 1:
+                    if self.mc_truth_corr:
+                        mc_truth_corr_factor = get_mc_truth_corr(
+                            self.mc_truth_corr,
+                            self.events.MatchedJetsNeutrino.RecoEta,
+                            self.events.MatchedJetsNeutrino.RecoPhi,
+                            self.events.MatchedJetsNeutrino.JetPtRaw,
+                            pnetreg=False,
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.MatchedJetsNeutrino.JetPtRaw
+                            * mc_truth_corr_factor,
+                            "JetPtJEC",
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.MatchedJetsNeutrino.ResponseRaw
+                            * mc_truth_corr_factor,
+                            "ResponseJEC",
+                        )
+                        # self.events[f"MatchedJets"] = ak.with_field(
+                        #     self.events.MatchedJets,
+                        #     mc_truth_corr_factor,
+                        #     "MCTruthCorrPNetReg",
+                        # )
+                    else:
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.JetNeutrinoMatched.pt,
+                            "JetPtJEC",
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.JetNeutrinoMatched.pt
+                            / self.events.GenJetNeutrinoMatched.pt,
+                            "ResponseJEC",
+                        )
 
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
@@ -609,7 +560,10 @@ class QCDBaseProcessor(BaseProcessorABC):
                             "JetPtPNetRegNeutrino",
                         )
                     # when regression is not valid
-                    elif int(os.environ.get("PNETREG15", 0)) == 0 and int(os.environ.get("EXTENDED_PT_BINS", 0)) == 0:
+                    elif (
+                        int(os.environ.get("PNETREG15", 0)) == 0
+                        and int(os.environ.get("EXTENDED_PT_BINS", 0)) == 0
+                    ):
                         self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                             self.events.MatchedJetsNeutrino,
                             ak.where(
@@ -660,7 +614,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                     )
 
                 if self.mc_truth_corr_pnetreg:
-                    mc_truth_corr_factor_pnetreg = self.get_mc_truth_corr(
+                    mc_truth_corr_factor_pnetreg = get_mc_truth_corr(
                         self.mc_truth_corr_pnetreg,
                         self.events.MatchedJets.RecoEta,
                         self.events.MatchedJets.RecoPhi,
@@ -688,7 +642,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                     self.mc_truth_corr_pnetreg_neutrino
                     and int(os.environ.get("NEUTRINO", 1)) == 1
                 ):
-                    mc_truth_corr_factor_pnetreg_neutrino = self.get_mc_truth_corr(
+                    mc_truth_corr_factor_pnetreg_neutrino = get_mc_truth_corr(
                         self.mc_truth_corr_pnetreg_neutrino,
                         self.events.MatchedJetsNeutrino.RecoEta,
                         self.events.MatchedJetsNeutrino.RecoPhi,
@@ -711,8 +665,8 @@ class QCDBaseProcessor(BaseProcessorABC):
                     #     mc_truth_corr_factor_pnetreg_neutrino,
                     #     "MCTruthCorrPNetRegNeutrino",
                     # )
-            
-            if int(os.environ.get("UPART", 0)) == 1:
+
+            if int(os.environ.get("UPART", 0)) == 1 or self.upart:
                 # UparTReg
                 self.events[f"MatchedJets"] = ak.with_field(
                     self.events.MatchedJets,
@@ -747,7 +701,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                 )
 
                 # UparTRegNeutrino
-                if int(os.environ.get("NEUTRINO", 1)) == 1:
+                if int(os.environ.get("NEUTRINO", 1)) == 1 or self.upart:
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
                         self.events.JetNeutrinoMatched.pt_raw,
@@ -759,36 +713,39 @@ class QCDBaseProcessor(BaseProcessorABC):
                         / self.events.GenJetNeutrinoMatched.pt,
                         "ResponseRaw",
                     )
-                    if int(os.environ.get("CLOSURE", 0)) == 1:
-                        if self.mc_truth_corr:
-                            mc_truth_corr_factor = self.get_mc_truth_corr(
-                                self.mc_truth_corr,
-                                self.events.MatchedJetsNeutrino.RecoEta,
-                                self.events.MatchedJetsNeutrino.RecoPhi,
-                                self.events.MatchedJetsNeutrino.JetPtRaw,
-                                pnetreg=False,
-                            )
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.MatchedJetsNeutrino.JetPtRaw * mc_truth_corr_factor,
-                                "JetPtJEC",
-                            )
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.MatchedJetsNeutrino.ResponseRaw * mc_truth_corr_factor,
-                                "ResponseJEC",
-                            )
-                        else:
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.JetNeutrinoMatched.pt,
-                                "JetPtJEC",
-                            )
-                            self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                                self.events.MatchedJetsNeutrino,
-                                self.events.JetNeutrinoMatched.pt / self.events.GenJetNeutrinoMatched.pt,
-                                "ResponseJEC",
-                            )
+                    # if int(os.environ.get("CLOSURE", 0)) == 1:
+                    if self.mc_truth_corr:
+                        mc_truth_corr_factor = get_mc_truth_corr(
+                            self.mc_truth_corr,
+                            self.events.MatchedJetsNeutrino.RecoEta,
+                            self.events.MatchedJetsNeutrino.RecoPhi,
+                            self.events.MatchedJetsNeutrino.JetPtRaw,
+                            pnetreg=False,
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.MatchedJetsNeutrino.JetPtRaw
+                            * mc_truth_corr_factor,
+                            "JetPtJEC",
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.MatchedJetsNeutrino.ResponseRaw
+                            * mc_truth_corr_factor,
+                            "ResponseJEC",
+                        )
+                    else:
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.JetNeutrinoMatched.pt,
+                            "JetPtJEC",
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            self.events.JetNeutrinoMatched.pt
+                            / self.events.GenJetNeutrinoMatched.pt,
+                            "ResponseJEC",
+                        )
 
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
@@ -804,7 +761,6 @@ class QCDBaseProcessor(BaseProcessorABC):
                         / self.events.GenJetNeutrinoMatched.pt,
                         "ResponseUparTRegNeutrino",
                     )
-
 
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
@@ -827,13 +783,13 @@ class QCDBaseProcessor(BaseProcessorABC):
                     )
 
                 if self.mc_truth_corr_upartreg:
-                    mc_truth_corr_factor_upartreg = self.get_mc_truth_corr(
+                    mc_truth_corr_factor_upartreg = get_mc_truth_corr(
                         self.mc_truth_corr_upartreg,
                         self.events.MatchedJets.RecoEta,
                         self.events.MatchedJets.RecoPhi,
                         self.events.MatchedJets.JetPtUparTReg,
-                        False, # pnetreg
-                        True # upartreg
+                        False,  # pnetreg
+                        True,  # upartreg
                     )
                     self.events[f"MatchedJets"] = ak.with_field(
                         self.events.MatchedJets,
@@ -852,13 +808,13 @@ class QCDBaseProcessor(BaseProcessorABC):
                     self.mc_truth_corr_upartreg_neutrino
                     and int(os.environ.get("NEUTRINO", 1)) == 1
                 ):
-                    mc_truth_corr_factor_upartreg_neutrino = self.get_mc_truth_corr(
+                    mc_truth_corr_factor_upartreg_neutrino = get_mc_truth_corr(
                         self.mc_truth_corr_upartreg_neutrino,
                         self.events.MatchedJetsNeutrino.RecoEta,
                         self.events.MatchedJetsNeutrino.RecoPhi,
                         self.events.MatchedJetsNeutrino.JetPtUparTRegNeutrino,
-                        False, #pnetreg
-                        True #upartreg
+                        False,  # pnetreg
+                        True,  # upartreg
                     )
                     self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                         self.events.MatchedJetsNeutrino,
