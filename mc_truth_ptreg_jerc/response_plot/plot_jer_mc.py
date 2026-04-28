@@ -1,13 +1,10 @@
 import logging
 
-logger = logging.getLogger("matplotlib")
-logger.setLevel(logging.WARNING)  # suppress INFO
-logger.propagate = False
+# Suppress noisy third-party loggers before any imports that trigger them
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
+logging.getLogger("boost_histogram").setLevel(logging.WARNING)
 
-# Suppress boost_histogram debug output
-boost_logger = logging.getLogger("boost_histogram")
-boost_logger.setLevel(logging.WARNING)
-boost_logger.propagate = False
+log = logging.getLogger("plot_jer_mc")
 
 import os
 import numpy as np
@@ -38,10 +35,36 @@ from mc_truth_ptreg_jerc.response_plot.plot_config_jer_mc import (
     MIXED_MODE,
     Y_LIM_RESOLUTION,
     YEAR_MAP,
-    REBIN_FOR_PLOTTING,
+    RESOLUTION_VS_PT_GEN,
+    RESOLUTION_VS_PT_RECO,
+    HISTOGRAMS_MAP,
+    HISTOGRAMS_RESPONSE,
 )
 
 from mc_truth_ptreg_jerc.response_plot.confidence import Confidence_numpy
+
+
+def setup_logging(output_dir: str) -> None:
+    """Configure root logger with console + rotating file handlers."""
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    log.setLevel(logging.DEBUG)
+
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    console.setFormatter(fmt)
+
+    log_path = os.path.join(output_dir, "plot_jer_mc.log")
+    file_handler = logging.FileHandler(log_path, mode="a")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(fmt)
+
+    log.addHandler(console)
+    log.addHandler(file_handler)
+    log.propagate = False
+    log.info("Logging to %s", log_path)
 
 
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
@@ -192,12 +215,47 @@ def perform_fit(
         valid = np.isfinite(x) & np.isfinite(y) & np.isfinite(y_err_arr)
 
     if not np.any(valid):
-        raise ValueError("No valid points for fitting")
+        log.error("No valid points for fitting")
+        return {
+            "fit_function": getattr(fit_function, "__name__", str(fit_function)),
+            "fit_formula": getattr(fit_function, "formula", None),
+            "fit_param_names": getattr(fit_function, "param_names", None),
+            "params": np.full(n_params, np.nan),
+            "params_err": np.full(n_params, np.nan),
+            "cov": None,
+            "r_squared": np.nan,
+            "chi2": np.nan,
+            "dof": 0,
+            "p_value": np.nan,
+            "n_points": 0,
+            "fit_func": lambda x_val: np.full_like(x_val, np.nan),
+            "x_min": np.nan,
+            "x_max": np.nan,
+        }
 
     x = x[valid]
     y = y[valid]
     if y_err_arr is not None:
         y_err_arr = y_err_arr[valid]
+        
+    if len(x) < n_params:
+        log.error("Not enough valid points for fitting: %d points, %d parameters", len(x), n_params)
+        return {
+            "fit_function": getattr(fit_function, "__name__", str(fit_function)),
+            "fit_formula": getattr(fit_function, "formula", None),
+            "fit_param_names": getattr(fit_function, "param_names", None),
+            "params": np.full(n_params, np.nan),
+            "params_err": np.full(n_params, np.nan),
+            "cov": None,
+            "r_squared": np.nan,
+            "chi2": np.nan,
+            "dof": 0,
+            "p_value": np.nan,
+            "n_points": len(x),
+            "fit_func": lambda x_val: np.full_like(x_val, np.nan),
+            "x_min": np.min(x) if len(x) > 0 else np.nan,
+            "x_max": np.max(x) if len(x) > 0 else np.nan,
+        }
 
     # If uncertainties are missing or unusable, fall back to unweighted fit.
     use_sigma = (
@@ -205,16 +263,25 @@ def perform_fit(
     )
     sigma = y_err_arr if use_sigma else None
 
-    popt, pcov = curve_fit(
-        fit_function,
-        x,
-        y,
+    _curve_fit_kwargs = dict(
         sigma=sigma,
         absolute_sigma=absolute_sigma if use_sigma else False,
         p0=p0,
         bounds=bounds,
         maxfev=100000,
     )
+    try:
+        popt, pcov = curve_fit(fit_function, x, y, **_curve_fit_kwargs)
+    except RuntimeError:
+        # Levenberg-Marquardt failed; retry with Trust Region Reflective which
+        # handles poorly-scaled problems more robustly.
+        try:
+            _trf_bounds = bounds if bounds != (-np.inf, np.inf) else (-np.inf, np.inf)
+            popt, pcov = curve_fit(
+                fit_function, x, y, method="trf", **{**_curve_fit_kwargs, "bounds": _trf_bounds}
+            )
+        except RuntimeError as exc:
+            log.error("Fit failed: %s", exc)
 
     params = np.array(popt, dtype=float)
     params_err = (
@@ -241,6 +308,8 @@ def perform_fit(
     r_squared = 1.0 - ss_res / ss_tot if ss_tot != 0 else np.nan
     dof = max(len(x) - int(n_params), 1)
     p_value = chi2_dist.sf(chi2_stat, dof)
+    
+    log.debug("Fit was successful!")
 
     return {
         "fit_function": getattr(fit_function, "__name__", str(fit_function)),
@@ -402,7 +471,6 @@ def plot_resolution_vs_x_variable(
         x_var_ref = ref_axes["x_var"]
         y_vars_ref = ref_axes["y_vars"]
 
-        x_var_idx_ref = bin_var_names_ref.index(x_var_ref)
         y_vars = [(v, bin_var_names_ref.index(v)) for v in y_vars_ref]
 
         x_bin_edges = bin_edges_dict[x_var_ref]
@@ -445,6 +513,11 @@ def plot_resolution_vs_x_variable(
                         and resolutions[full_bin_idx] is not None
                     ):
                         resolutions_for_plot.append(resolutions[full_bin_idx])
+                        errors_for_plot.append(0)
+                        valid_x_indices.append(x_idx)
+                    else:
+                        # put nan for missing points so x-values are still correct if some points are missing
+                        resolutions_for_plot.append(np.nan)
                         errors_for_plot.append(0)
                         valid_x_indices.append(x_idx)
 
@@ -501,8 +574,14 @@ def plot_resolution_vs_x_variable(
 
             if not graph_data:
                 continue
-
-            filename_parts = ["resolution", f"x_{x_np}"]
+            
+            if map_x_variable:
+                map_var_name = response_vars[response_var].get("map_x_variable")
+                name_plot=mapping_dict[map_var_name]["name_plot"]
+                filename_parts = ["resolution", f"x_{name_plot}"]
+            else:
+                filename_parts = ["resolution", f"x_{x_np}"]
+                
             for y_var_name, y_idx in y_vars:
                 bin_idx = y_bin_idx[y_vars.index((y_var_name, y_idx))]
                 low_edge_str = f"{bin_edges_dict[y_var_name][bin_idx]}".replace(
@@ -543,7 +622,7 @@ def plot_resolution_vs_x_variable(
                     if y_fit_err is not None:
                         y_fit_err = np.asarray(y_fit_err, dtype=float)[pos]
 
-                    if len(x_fit) < 4:
+                    if len(x_fit) < len(NSC.param_names):
                         continue
 
                     fit_res = perform_fit(
@@ -551,7 +630,7 @@ def plot_resolution_vs_x_variable(
                         y_fit,
                         y_fit_err,
                         NSC,
-                        n_params=4,
+                        n_params=len(NSC.param_names),
                         p0=(0.5, 0.5, 0.05, -1.0),
                     )
                     
@@ -580,7 +659,7 @@ def plot_resolution_vs_x_variable(
                 graph_data.update(fit_data)
                 all_fit_results.update(fit_results)
 
-            print(f"Creating plot for bin combination {y_bin_idx}")
+            log.debug("Creating plot for bin combination %s", y_bin_idx)
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
@@ -617,13 +696,12 @@ def plot_resolution_vs_x_variable(
 
         if args.workers == 1:
             for name, plotter in plotters.items():
-                print(
-                    f"Plotting resolution vs x variable for bin combination {name}..."
-                )
+                log.info("Plotting resolution vs x variable for bin combination %s...", name)
                 plotter.run()
         else:
-            print(
-                f"Plotting resolution vs x variable for {len(plotters)} bin combinations in parallel with {args.workers} workers..."
+            log.info(
+                "Plotting resolution vs x variable for %d bin combinations in parallel with %d workers...",
+                len(plotters), args.workers,
             )
             with Pool(args.workers) as pool:
                 pool.map(run_plot, plotters.values())
@@ -656,7 +734,7 @@ def flatten_data(data):
 
     flat_data = {}
     for key, arr in data.items():
-        print(f"Flattening variable '{key}' with shape {arr.shape}")
+        log.debug("Flattening variable '%s' with shape %s", key, arr.shape)
         if is_ragged(arr):
             flat_data[key] = np.concatenate(arr)
         else:
@@ -696,7 +774,7 @@ def create_ND_histo(variables_dict, data, bin_var_configs):
         bin_var_names = var_cfg.get("bin_vars", [])
 
         if var_name not in data:
-            print(f"Warning: Variable '{var_name}' not found in data, skipping.")
+            log.warning("Variable '%s' not found in data, skipping.", var_name)
             continue
 
         # Check that all required bin variables are available in bin_var_configs
@@ -783,7 +861,7 @@ def compute_means(h_dict, mapping_vars):
     map_vars = list(h_dict.keys())
 
     for mv in map_vars:
-        print(mv)
+        log.debug("Processing mapping variable: %s", mv)
         cfg = mapping_vars[mv]
         active_bin_vars = cfg["bin_vars"]
 
@@ -934,7 +1012,7 @@ def _compute_resolution_from_histogram(
     resolutions = {}
     resolution_grid = np.full(bin_shape, np.nan)
 
-    print(f"Processing resolution for '{response_var_name}'...")
+    log.info("Processing resolution for '%s'...", response_var_name)
 
     # Get the underlying numpy array from the histogram
     h_view = h_response.view()
@@ -958,11 +1036,9 @@ def _compute_resolution_from_histogram(
                 resolutions[bin_idx] = resolution
                 resolution_grid[bin_idx] = resolution
             except Exception as e:
-                print(f"Warning: Failed to compute resolution for bin {bin_idx}: {e}")
+                log.warning("Failed to compute resolution for bin %s: %s", bin_idx, e)
         else:
-            print(
-                f"Skipping bin {bin_idx}: insufficient data ({int(np.sum(hist_counts))} points)"
-            )
+            log.debug("Skipping bin %s: insufficient data (%d points)", bin_idx, int(np.sum(hist_counts)))
 
     return (
         response_var_name,
@@ -1008,15 +1084,14 @@ def compute_binned_resolution_from_histograms(h_dict, bin_var_names, response_va
     if len(args_list) == 1 or args.workers == 1:
         # Single worker - no need for Pool overhead
         for arg_tuple in args_list:
-            print(
-                f"Computing resolution for '{arg_tuple[0]}' without multiprocessing..."
-            )
+            log.info("Computing resolution for '%s' without multiprocessing...", arg_tuple[0])
             var_name, result = _compute_resolution_from_histogram(*arg_tuple)
             response_tot_dict[var_name] = result
     else:
         # Multi-worker processing
-        print(
-            f"Computing binned resolution for {len(args_list)} response variables in parallel with {args.workers} workers..."
+        log.info(
+            "Computing binned resolution for %d response variables in parallel with %d workers...",
+            len(args_list), args.workers,
         )
         with Pool(args.workers) as pool:
             results = pool.starmap(_compute_resolution_from_histogram, args_list)
@@ -1066,7 +1141,7 @@ def rebin_histogram(series_dict, target_bins=50, quantile_range=(0.001, 0.999)):
 
     # Check if all histograms are empty
     if all_counts is None or all_counts.sum() == 0:
-        print("Warning: All histograms are empty, returning original dict")
+        log.warning("All histograms are empty, returning original dict")
         return series_dict
 
     # Get axis from first histogram
@@ -1080,8 +1155,10 @@ def rebin_histogram(series_dict, target_bins=50, quantile_range=(0.001, 0.999)):
     hi_idx = min(len(centers), np.searchsorted(cdf, quantile_range[1]) + 1)
     n_bins_in_range = hi_idx - lo_idx
 
-    # Compute rebin factor for the common range
-    rebin_factor = max(1, round(n_bins_in_range / target_bins))
+    # Compute rebin factor for the common range.
+    # Use floor division so the output has *at least* target_bins bins.
+    # round() could overshoot (e.g. round(75/50)=2 → 38 bins instead of 50).
+    rebin_factor = max(1, n_bins_in_range // target_bins)
     remainder = n_bins_in_range % rebin_factor
     if remainder != 0:
         hi_idx = min(len(centers), hi_idx + (rebin_factor - remainder))
@@ -1143,7 +1220,7 @@ def plot_variable_slices(
         if var_type in ("mapping", "plot")
         else "response variables"
     )
-    print(f"Plotting {type_label} slices for {category}...")
+    log.info("Plotting %s slices for %s...", type_label, category)
 
     # Group variables by their bin structure (they may have different bin_vars)
     variables_by_bin_axes = {}
@@ -1178,7 +1255,7 @@ def plot_variable_slices(
             # Create output filename
             output_name = f"{output_dir}/histo_{variables_dict[var_name]['name_plot']}_slice_{category}"
 
-            print(f"Creating plot for unbinned variables: {list(group_dict.keys())}...")
+            log.debug("Creating plot for unbinned variables: %s...", list(group_dict.keys()))
             # Plot using HEPPlotter
             plotter = (
                 HEPPlotter()
@@ -1233,14 +1310,15 @@ def plot_variable_slices(
                 }
 
             # check if all histograms in this group have empty data for this bin combination
-            if all(np.sum(h_var.values()) == 0 for h_var in series_dict.values()):
-                print(
-                    f"Warning: All histograms in group {bin_var_names} are empty for bin combination {bin_idx}, skipping plot."
+            if all(np.sum(h_var["data"].values()) == 0 for h_var in series_dict.values()):
+                log.warning(
+                    "All histograms in group %s are empty for bin combination %s, skipping plot.",
+                    bin_var_names, bin_idx,
                 )
                 continue
             
             if variables_dict[var_name].get("rebin_for_plotting", False):
-                series_dict = rebin_histogram(series_dict)
+                series_dict = rebin_histogram(series_dict, 50, (0.01, 0.99))
 
             # Create output filename with bin ranges
             filename_parts = [
@@ -1264,9 +1342,7 @@ def plot_variable_slices(
             # Get the axis label from the first variable in this group
             axis_label = list(group_dict.values())[0].axes[-1].label
 
-            print(
-                f"Creating plot for bin combination {bin_idx} with variables: {list(group_dict.keys())}..."
-            )
+            log.debug("Creating plot for bin combination %s with variables: %s...", bin_idx, list(group_dict.keys()))
             # Plot using HEPPlotter
             plotter = (
                 HEPPlotter()
@@ -1289,12 +1365,10 @@ def plot_variable_slices(
     # Run all plotters
     if args.workers == 1:
         for plotter in plotters:
-            print(f"Plotting {type_label} slice...")
+            log.debug("Plotting %s slice...", type_label)
             plotter.run()
     else:
-        print(
-            f"Plotting {type_label} slices in parallel with {args.workers} workers..."
-        )
+        log.info("Plotting %s slices in parallel with %d workers...", type_label, args.workers)
         with Pool(args.workers) as pool:
             pool.map(run_plot, plotters)
 
@@ -1322,7 +1396,7 @@ def profile_means(h_mean_dict, mapping_vars):
     results = {}
 
     for mv, h_mean in h_mean_dict.items():
-        print(mv)
+        log.debug("Processing mapping variable: %s", mv)
         cfg = mapping_vars[mv]
         active_bin_vars = cfg["bin_vars"]
 
@@ -1355,7 +1429,7 @@ def save_plotted_data(output_path, data_dict):
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     util.save(data_dict, output_path)
-    print(f"Saved plotted data to {output_path}")
+    log.info("Saved plotted data to %s", output_path)
 
 
 def load_plotted_data(input_path):
@@ -1374,7 +1448,7 @@ def load_plotted_data(input_path):
     """
 
     data_dict = util.load(input_path)
-    print(f"Loaded plotted data from {input_path}")
+    log.info("Loaded plotted data from %s", input_path)
     return data_dict
 
 
@@ -1411,7 +1485,7 @@ def plot_mapping_variable_linear_fit(
     ).run()
 
     fit_results = perform_linear_fit(results[var_name]["mean"])
-    print(fit_results)
+    log.debug("Linear fit results: %s", fit_results)
 
     x_axis = results[var_name]["mean"].axes[0]
     x_lin = np.linspace(x_axis.edges[0], x_axis.edges[-1], 100)
@@ -1486,7 +1560,7 @@ def save_fit_results(fit_results, output_path):
 
     with open(output_path, "w") as f:
         json.dump(serializable, f, indent=4)
-    print(f"Saved fit results to {output_path}")
+    log.info("Saved fit results to %s", output_path)
 
 
 def save_txt_resolution(
@@ -1525,13 +1599,13 @@ def save_txt_resolution(
     
     
     if x_var is None:
-        print(f"No resolution_x_variable found for {response_var_name}, skipping txt.")
+        log.warning("No resolution_x_variable found for %s, skipping txt.", response_var_name)
         return
 
     prefix = f"{response_var_name}_"
     matching = {k: v for k, v in fit_results.items() if k.startswith(prefix)}
     if not matching:
-        print(f"No fit results for {response_var_name}, skipping txt output.")
+        log.warning("No fit results for %s, skipping txt output.", response_var_name)
         return
 
     # Detect which bin variables are actually in the keys. In "mixed" mode,
@@ -1587,7 +1661,7 @@ def save_txt_resolution(
                 break
 
         if not parse_ok:
-            print(f"Could not parse bin edges from key '{key}', skipping row.")
+            log.warning("Could not parse bin edges from key '%s', skipping row.", key)
             continue
 
         row_cols = []
@@ -1605,7 +1679,7 @@ def save_txt_resolution(
             row_cols.extend([lo, hi])
 
         if not build_ok:
-            print(f"Missing bin variable in row for key '{key}', skipping.")
+            log.warning("Missing bin variable in row for key '%s', skipping.", key)
             continue
 
         rows.append(
@@ -1613,7 +1687,7 @@ def save_txt_resolution(
         )
 
     if not rows:
-        print(f"No valid rows for {response_var_name}, skipping txt output.")
+        log.warning("No valid rows for %s, skipping txt output.", response_var_name)
         return
 
     rows.sort(key=lambda r: r[: 2 * n_bin_vars])
@@ -1633,11 +1707,11 @@ def save_txt_resolution(
         f.write(header + "\n")
         for row in rows:
             f.write("  ".join(_fmt(v) for v in row) + "\n")
-    print(f"Saved resolution txt to {output_path}")
+    log.info("Saved resolution txt to %s", output_path)
 
 
 def plot_mapping_variable_histograms(*, category, year, h_dict):
-    if not args.histo:
+    if not args.histo or HISTOGRAMS_MAP:
         return
 
     plot_var_output_dir = f"{args.output}/histograms_mapping_variables_{category}"
@@ -1652,6 +1726,15 @@ def plot_mapping_variable_histograms(*, category, year, h_dict):
         var_type="mapping",
     )
 
+def get_bin_vars_for_mode(mode):
+    if mode == "regular":
+        return BIN_VARIABLES
+    elif mode == "neutrino":
+        return BIN_VARIABLES_NEUTRINO
+    elif mode == "mixed":
+        return BIN_VARIABLES_MIXED
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
 
 def process_response_type(
     *,
@@ -1667,7 +1750,7 @@ def process_response_type(
 ):
     suffix = f"_{mode}"
 
-    if args.histo:
+    if args.histo or HISTOGRAMS_RESPONSE:
         response_histogram_dir = (
             f"{args.output}/histograms_resolution_{category}{suffix}"
         )
@@ -1682,124 +1765,118 @@ def process_response_type(
             var_type="response",
         )
 
-    # Plot resolution vs x variable for response variables (bin centers)
-    output_dir = f"{args.output}/resolution_ptgen_{category}{suffix}"
-    os.makedirs(output_dir, exist_ok=True)
-    plot_resolution_vs_x_variable(
-        response_types_dict=response_tot_dict,
-        bin_var_configs=bin_vars,
-        response_vars=available_response_vars,
-        mapping_dict=MAPPING_VARIABLES,
-        output_dir=output_dir,
-        year=year,
-    )
-
-    # Plot resolution vs mapped x variable (means) + fit + save fit results
-    output_dir = f"{args.output}/resolution_ptreco_{category}{suffix}"
-    os.makedirs(output_dir, exist_ok=True)
-    fit_results = plot_resolution_vs_x_variable(
-        response_types_dict=response_tot_dict,
-        bin_var_configs=bin_vars,
-        response_vars=available_response_vars,
-        mapping_dict=MAPPING_VARIABLES,
-        output_dir=output_dir,
-        year=year,
-        h_mean_dict=results_for_mapping,
-        map_x_variable=True,
-        fit_resolution=True,
-    )
-    print(fit_results)
-    save_fit_results(
-        fit_results,
-        f"{args.output}/fit_results_{category}{suffix}.json",
-    )
-
-    for resp_var_name, resp_var_cfg in available_response_vars.items():
-        save_txt_resolution(
-            fit_results=fit_results,
-            response_var_name=resp_var_name,
-            response_var_cfg=resp_var_cfg,
+    if RESOLUTION_VS_PT_GEN:
+        # Plot resolution vs x variable for response variables (bin centers)
+        output_dir = f"{args.output}/resolution_ptgen_{category}{suffix}"
+        os.makedirs(output_dir, exist_ok=True)
+        plot_resolution_vs_x_variable(
+            response_types_dict=response_tot_dict,
             bin_var_configs=bin_vars,
-            linear_fit_maps=linear_fit_maps,
-            mapping_vars=MAPPING_VARIABLES,
-            output_dir=args.output,
+            response_vars=available_response_vars,
+            mapping_dict=MAPPING_VARIABLES,
+            output_dir=output_dir,
             year=year,
+        )   
+
+    if RESOLUTION_VS_PT_RECO:
+        # Plot resolution vs mapped x variable (means) + fit + save fit results
+        output_dir = f"{args.output}/resolution_ptreco_{category}{suffix}"
+        os.makedirs(output_dir, exist_ok=True)
+        fit_results = plot_resolution_vs_x_variable(
+            response_types_dict=response_tot_dict,
+            bin_var_configs=bin_vars,
+            response_vars=available_response_vars,
+            mapping_dict=MAPPING_VARIABLES,
+            output_dir=output_dir,
+            year=year,
+            h_mean_dict=results_for_mapping,
+            map_x_variable=True,
+            fit_resolution=True,
         )
+        save_fit_results(
+            fit_results,
+            f"{args.output}/fit_results_{category}{suffix}.json",
+        )
+
+        for resp_var_name, resp_var_cfg in available_response_vars.items():
+            save_txt_resolution(
+                fit_results=fit_results,
+                response_var_name=resp_var_name,
+                response_var_cfg=resp_var_cfg,
+                bin_var_configs=bin_vars,
+                linear_fit_maps=linear_fit_maps,
+                mapping_vars=MAPPING_VARIABLES,
+                output_dir=args.output,
+                year=year,
+            )
 
 
 def main():
     # make output dir if it doesn't exist
     os.makedirs(args.output, exist_ok=True)
+    setup_logging(args.output)
 
     # If loading from precomputed file, skip data loading and computation
     if args.load:
-        print(f"Loading precomputed data from {args.load}...")
+        log.info("Loading precomputed data from %s...", args.load)
         loaded_data = load_plotted_data(args.load)
         year = loaded_data["year"]
+        category = loaded_data["category"]
+        cat_data = loaded_data["histogram_data"]
+        h_dict = cat_data["h_dict"]
+        results = cat_data["results"]
 
-        # Process each category from loaded data
-        for category, cat_data in loaded_data["categories"].items():
-            h_dict = cat_data["h_dict"]
-            results = cat_data["results"]
-
-            # Load linear fit results from file if available, otherwise recompute
-            if "linear_fit_maps" in cat_data:
-                linear_fit_maps = cat_data["linear_fit_maps"]
-                mapped_bin_edges = cat_data.get("mapped_bin_edges", {})
-            else:
-                linear_fit_maps = {}
-                mapped_bin_edges = {}
-                for lf_var_name, lf_var_cfg in MAPPING_VARIABLES.items():
-                    if not lf_var_cfg.get("linear_fit", False):
-                        continue
-                    linear_fit_maps[lf_var_name] = plot_mapping_variable_linear_fit(
-                        h_dict=h_dict,
-                        results=results,
-                        mapping_vars=MAPPING_VARIABLES,
-                        year=year,
-                        category=category,
-                        output_dir=args.output,
-                        var_name=lf_var_name,
-                        bin_var_configs=BIN_VARIABLES_MIXED,
-                    )
-                    mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
-                        BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"]
-                    )
-
-            plot_mapping_variable_histograms(
-                category=category, year=year, h_dict=h_dict
-            )
-
-            # Process response variables from loaded data
-            for mode in ["regular", "neutrino", "mixed"]:
-                if mode not in cat_data["response_data"]:
+        # Load linear fit results from file if available, otherwise recompute
+        if "linear_fit_maps" in cat_data:
+            linear_fit_maps = cat_data["linear_fit_maps"]
+            mapped_bin_edges = cat_data.get("mapped_bin_edges", {})
+        else:
+            linear_fit_maps = {}
+            mapped_bin_edges = {}
+            for lf_var_name, lf_var_cfg in MAPPING_VARIABLES.items():
+                if not lf_var_cfg.get("linear_fit", False):
                     continue
-
-                resp_data = cat_data["response_data"][mode]
-                response_h_dict = resp_data["response_h_dict"]
-                response_tot_dict = resp_data["response_tot_dict"]
-                available_response_vars = resp_data["available_response_vars"]
-
-                if mode == "regular":
-                    bin_vars = BIN_VARIABLES
-                elif mode == "neutrino":
-                    bin_vars = BIN_VARIABLES_NEUTRINO
-                elif mode == "mixed":
-                    bin_vars = BIN_VARIABLES_MIXED
-                else:
-                    raise ValueError
-
-                process_response_type(
-                    category=category,
+                linear_fit_maps[lf_var_name] = plot_mapping_variable_linear_fit(
+                    h_dict=h_dict,
+                    results=results,
+                    mapping_vars=MAPPING_VARIABLES,
                     year=year,
-                    mode=mode,
-                    response_h_dict=response_h_dict,
-                    response_tot_dict=response_tot_dict,
-                    available_response_vars=available_response_vars,
-                    bin_vars=bin_vars,
-                    results_for_mapping=results,
-                    linear_fit_maps=linear_fit_maps,
+                    category=category,
+                    output_dir=args.output,
+                    var_name=lf_var_name,
+                    bin_var_configs=BIN_VARIABLES_MIXED,
                 )
+                mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
+                    BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"]
+                )
+
+        plot_mapping_variable_histograms(
+            category=category, year=year, h_dict=h_dict
+        )
+
+        # Process response variables from loaded data
+        for mode in ["regular", "neutrino", "mixed"]:
+            if mode not in cat_data["response_data"]:
+                continue
+
+            resp_data = cat_data["response_data"][mode]
+            response_h_dict = resp_data["response_h_dict"]
+            response_tot_dict = resp_data["response_tot_dict"]
+            available_response_vars = resp_data["available_response_vars"]
+
+            bin_vars = get_bin_vars_for_mode(mode)
+
+            process_response_type(
+                category=category,
+                year=year,
+                mode=mode,
+                response_h_dict=response_h_dict,
+                response_tot_dict=response_tot_dict,
+                available_response_vars=available_response_vars,
+                bin_vars=bin_vars,
+                results_for_mapping=results,
+                linear_fit_maps=linear_fit_maps,
+            )
         return
 
     inputfiles_data = [
@@ -1808,7 +1885,7 @@ def main():
         if file.endswith(".coffea")
     ]
 
-    print("Loading the columns...")
+    log.info("Loading the columns...")
     cat_col, total_datasets_list = get_columns_from_files(
         inputfiles_data,
         "nominal",
@@ -1826,11 +1903,9 @@ def main():
 
         year = ", ".join([year, y]) if year else y
 
-    print(f"Total datasets found: {total_datasets_list}")
-    print(f"Year: {year}")
+    log.info("Total datasets found: %s", total_datasets_list)
+    log.info("Year: %s", year)
 
-    # Dictionary to store all data for saving
-    all_categories_data = {}
 
     for category, col_var in cat_col.items():
         col_var_flatten = flatten_data(col_var)
@@ -1842,10 +1917,9 @@ def main():
             bin_var_configs=BIN_VARIABLES_MIXED,
         )
 
-        # results_full_hist = compute_means(h_dict, MAPPING_VARIABLES)
         results = profile_means(h_mean_dict, MAPPING_VARIABLES)
 
-        # Plot and fit mapping variables that have a linear_fit defined
+        # Fit mapping variables that have a linear_fit defined
         linear_fit_maps = {}
         mapped_bin_edges = {}
         for lf_var_name, lf_var_cfg in MAPPING_VARIABLES.items():
@@ -1865,8 +1939,6 @@ def main():
                 BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"]
             )
 
-        plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
-
         # Store category data for saving
         category_data = {
             "h_dict": h_dict,
@@ -1876,9 +1948,6 @@ def main():
             "mapped_bin_edges": mapped_bin_edges,
             "response_data": {},
         }
-
-        # free memory from plot variable histograms
-        del h_dict
 
         # Process response variables separately for neutrino and non-neutrino
         for response_vars, mode in (
@@ -1893,14 +1962,7 @@ def main():
             )
         ):
             # Determine which bin_vars to use based on neutrino flag
-            if mode == "regular":
-                bin_vars = BIN_VARIABLES
-            elif mode == "neutrino":
-                bin_vars = BIN_VARIABLES_NEUTRINO
-            elif mode == "mixed":
-                bin_vars = BIN_VARIABLES_MIXED
-            else:
-                raise ValueError
+            bin_vars = get_bin_vars_for_mode(mode)
 
             bin_var_names = list(bin_vars.keys())
 
@@ -1912,7 +1974,7 @@ def main():
             }
 
             if not available_response_vars:
-                print(f"No response variables found for mode={mode}, skipping.")
+                log.warning("No response variables found for mode=%s, skipping.", mode)
                 continue
 
             # Create ND histograms for response variables
@@ -1929,39 +1991,44 @@ def main():
                 response_vars=available_response_vars,
             )
 
-            process_response_type(
-                category=category,
-                year=year,
-                mode=mode,
-                response_h_dict=response_h_dict,
-                response_tot_dict=response_tot_dict,
-                available_response_vars=available_response_vars,
-                bin_vars=bin_vars,
-                results_for_mapping=results,
-                linear_fit_maps=linear_fit_maps,
-            )
-
             # Store response data for this category
             response_type_key = mode
             category_data["response_data"][response_type_key] = {
                 "response_h_dict": response_h_dict,
                 "response_tot_dict": response_tot_dict,
                 "available_response_vars": available_response_vars,
+                "bin_vars": bin_vars,
             }
             
-
-        all_categories_data[category] = category_data
-
-    # Save all plotted data to coffea file
-    output_coffea = os.path.join(args.output, "plotted_data.coffea")
-    save_plotted_data(
-        output_coffea,
-        {
-            "year": year,
-            "categories": all_categories_data,
-        },
-    )
-
+        # Save all plotted data to coffea file
+        output_coffea = os.path.join(args.output, f"plotted_data_{category}.coffea")
+        save_plotted_data(
+            output_coffea,
+            {
+                "year": year,
+                "category": category,
+                "histogram_data": category_data,
+            },
+        )
+        
+        # Plot 
+        plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
+        for response_type, resp_data in category_data["response_data"].items():
+            
+            process_response_type(
+                category=category,
+                year=year,
+                mode=mode,
+                response_h_dict=resp_data["response_h_dict"],
+                response_tot_dict=resp_data["response_tot_dict"],
+                available_response_vars=resp_data["available_response_vars"],
+                bin_vars=resp_data["bin_vars"],
+                results_for_mapping=results,
+                linear_fit_maps=linear_fit_maps,
+            )
+    
+    log.info("All done!")
+            
 
 if __name__ == "__main__":
 

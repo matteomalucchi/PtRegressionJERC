@@ -4,7 +4,11 @@ TEST = False
 
 MIXED_MODE = True
 
-REBIN_FOR_PLOTTING = False
+RESOLUTION_VS_PT_GEN= False
+RESOLUTION_VS_PT_RECO= False
+HISTOGRAMS_MAP= False
+HISTOGRAMS_RESPONSE= True
+
 
 pu_bins = np.array(
     [
@@ -262,7 +266,6 @@ RESPONSE_VARIABLES = {
         "map_x_variable": "MatchedJets_JetPtJEC",
         "is_reference": True,
         "txt_jet_name": "AK4PFPuppi",
-        "rebin_for_plotting": False,
         "rebin_for_plotting": False,
     },
     "MatchedJets_ResponseRaw": {
