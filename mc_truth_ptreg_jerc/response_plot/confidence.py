@@ -19,38 +19,42 @@ sigma_to_conv = {
     0.68: 0.9945,
 }
 
-def Confidence_numpy(hist, bins_mid, bin_width, confLevel = 0.87):
-    ix = np.argmax(bins_mid>np.average(bins_mid, weights=hist))
-    # print(ix, np.average(bins_mid, weights=hist))
+def Confidence_numpy(hist, bins_mid, bin_width, confLevel=0.87, return_bins=False):
+    ix = np.argmax(bins_mid > np.average(bins_mid, weights=hist))
     ixlow = ix
     ixhigh = ix
     nb = len(hist)
     ntot = np.sum(hist)
     nsum = hist[ix]
     width = bin_width
-    # print("bin width", bin_width)
-    if ntot==0: return 0
-    while (nsum < confLevel * ntot):
-        nlow = hist[ixlow-1] if ixlow>0 else 0
-        nhigh = hist[ixhigh+1] if ixhigh<nb-1 else 0
-        if (nsum+max(nlow,nhigh) < confLevel * ntot):
-            if (nlow>=nhigh and ixlow>0):
+    if ntot == 0:
+        if return_bins:
+            return 0, 0, nb - 1
+        return 0
+    while nsum < confLevel * ntot:
+        nlow = hist[ixlow - 1] if ixlow > 0 else 0
+        nhigh = hist[ixhigh + 1] if ixhigh < nb - 1 else 0
+        if nsum + max(nlow, nhigh) < confLevel * ntot:
+            if nlow >= nhigh and ixlow > 0:
                 nsum += nlow
-                ixlow -=1
+                ixlow -= 1
                 width += bin_width
-            elif ixhigh<nb:
+            elif ixhigh < nb:
                 nsum += nhigh
-                ixhigh+=1
+                ixhigh += 1
                 width += bin_width
-            else: raise ValueError('BOOM')
-        else:
-            if (nlow>nhigh):
-                width +=  bin_width * (confLevel * ntot - nsum) / nlow
             else:
-                width +=  bin_width * (confLevel * ntot - nsum) / nhigh
+                raise ValueError('BOOM')
+        else:
+            if nlow > nhigh:
+                width += bin_width * (confLevel * ntot - nsum) / nlow
+            else:
+                width += bin_width * (confLevel * ntot - nsum) / nhigh
             nsum = ntot
-    # print(width)
-    return width/(2* sigma_to_conv[confLevel])
+    result = width / (2 * sigma_to_conv[confLevel])
+    if return_bins:
+        return result, ixlow, ixhigh
+    return result
 
 
 
