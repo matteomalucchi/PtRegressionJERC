@@ -7,6 +7,7 @@ logging.getLogger("boost_histogram").setLevel(logging.WARNING)
 log = logging.getLogger("plot_jer_mc")
 
 import os
+import shutil
 import numpy as np
 from multiprocessing import Pool
 import argparse
@@ -16,32 +17,13 @@ from scipy.optimize import curve_fit
 from scipy.stats import chi2 as chi2_dist
 from coffea import util
 import json
+import yaml
 
 
 from utils_configs.plot.get_columns_from_files import get_columns_from_files
 from utils_configs.plot.HEPPlotter import HEPPlotter
 
 import met_ptreg_performance.helpers as helpers
-
-from mc_truth_ptreg_jerc.response_plot.plot_config_jer_mc import (
-    BIN_VARIABLES,
-    BIN_VARIABLES_NEUTRINO,
-    BIN_VARIABLES_MIXED,
-    MAPPING_VARIABLES,
-    RESPONSE_VARIABLES,
-    RESPONSE_VARIABLES_NEUTRINO,
-    RESPONSE_VARIABLES_MIXED,
-    PLOT_SETTINGS_DICT,
-    MIXED_MODE,
-    Y_LIM_RESOLUTION,
-    YEAR_MAP,
-    RESOLUTION_VS_PT_GEN,
-    RESOLUTION_VS_PT_RECO,
-    HISTOGRAMS_MAP,
-    HISTOGRAMS_RESPONSE,
-    GAUSSIAN_FIT_RESOLUTION,
-    GAUSSIAN_FIT_CUT_TAILS,
-)
 
 from mc_truth_ptreg_jerc.response_plot.confidence import Confidence_numpy
 
@@ -68,6 +50,67 @@ def setup_logging(output_dir: str) -> None:
     log.propagate = False
     log.info("Logging to %s", log_path)
 
+
+def _load_config(config_path):
+    """Load and process the YAML configuration file."""
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+
+    # Convert bin_edges lists to numpy arrays in bin_variable dicts
+    for bv_dict_key in ("bin_variables", "bin_variables_neutrino", "bin_variables_mixed"):
+        if bv_dict_key not in cfg:
+            continue
+        for var_cfg in cfg[bv_dict_key].values():
+            if "bin_edges" in var_cfg:
+                var_cfg["bin_edges"] = np.array(var_cfg["bin_edges"])
+
+    # Apply test mode overrides
+    if cfg.get("test", False):
+        test_pu = np.array(cfg["test_pu_bins"])
+        test_eta = np.array(cfg["test_jet_eta_bins"])
+        test_pt = np.array(cfg["test_jet_pt_bins"])
+        for bv_dict_key in ("bin_variables", "bin_variables_neutrino", "bin_variables_mixed"):
+            if bv_dict_key not in cfg:
+                continue
+            bv = cfg[bv_dict_key]
+            if "Pileup_nPU" in bv:
+                bv["Pileup_nPU"]["bin_edges"] = test_pu
+            for eta_key in ("MatchedJets_eta", "MatchedJetsNeutrino_eta"):
+                if eta_key in bv:
+                    bv[eta_key]["bin_edges"] = test_eta
+            for pt_key in ("MatchedJets_pt", "MatchedJetsNeutrino_pt"):
+                if pt_key in bv:
+                    bv[pt_key]["bin_edges"] = test_pt
+
+    # Build bin_variables_mixed as the union of bin_variables and bin_variables_neutrino
+    # if it is not explicitly defined in the YAML
+    if "bin_variables_mixed" not in cfg:
+        cfg["bin_variables_mixed"] = {
+            **cfg.get("bin_variables", {}),
+            **cfg.get("bin_variables_neutrino", {}),
+        }
+
+    # Convert bin_limits lists to tuples in mapping/response variable dicts
+    for var_dict_key in (
+        "mapping_variables",
+        "response_variables",
+        "response_variables_neutrino",
+        "response_variables_mixed",
+    ):
+        if var_dict_key not in cfg:
+            continue
+        for var_cfg in cfg[var_dict_key].values():
+            if "bin_limits" in var_cfg:
+                var_cfg["bin_limits"] = tuple(var_cfg["bin_limits"])
+
+    # Convert y_lim_resolution list to tuple
+    if "y_lim_resolution" in cfg:
+        cfg["y_lim_resolution"] = tuple(cfg["y_lim_resolution"])
+
+    return cfg
+
+
+cfg = None
 
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
 parser.add_argument(
@@ -110,9 +153,17 @@ parser.add_argument(
     help="Path to precomputed histograms coffea file to load and plot",
     default=None,
 )
-parser.add_argument("-o", "--output", type=str, help="Output directory", default="./")
+parser.add_argument("-o", "--output", type=str, help="Output directory", default="./plot_jer_mc/")
+parser.add_argument(
+    "-c",
+    "--config",
+    type=str,
+    required=True,
+    help="Path to YAML configuration file",
+)
 
 args = parser.parse_args()
+cfg = _load_config(args.config)
 
 
 PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
@@ -124,16 +175,16 @@ def run_plot(plotter):
 
 
 def get_color(response_var):
-    for key in PLOT_SETTINGS_DICT:
+    for key in cfg["plot_settings"]:
         if response_var.endswith(key):
-            return PLOT_SETTINGS_DICT[key]["color"]
+            return cfg["plot_settings"][key]["color"]
     return None
 
 
 def get_fmt(response_var):
-    for key in PLOT_SETTINGS_DICT:
+    for key in cfg["plot_settings"]:
         if response_var.endswith(key):
-            return PLOT_SETTINGS_DICT[key]["fmt"]
+            return cfg["plot_settings"][key]["fmt"]
     return None
 
 
@@ -687,8 +738,8 @@ def plot_resolution_vs_x_variable(
                     x_log=True,
                     split_legend=False,
                     reference_to_den=False,
-                    ylim_bottom_value=Y_LIM_RESOLUTION[0],
-                    ylim_top_value=Y_LIM_RESOLUTION[1],
+                    ylim_bottom_value=cfg["y_lim_resolution"][0],
+                    ylim_top_value=cfg["y_lim_resolution"][1],
                     set_ylim_ratio=0.5,
                 )
                 .set_output(f"{output_dir}/{output_name}")
@@ -892,8 +943,8 @@ def compute_means(h_dict, mapping_vars):
 
     for mv in map_vars:
         log.debug("Processing mapping variable: %s", mv)
-        cfg = mapping_vars[mv]
-        active_bin_vars = cfg["bin_vars"]
+        map_cfg = mapping_vars[mv]
+        active_bin_vars = map_cfg["bin_vars"]
 
         # Project down to only the active bin axes + this mapping variable axis
         # All other axes are summed over (marginalized)
@@ -913,8 +964,8 @@ def compute_means(h_dict, mapping_vars):
 
 def compute_projection(h_dict, mapping_vars, mapping_var_key):
     nd_hist = h_dict[mapping_var_key]
-    cfg = mapping_vars[mapping_var_key]
-    active_bin_vars = cfg["bin_vars"] + [mapping_var_key]
+    map_cfg = mapping_vars[mapping_var_key]
+    active_bin_vars = map_cfg["bin_vars"] + [mapping_var_key]
 
     # Project down to only the active bin axes + this mapping variable axis
     # All other axes are summed over (marginalized)
@@ -1062,13 +1113,13 @@ def _compute_resolution_from_histogram(
         failed = False
         # Check if we have enough data (at least 5 events)
         if np.sum(hist_counts) > 5:
-            if GAUSSIAN_FIT_RESOLUTION:
+            if cfg["gaussian_fit_resolution"]:
                 try:
                     x_fit = response_bin_centers.copy()
                     y_fit = hist_counts.astype(float)
                     y_fit_err = np.sqrt(hist_variance)  # Poisson errors
 
-                    if GAUSSIAN_FIT_CUT_TAILS:
+                    if cfg["gaussian_fit_cut_tails"]:
                         # Restrict to the 87% confidence interval around the mean
                         total = y_fit.sum()
                         if total > 0:
@@ -1495,7 +1546,7 @@ def plot_variable_slices(
             )
 
             # Overlay Gaussian fit curves when fit results are available
-            if gaussian_fit_results is not None and GAUSSIAN_FIT_RESOLUTION:
+            if gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]:
                 for i, var_name in enumerate(group_dict):
 
                     var_fits = gaussian_fit_results.get(var_name, {})
@@ -1532,7 +1583,7 @@ def plot_variable_slices(
                         color=get_color(var_name),
                     )
 
-                    if GAUSSIAN_FIT_CUT_TAILS:
+                    if cfg["gaussian_fit_cut_tails"]:
                         # plot the lines corresponding to the fit range
                         plotter.add_line(
                             "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
@@ -1582,8 +1633,8 @@ def profile_means(h_mean_dict, mapping_vars):
 
     for mv, h_mean in h_mean_dict.items():
         log.info("Processing mapping variable: %s", mv)
-        cfg = mapping_vars[mv]
-        active_bin_vars = cfg["bin_vars"]
+        map_cfg = mapping_vars[mv]
+        active_bin_vars = map_cfg["bin_vars"]
 
         # Project down to only the active bin axes
         # The Mean storage already contains the mean values and uncertainties
@@ -1776,10 +1827,10 @@ def save_txt_resolution(
     """
 
     def get_txt_name(var_name):
-        cfg = bin_var_configs[var_name]
-        if "txt_name" in cfg:
-            return cfg["txt_name"]
-        mapped_to = cfg.get("txt_map_to")
+        bin_var_cfg = bin_var_configs[var_name]
+        if "txt_name" in bin_var_cfg:
+            return bin_var_cfg["txt_name"]
+        mapped_to = bin_var_cfg.get("txt_map_to")
         if mapped_to and mapped_to in mapping_vars:
             return mapping_vars[mapped_to].get("txt_name", mapped_to)
         return var_name
@@ -1863,9 +1914,9 @@ def save_txt_resolution(
                 build_ok = False
                 break
             lo, hi = bin_edges_raw[y_var]
-            cfg = bin_var_configs[y_var]
-            if "txt_map_to" in cfg:
-                fit_map = (linear_fit_maps or {}).get(cfg["txt_map_to"])
+            bin_var_cfg = bin_var_configs[y_var]
+            if "txt_map_to" in bin_var_cfg:
+                fit_map = (linear_fit_maps or {}).get(bin_var_cfg["txt_map_to"])
                 if fit_map is not None:
                     lo, hi = fit_map["fit_func"](np.array([lo, hi]))
             row_cols.extend([lo, hi])
@@ -1891,7 +1942,7 @@ def save_txt_resolution(
             return str(int(val))
         return f"{float(val):g}"
 
-    year_tag = YEAR_MAP.get(year, year)
+    year_tag = cfg["year_map"].get(year, year)
     jet_type = response_var_cfg.get("txt_jet_name", "AK4PFPuppi")
     filename = f"Run3{year_tag}_V1_NSC_MC_PtResolution_{jet_type}.txt"
     output_path = os.path.join(output_dir, filename)
@@ -1905,29 +1956,27 @@ def save_txt_resolution(
 
 
 def plot_mapping_variable_histograms(*, category, year, h_dict):
-    if not args.histo or HISTOGRAMS_MAP:
-        return
-
-    plot_var_output_dir = f"{args.output}/histograms_mapping_variables_{category}"
-    os.makedirs(plot_var_output_dir, exist_ok=True)
-    plot_variable_slices(
-        h_dict=h_dict,
-        variables_dict=MAPPING_VARIABLES,
-        bin_var_configs=BIN_VARIABLES_MIXED,
-        output_dir=plot_var_output_dir,
-        category=category,
-        year=year,
-        var_type="mapping",
-    )
+    if args.histo or cfg["histograms_map"]:
+        plot_var_output_dir = f"{args.output}/histograms_mapping_variables_{category}"
+        os.makedirs(plot_var_output_dir, exist_ok=True)
+        plot_variable_slices(
+            h_dict=h_dict,
+            variables_dict=cfg["mapping_variables"],
+            bin_var_configs=cfg["bin_variables_mixed"],
+            output_dir=plot_var_output_dir,
+            category=category,
+            year=year,
+            var_type="mapping",
+        )
 
 
 def get_bin_vars_for_mode(mode):
     if mode == "regular":
-        return BIN_VARIABLES
+        return cfg["bin_variables"]
     elif mode == "neutrino":
-        return BIN_VARIABLES_NEUTRINO
+        return cfg["bin_variables_neutrino"]
     elif mode == "mixed":
-        return BIN_VARIABLES_MIXED
+        return cfg["bin_variables_mixed"]
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
@@ -1946,13 +1995,13 @@ def process_response_type(
 ):
     suffix = f"_{mode}"
 
-    if args.histo or HISTOGRAMS_RESPONSE:
+    if args.histo or cfg["histograms_response"]:
         response_histogram_dir = (
             f"{args.output}/histograms_resolution_{category}{suffix}"
         )
         os.makedirs(response_histogram_dir, exist_ok=True)
         # Extract Gaussian fit results from the precomputed resolution dicts
-        if GAUSSIAN_FIT_RESOLUTION and response_tot_dict:
+        if cfg["gaussian_fit_resolution"] and response_tot_dict:
             gaussian_fit_results = {
                 var_name: result.get("gaussian_fits", {})
                 for var_name, result in response_tot_dict.items()
@@ -1976,7 +2025,7 @@ def process_response_type(
             gaussian_fit_results=gaussian_fit_results,
         )
 
-    if RESOLUTION_VS_PT_GEN:
+    if cfg["resolution_vs_pt_gen"]:
         # Plot resolution vs x variable for response variables (bin centers)
         output_dir = f"{args.output}/resolution_ptgen_{category}{suffix}"
         os.makedirs(output_dir, exist_ok=True)
@@ -1984,12 +2033,12 @@ def process_response_type(
             response_types_dict=response_tot_dict,
             bin_var_configs=bin_vars,
             response_vars=available_response_vars,
-            mapping_dict=MAPPING_VARIABLES,
+            mapping_dict=cfg["mapping_variables"],
             output_dir=output_dir,
             year=year,
         )
 
-    if RESOLUTION_VS_PT_RECO:
+    if cfg["resolution_vs_pt_reco"]:
         # Plot resolution vs mapped x variable (means) + fit + save fit results
         output_dir = f"{args.output}/resolution_ptreco_{category}{suffix}"
         os.makedirs(output_dir, exist_ok=True)
@@ -1997,7 +2046,7 @@ def process_response_type(
             response_types_dict=response_tot_dict,
             bin_var_configs=bin_vars,
             response_vars=available_response_vars,
-            mapping_dict=MAPPING_VARIABLES,
+            mapping_dict=cfg["mapping_variables"],
             output_dir=output_dir,
             year=year,
             h_mean_dict=results_for_mapping,
@@ -2016,7 +2065,7 @@ def process_response_type(
                 response_var_cfg=resp_var_cfg,
                 bin_var_configs=bin_vars,
                 linear_fit_maps=linear_fit_maps,
-                mapping_vars=MAPPING_VARIABLES,
+                mapping_vars=cfg["mapping_variables"],
                 output_dir=args.output,
                 year=year,
             )
@@ -2025,6 +2074,7 @@ def process_response_type(
 def main():
     # make output dir if it doesn't exist
     os.makedirs(args.output, exist_ok=True)
+    shutil.copy2(args.config, os.path.join(args.output, os.path.basename(args.config)))
     setup_logging(args.output)
 
     # If loading from precomputed file, skip data loading and computation
@@ -2044,22 +2094,22 @@ def main():
         else:
             linear_fit_maps = {}
             mapped_bin_edges = {}
-            for lf_var_name, lf_var_cfg in MAPPING_VARIABLES.items():
+            for lf_var_name, lf_var_cfg in cfg["mapping_variables"].items():
                 if not lf_var_cfg.get("linear_fit", False):
                     continue
                 linear_fit_maps[lf_var_name] = plot_mapping_variable_linear_fit(
                     h_dict=h_dict,
                     results=results,
-                    mapping_vars=MAPPING_VARIABLES,
+                    mapping_vars=cfg["mapping_variables"],
                     year=year,
                     category=category,
                     output_dir=args.output,
                     var_name=lf_var_name,
-                    bin_var_configs=BIN_VARIABLES_MIXED,
+                    bin_var_configs=cfg["bin_variables_mixed"],
                 )
                 mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name][
                     "fit_func"
-                ](BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"])
+                ](cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"])
 
         plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
 
@@ -2122,31 +2172,31 @@ def main():
         # Process plot variables (contains both regular and neutrino versions)
         log.info("Building mapping variable histograms for category '%s'...", category)
         h_dict, h_mean_dict = create_ND_histo(
-            variables_dict=MAPPING_VARIABLES,
+            variables_dict=cfg["mapping_variables"],
             data=col_var_flatten,
-            bin_var_configs=BIN_VARIABLES_MIXED,
+            bin_var_configs=cfg["bin_variables_mixed"],
         )
 
-        results = profile_means(h_mean_dict, MAPPING_VARIABLES)
+        results = profile_means(h_mean_dict, cfg["mapping_variables"])
 
         # Fit mapping variables that have a linear_fit defined
         linear_fit_maps = {}
         mapped_bin_edges = {}
-        for lf_var_name, lf_var_cfg in MAPPING_VARIABLES.items():
+        for lf_var_name, lf_var_cfg in cfg["mapping_variables"].items():
             if not lf_var_cfg.get("linear_fit", False):
                 continue
             linear_fit_maps[lf_var_name] = plot_mapping_variable_linear_fit(
                 h_dict=h_dict,
                 results=results,
-                mapping_vars=MAPPING_VARIABLES,
+                mapping_vars=cfg["mapping_variables"],
                 year=year,
                 category=category,
                 output_dir=args.output,
                 var_name=lf_var_name,
-                bin_var_configs=BIN_VARIABLES_MIXED,
+                bin_var_configs=cfg["bin_variables_mixed"],
             )
             mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
-                BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"]
+                cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"]
             )
 
         # Store category data for saving
@@ -2162,12 +2212,12 @@ def main():
         # Process response variables separately for neutrino and non-neutrino
         for response_vars, mode in (
             zip(
-                [RESPONSE_VARIABLES, RESPONSE_VARIABLES_NEUTRINO],
+                [cfg["response_variables"], cfg["response_variables_neutrino"]],
                 ["regular", "neutrino"],
             )
-            if not MIXED_MODE
+            if not cfg["mixed_mode"]
             else zip(
-                [RESPONSE_VARIABLES_MIXED],
+                [cfg["response_variables_mixed"]],
                 ["mixed"],
             )
         ):
