@@ -161,6 +161,18 @@ parser.add_argument(
     required=True,
     help="Path to YAML configuration file",
 )
+parser.add_argument(
+    "--refit",
+    action="store_true",
+    default=False,
+    help=(
+        "When used with --load, merge histogram bins using the bin edges from the current YAML "
+        "config (if coarser than what is stored) and recompute the Gaussian fit before plotting. "
+        "Bins in the coffea file that are a strict sub-group of the config edges are merged; "
+        "if the config requests finer binning than available a warning is emitted and the axis "
+        "is left unchanged."
+    ),
+)
 
 args = parser.parse_args()
 cfg = _load_config(args.config)
@@ -1041,6 +1053,130 @@ def perform_linear_fit(h_mean_hist):
     }
 
 
+def merge_nd_histogram_bins(h, bin_var_configs_new):
+    """
+    Merge histogram bins along any axis whose name appears in *bin_var_configs_new* and
+    whose new bin edges are a coarser (proper sub-set) version of the axis's current edges.
+
+    Works for both ``hist.storage.Count`` and ``hist.storage.Mean`` storages.
+    Axes whose names are absent from *bin_var_configs_new* (e.g. the response-variable
+    axis) are left unchanged.
+
+    Parameters
+    ----------
+    h : hist.Hist
+        Histogram to rebin.  May have any number of axes.
+    bin_var_configs_new : dict
+        Mapping from variable name to config dict that must contain a ``bin_edges`` key
+        with the desired (possibly coarser) bin edges.
+
+    Returns
+    -------
+    h_new : hist.Hist
+        New histogram with merged bins.
+    any_rebinned : bool
+        ``True`` if at least one axis was actually merged.
+    """
+    # Check via the view dtype: Mean storage returns a structured array with named fields
+    # ('value', 'count'); Count storage returns a plain float array.
+    is_mean = h.view().dtype.names is not None
+
+    arr = h.view().copy()
+    new_axes = []
+    any_rebinned = False
+
+    for axis_idx, ax in enumerate(h.axes):
+        var_name = ax.name
+
+        if var_name not in bin_var_configs_new:
+            new_axes.append(ax)
+            continue
+
+        orig_edges = np.array(ax.edges)
+        new_edges = np.array(bin_var_configs_new[var_name]["bin_edges"])
+
+        if len(new_edges) >= len(orig_edges):
+            log.warning(
+                "Variable '%s': new config has %d edges but original has %d — "
+                "cannot increase binning, axis left unchanged.",
+                var_name,
+                len(new_edges),
+                len(orig_edges),
+            )
+            new_axes.append(ax)
+            continue
+
+        # Verify every new edge is present in the original edges (within tolerance).
+        all_match = all(
+            np.any(np.isclose(ne, orig_edges, rtol=1e-6, atol=1e-10)) for ne in new_edges
+        )
+        if not all_match:
+            log.warning(
+                "New bin edges for '%s' are not a subset of the original edges — "
+                "axis left unchanged.\n  original: %s\n  requested: %s",
+                var_name,
+                orig_edges,
+                new_edges,
+            )
+            new_axes.append(ax)
+            continue
+
+        # Map each new lower edge to its index in orig_edges.
+        group_starts = [
+            int(np.argmin(np.abs(orig_edges - ne))) for ne in new_edges[:-1]
+        ]
+
+        if is_mean:
+            # Mean storage view: structured array whose dtype must be preserved
+            # exactly (boost_histogram requires all fields, e.g.
+            # ('count', 'value', '_sum_of_deltas_squared')).
+            # _sum_of_deltas_squared is summed additively — this underestimates the
+            # true within-group variance by the between-bin term, but keeps it
+            # non-zero so that downstream fits (which require y_err > 0) still work.
+            log.warning(
+                "Merging bins for variable '%s' with Mean storage: this underestimates the true variance within merged bins, but keeps it non-zero for downstream fits.",
+                var_name,
+            )
+            orig_dtype = arr.dtype
+            counts = arr["count"].copy()
+            sum_vals = counts * arr["value"]
+
+            merged_counts = np.add.reduceat(counts, group_starts, axis=axis_idx)
+            merged_sum_vals = np.add.reduceat(sum_vals, group_starts, axis=axis_idx)
+
+            new_arr = np.zeros(merged_counts.shape, dtype=orig_dtype)
+            new_arr["count"] = merged_counts
+            new_arr["value"] = np.where(
+                merged_counts > 0, merged_sum_vals / merged_counts, 0.0
+            )
+            if "_sum_of_deltas_squared" in orig_dtype.names:
+                new_arr["_sum_of_deltas_squared"] = np.add.reduceat(
+                    arr["_sum_of_deltas_squared"].copy(), group_starts, axis=axis_idx
+                )
+            arr = new_arr
+        else:
+            arr = np.add.reduceat(arr, group_starts, axis=axis_idx)
+
+        new_axes.append(
+            hist.axis.Variable(new_edges, name=ax.name, label=ax.label, flow=False)
+        )
+        any_rebinned = True
+        log.info(
+            "Merged bins for '%s': %d → %d bins",
+            var_name,
+            len(orig_edges) - 1,
+            len(new_edges) - 1,
+        )
+
+    if not any_rebinned:
+        return h, False
+
+    storage = hist.storage.Mean() if is_mean else hist.storage.Double()
+    h_new = hist.Hist(*new_axes, storage=storage)
+    h_new.view()[:] = arr
+    return h_new, True
+
+
 def _compute_resolution_from_histogram(
     response_var_name, h_response, bin_var_names, response_vars
 ):
@@ -1511,7 +1647,7 @@ def plot_variable_slices(
 
             output_name = f"{output_dir}/{'_'.join(filename_parts)}"
 
-            # Get the axis label from the first variable in this group
+            # Get the axis label from tlineahe first variable in this group
             axis_label = list(group_dict.values())[0].axes[-1].label
 
             log.debug(
@@ -2111,6 +2247,53 @@ def main():
                     "fit_func"
                 ](cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"])
 
+        # When --refit is requested, merge histogram bins from the YAML config and
+        # recompute results / profile means so that the new binning is fully consistent.
+        # NOTE: plot_mapping_variable_histograms is called *after* this block so that it
+        # always receives an h_dict whose axes match cfg["bin_variables_mixed"].
+        if args.refit:
+            log.info("--refit: merging histogram bins from YAML config and recomputing profile means...")
+            bin_var_configs_all = cfg["bin_variables_mixed"]
+
+            # Merge mapping-variable Count histograms so linear fits stay consistent.
+            h_dict = {
+                vn: merge_nd_histogram_bins(h, bin_var_configs_all)[0]
+                for vn, h in h_dict.items()
+            }
+
+            # Recompute profile means from the merged Mean histograms (if saved).
+            if "h_mean_dict" in cat_data:
+                h_mean_dict_merged = {
+                    vn: merge_nd_histogram_bins(h, bin_var_configs_all)[0]
+                    for vn, h in cat_data["h_mean_dict"].items()
+                }
+                results = profile_means(h_mean_dict_merged, cfg["mapping_variables"])
+            else:
+                log.warning(
+                    "--refit: h_mean_dict not found in coffea file; "
+                    "profile means for the original binning will be reused."
+                )
+
+            # Redo linear fits with the merged histograms.
+            linear_fit_maps = {}
+            mapped_bin_edges = {}
+            for lf_var_name, lf_var_cfg in cfg["mapping_variables"].items():
+                if not lf_var_cfg.get("linear_fit", False):
+                    continue
+                linear_fit_maps[lf_var_name] = plot_mapping_variable_linear_fit(
+                    h_dict=h_dict,
+                    results=results,
+                    mapping_vars=cfg["mapping_variables"],
+                    year=year,
+                    category=category,
+                    output_dir=args.output,
+                    var_name=lf_var_name,
+                    bin_var_configs=cfg["bin_variables_mixed"],
+                )
+                mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
+                    cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"]
+                )
+
         plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
 
         # Process response variables from loaded data
@@ -2120,10 +2303,24 @@ def main():
 
             resp_data = cat_data["response_data"][mode]
             response_h_dict = resp_data["response_h_dict"]
-            response_tot_dict = resp_data["response_tot_dict"]
             available_response_vars = resp_data["available_response_vars"]
 
             bin_vars = get_bin_vars_for_mode(mode)
+
+            if args.refit:
+                log.info("--refit mode='%s': merging response histogram bins...", mode)
+                response_h_dict = {
+                    vn: merge_nd_histogram_bins(h, bin_vars)[0]
+                    for vn, h in response_h_dict.items()
+                }
+                log.info("--refit mode='%s': recomputing Gaussian fit...", mode)
+                response_tot_dict = compute_binned_resolution_from_histograms(
+                    h_dict=response_h_dict,
+                    bin_var_names=list(bin_vars.keys()),
+                    response_vars=available_response_vars,
+                )
+            else:
+                response_tot_dict = resp_data["response_tot_dict"]
 
             process_response_type(
                 category=category,
