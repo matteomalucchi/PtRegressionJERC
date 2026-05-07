@@ -4,11 +4,14 @@ TEST = False
 
 MIXED_MODE = True
 
-RESOLUTION_VS_PT_GEN= False
-RESOLUTION_VS_PT_RECO= False
-HISTOGRAMS_MAP= False
+RESOLUTION_VS_PT_GEN= True
+RESOLUTION_VS_PT_RECO= True
+
+HISTOGRAMS_MAP= True
 HISTOGRAMS_RESPONSE= True
 
+GAUSSIAN_FIT_RESOLUTION = True
+GAUSSIAN_FIT_CUT_TAILS = True
 
 pu_bins = np.array(
     [
@@ -255,12 +258,15 @@ MAPPING_VARIABLES = {
     },
 }
 
+N_BINS_RESPONSE = 150
+BIN_LIMITS_RESPONSE = (0.5, 1.5)
+
 RESPONSE_VARIABLES = {
     "MatchedJets_ResponseJEC": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_jec",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "JEC",
         "map_x_variable": "MatchedJets_JetPtJEC",
@@ -271,8 +277,8 @@ RESPONSE_VARIABLES = {
     "MatchedJets_ResponseRaw": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_raw",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "Raw",
         "map_x_variable": "MatchedJets_JetPtRaw",
@@ -283,8 +289,8 @@ RESPONSE_VARIABLES = {
     "MatchedJets_ResponsePNetReg": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_pnetreg",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "PNetReg",
         "map_x_variable": "MatchedJets_JetPtPNetReg",
@@ -295,8 +301,8 @@ RESPONSE_VARIABLES = {
     "MatchedJets_ResponseUparTReg": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_upartreg",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "UParTReg",
         "map_x_variable": "MatchedJets_JetPtUparTReg",
@@ -310,8 +316,8 @@ RESPONSE_VARIABLES_NEUTRINO = {
     "MatchedJetsNeutrino_ResponseJEC": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_jec",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJetsNeutrino_eta", "MatchedJetsNeutrino_pt"],
         "legend_name": "JEC",
         "map_x_variable": "MatchedJetsNeutrino_JetPtJEC",
@@ -322,8 +328,8 @@ RESPONSE_VARIABLES_NEUTRINO = {
     "MatchedJetsNeutrino_ResponseRaw": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_raw",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJetsNeutrino_eta", "MatchedJetsNeutrino_pt"],
         "legend_name": "Raw",
         "map_x_variable": "MatchedJetsNeutrino_JetPtRaw",
@@ -334,8 +340,8 @@ RESPONSE_VARIABLES_NEUTRINO = {
     "MatchedJetsNeutrino_ResponsePNetRegNeutrino": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_pnetreg_neutrino",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJetsNeutrino_eta", "MatchedJetsNeutrino_pt"],
         "legend_name": "PNetRegNeutrino",
         "map_x_variable": "MatchedJetsNeutrino_JetPtPNetRegNeutrino",
@@ -346,8 +352,8 @@ RESPONSE_VARIABLES_NEUTRINO = {
     "MatchedJetsNeutrino_ResponseUparTRegNeutrino": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_upartreg_neutrino",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJetsNeutrino_eta", "MatchedJetsNeutrino_pt"],
         "legend_name": "UParTRegNeutrino",
         "map_x_variable": "MatchedJetsNeutrino_JetPtUparTRegNeutrino",
@@ -362,8 +368,8 @@ RESPONSE_VARIABLES_MIXED = {
     "MatchedJets_ResponseJEC": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_jec",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "JEC",
         "map_x_variable": "MatchedJets_JetPtJEC",
@@ -371,23 +377,23 @@ RESPONSE_VARIABLES_MIXED = {
         "txt_jet_name": "AK4PFPuppi",
         "rebin_for_plotting": False,
     },
-    "MatchedJets_ResponseRaw": {
-        "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
-        "name_plot": "response_raw",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
-        "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
-        "legend_name": "Raw",
-        "map_x_variable": "MatchedJets_JetPtRaw",
-        "is_reference": False,
-        "txt_jet_name": "AK4PFPuppiRaw",
-        "rebin_for_plotting": False,
-    },
+    # "MatchedJets_ResponseRaw": {
+    #     "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
+    #     "name_plot": "response_raw",
+    #     "N_bins": N_BINS_RESPONSE,
+    #     "bin_limits": BIN_LIMITS_RESPONSE,
+    #     "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
+    #     "legend_name": "Raw",
+    #     "map_x_variable": "MatchedJets_JetPtRaw",
+    #     "is_reference": False,
+    #     "txt_jet_name": "AK4PFPuppiRaw",
+    #     "rebin_for_plotting": False,
+    # },
     "MatchedJets_ResponsePNetReg": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_pnetreg",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "PNetReg",
         "map_x_variable": "MatchedJets_JetPtPNetReg",
@@ -398,8 +404,8 @@ RESPONSE_VARIABLES_MIXED = {
     "MatchedJets_ResponseUparTReg": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_upartreg",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJets_eta", "MatchedJets_pt"],
         "legend_name": "UParTReg",
         "map_x_variable": "MatchedJets_JetPtUparTReg",
@@ -410,8 +416,8 @@ RESPONSE_VARIABLES_MIXED = {
     "MatchedJetsNeutrino_ResponsePNetRegNeutrino": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_pnetreg_neutrino",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJetsNeutrino_eta", "MatchedJetsNeutrino_pt"],
         "legend_name": "PNetRegNeutrino",
         "map_x_variable": "MatchedJetsNeutrino_JetPtPNetRegNeutrino",
@@ -422,8 +428,8 @@ RESPONSE_VARIABLES_MIXED = {
     "MatchedJetsNeutrino_ResponseUparTRegNeutrino": {
         "label": r"$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$",
         "name_plot": "response_upartreg_neutrino",
-        "N_bins": 60,
-        "bin_limits": (0, 2.0),
+        "N_bins": N_BINS_RESPONSE,
+        "bin_limits": BIN_LIMITS_RESPONSE,
         "bin_vars": ["Pileup_nPU", "MatchedJetsNeutrino_eta", "MatchedJetsNeutrino_pt"],
         "legend_name": "UParTRegNeutrino",
         "map_x_variable": "MatchedJetsNeutrino_JetPtUparTRegNeutrino",

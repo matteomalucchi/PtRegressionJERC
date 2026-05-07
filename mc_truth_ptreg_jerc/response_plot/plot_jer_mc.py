@@ -39,6 +39,8 @@ from mc_truth_ptreg_jerc.response_plot.plot_config_jer_mc import (
     RESOLUTION_VS_PT_RECO,
     HISTOGRAMS_MAP,
     HISTOGRAMS_RESPONSE,
+    GAUSSIAN_FIT_RESOLUTION,
+    GAUSSIAN_FIT_CUT_TAILS,
 )
 
 from mc_truth_ptreg_jerc.response_plot.confidence import Confidence_numpy
@@ -166,6 +168,15 @@ linear_model.param_names = ["[0]", "[1]"]
 linear_model.x_name = "x"
 
 
+def gaussian_model(x, amplitude, mean, sigma):
+    return amplitude * np.exp(-0.5 * ((x - mean) / sigma) ** 2)
+
+
+gaussian_model.formula = "[0]*exp(-0.5*((x-[1])/[2])^2)"
+gaussian_model.param_names = ["[0]", "[1]", "[2]"]
+gaussian_model.x_name = "x"
+
+
 def perform_fit(
     x,
     y,
@@ -214,48 +225,38 @@ def perform_fit(
             raise ValueError("y_err must have the same shape as y")
         valid = np.isfinite(x) & np.isfinite(y) & np.isfinite(y_err_arr)
 
+    invalid_dict = {
+        "fit_function_name": getattr(fit_function, "__name__", str(fit_function)),
+        "fit_formula": getattr(fit_function, "formula", None),
+        "fit_param_names": getattr(fit_function, "param_names", None),
+        "params": np.full(n_params, np.nan),
+        "params_err": np.full(n_params, np.nan),
+        "cov": None,
+        "r_squared": np.nan,
+        "chi2": np.nan,
+        "dof": 0,
+        "p_value": np.nan,
+        "n_points": len(x),
+        "fit_func": lambda x_val: np.full_like(x_val, np.nan),
+        "x_min": np.min(x) if len(x) > 0 else np.nan,
+        "x_max": np.max(x) if len(x) > 0 else np.nan,
+    }
     if not np.any(valid):
         log.error("No valid points for fitting")
-        return {
-            "fit_function": getattr(fit_function, "__name__", str(fit_function)),
-            "fit_formula": getattr(fit_function, "formula", None),
-            "fit_param_names": getattr(fit_function, "param_names", None),
-            "params": np.full(n_params, np.nan),
-            "params_err": np.full(n_params, np.nan),
-            "cov": None,
-            "r_squared": np.nan,
-            "chi2": np.nan,
-            "dof": 0,
-            "p_value": np.nan,
-            "n_points": 0,
-            "fit_func": lambda x_val: np.full_like(x_val, np.nan),
-            "x_min": np.nan,
-            "x_max": np.nan,
-        }
+        return invalid_dict
 
     x = x[valid]
     y = y[valid]
     if y_err_arr is not None:
         y_err_arr = y_err_arr[valid]
-        
+
     if len(x) < n_params:
-        log.error("Not enough valid points for fitting: %d points, %d parameters", len(x), n_params)
-        return {
-            "fit_function": getattr(fit_function, "__name__", str(fit_function)),
-            "fit_formula": getattr(fit_function, "formula", None),
-            "fit_param_names": getattr(fit_function, "param_names", None),
-            "params": np.full(n_params, np.nan),
-            "params_err": np.full(n_params, np.nan),
-            "cov": None,
-            "r_squared": np.nan,
-            "chi2": np.nan,
-            "dof": 0,
-            "p_value": np.nan,
-            "n_points": len(x),
-            "fit_func": lambda x_val: np.full_like(x_val, np.nan),
-            "x_min": np.min(x) if len(x) > 0 else np.nan,
-            "x_max": np.max(x) if len(x) > 0 else np.nan,
-        }
+        log.error(
+            "Not enough valid points for fitting: %d points, %d parameters",
+            len(x),
+            n_params,
+        )
+        return invalid_dict
 
     # If uncertainties are missing or unusable, fall back to unweighted fit.
     use_sigma = (
@@ -278,10 +279,15 @@ def perform_fit(
         try:
             _trf_bounds = bounds if bounds != (-np.inf, np.inf) else (-np.inf, np.inf)
             popt, pcov = curve_fit(
-                fit_function, x, y, method="trf", **{**_curve_fit_kwargs, "bounds": _trf_bounds}
+                fit_function,
+                x,
+                y,
+                method="trf",
+                **{**_curve_fit_kwargs, "bounds": _trf_bounds},
             )
         except RuntimeError as exc:
             log.error("Fit failed: %s", exc)
+            return invalid_dict
 
     params = np.array(popt, dtype=float)
     params_err = (
@@ -308,11 +314,11 @@ def perform_fit(
     r_squared = 1.0 - ss_res / ss_tot if ss_tot != 0 else np.nan
     dof = max(len(x) - int(n_params), 1)
     p_value = chi2_dist.sf(chi2_stat, dof)
-    
+
     log.debug("Fit was successful!")
 
     return {
-        "fit_function": getattr(fit_function, "__name__", str(fit_function)),
+        "fit_function_name": getattr(fit_function, "__name__", str(fit_function)),
         "fit_formula": getattr(fit_function, "formula", None),
         "fit_param_names": getattr(fit_function, "param_names", None),
         "params": params,
@@ -326,8 +332,8 @@ def perform_fit(
         "fit_func": (
             lambda x_val: fit_function(np.asarray(x_val, dtype=float), *params)
         ),
-        "x_min": np.min(x),
-        "x_max": np.max(x),
+        "x_min": np.min(x) if len(x) > 0 else np.nan,
+        "x_max": np.max(x) if len(x) > 0 else np.nan,
     }
 
 
@@ -488,6 +494,7 @@ def plot_resolution_vs_x_variable(
             for response_var in group_response_vars:
                 resolution_result = response_types_dict[response_var]
                 resolutions = resolution_result["resolutions"]
+                resolutions_uncertainty = resolution_result["resolutions_uncertainty"]
                 bin_var_names_local = resolution_result["bin_var_names"]
                 axes = axis_maps[response_var]
 
@@ -513,12 +520,12 @@ def plot_resolution_vs_x_variable(
                         and resolutions[full_bin_idx] is not None
                     ):
                         resolutions_for_plot.append(resolutions[full_bin_idx])
-                        errors_for_plot.append(0)
+                        errors_for_plot.append(resolutions_uncertainty[full_bin_idx])
                         valid_x_indices.append(x_idx)
                     else:
                         # put nan for missing points so x-values are still correct if some points are missing
                         resolutions_for_plot.append(np.nan)
-                        errors_for_plot.append(0)
+                        errors_for_plot.append(np.nan)
                         valid_x_indices.append(x_idx)
 
                 if len(resolutions_for_plot) == 0:
@@ -574,14 +581,14 @@ def plot_resolution_vs_x_variable(
 
             if not graph_data:
                 continue
-            
+
             if map_x_variable:
                 map_var_name = response_vars[response_var].get("map_x_variable")
-                name_plot=mapping_dict[map_var_name]["name_plot"]
+                name_plot = mapping_dict[map_var_name]["name_plot"]
                 filename_parts = ["resolution", f"x_{name_plot}"]
             else:
                 filename_parts = ["resolution", f"x_{x_np}"]
-                
+
             for y_var_name, y_idx in y_vars:
                 bin_idx = y_bin_idx[y_vars.index((y_var_name, y_idx))]
                 low_edge_str = f"{bin_edges_dict[y_var_name][bin_idx]}".replace(
@@ -633,7 +640,7 @@ def plot_resolution_vs_x_variable(
                         n_params=len(NSC.param_names),
                         p0=(0.5, 0.5, 0.05, -1.0),
                     )
-                    
+
                     fit_results[f"{response_var}{fit_result_string}"] = fit_res
 
                     x_fit_fit = np.logspace(
@@ -670,7 +677,7 @@ def plot_resolution_vs_x_variable(
                 .set_labels(
                     xlabel=xlabel,
                     ylabel="Jet Energy Resolution",
-                    ratio_label="Ratio to JEC",
+                    ratio_label="JEC / Resolution",
                 )
                 .set_data(graph_data, plot_type="graph")
                 .set_options(
@@ -679,9 +686,10 @@ def plot_resolution_vs_x_variable(
                     legend_loc="upper right",
                     x_log=True,
                     split_legend=False,
-                    reference_to_den=True,
+                    reference_to_den=False,
                     ylim_bottom_value=Y_LIM_RESOLUTION[0],
                     ylim_top_value=Y_LIM_RESOLUTION[1],
+                    set_ylim_ratio=0.5,
                 )
                 .set_output(f"{output_dir}/{output_name}")
                 .add_annotation(
@@ -692,16 +700,33 @@ def plot_resolution_vs_x_variable(
                     verticalalignment="top",
                 )
             )
+
+            if fit_resolution:
+                for i, (response_var, fit_res) in enumerate(fit_results.items()):
+                    chi2_str = f"$\\chi^2$/ndf={fit_res['chi2']:.1f}/{fit_res['dof']}, p={fit_res['p_value']:.2f}"
+                    plotter.add_annotation(
+                        0.7,
+                        0.6 - i * 0.05,
+                        chi2_str,
+                        color=get_color(response_var.replace(fit_result_string, "")),
+                        horizontalalignment="left",
+                        verticalalignment="top",
+                        fontsize=13,
+                    )
+
             plotters[y_bin_idx] = plotter
 
         if args.workers == 1:
             for name, plotter in plotters.items():
-                log.info("Plotting resolution vs x variable for bin combination %s...", name)
+                log.info(
+                    "Plotting resolution vs x variable for bin combination %s...", name
+                )
                 plotter.run()
         else:
             log.info(
                 "Plotting resolution vs x variable for %d bin combinations in parallel with %d workers...",
-                len(plotters), args.workers,
+                len(plotters),
+                args.workers,
             )
             with Pool(args.workers) as pool:
                 pool.map(run_plot, plotters.values())
@@ -733,12 +758,15 @@ def flatten_data(data):
     nJets = np.array([len(jets) for jets in data[jet_level_key]])
 
     flat_data = {}
-    for key, arr in data.items():
+    n_vars = len(data)
+    for i, (key, arr) in enumerate(data.items()):
         log.debug("Flattening variable '%s' with shape %s", key, arr.shape)
         if is_ragged(arr):
             flat_data[key] = np.concatenate(arr)
         else:
             flat_data[key] = np.repeat(arr, nJets)
+        if (i + 1) % 10 == 0 or (i + 1) == n_vars:
+            log.info("Flattening variables: %d/%d done", i + 1, n_vars)
 
     return flat_data
 
@@ -768,8 +796,10 @@ def create_ND_histo(variables_dict, data, bin_var_configs):
     """
     h_dict = {}
     h_mean_dict = {}
+    n_vars = len(variables_dict)
 
-    for var_name, var_cfg in variables_dict.items():
+    for i, (var_name, var_cfg) in enumerate(variables_dict.items()):
+        log.info("Filling histogram %d/%d: '%s'", i + 1, n_vars, var_name)
         # Get the bin variables for this variable
         bin_var_names = var_cfg.get("bin_vars", [])
 
@@ -919,12 +949,13 @@ def perform_linear_fit(h_mean_hist):
     x = np.array(x_axis.centers)
     view = h_mean_hist.view()
     y = np.array(view.value)
+    count = np.array(view.count)
     variance = np.array(view.variance)
 
     if y.shape != x.shape:
         raise ValueError("Histogram x and y arrays must have the same shape")
 
-    y_err = np.sqrt(variance)
+    y_err = np.where(count > 0, np.sqrt(variance / count), np.inf)
     valid = np.isfinite(x) & np.isfinite(y) & np.isfinite(y_err) & (y_err > 0)
     if not np.any(valid):
         raise ValueError("Histogram contains no valid points for fitting")
@@ -952,11 +983,11 @@ def perform_linear_fit(h_mean_hist):
         "intercept_err": intercept_err,
         "r_squared": fit_res["r_squared"],
         "chi2": fit_res["chi2"],
+        "dof": fit_res["dof"],
         "p_value": fit_res["p_value"],
         "n_points": fit_res["n_points"],
         "fit_func": fit_res["fit_func"],
     }
-
 
 
 def _compute_resolution_from_histogram(
@@ -1010,12 +1041,15 @@ def _compute_resolution_from_histogram(
     response_bin_width = response_bin_edges[1] - response_bin_edges[0]
 
     resolutions = {}
+    resolutions_uncertainty = {}
     resolution_grid = np.full(bin_shape, np.nan)
+    gaussian_fits = {}
 
     log.info("Processing resolution for '%s'...", response_var_name)
 
     # Get the underlying numpy array from the histogram
     h_view = h_response.view()
+    h_variance = h_response.variances()
 
     # Iterate over all bin combinations of bin variables
     for bin_idx in np.ndindex(bin_shape):
@@ -1023,22 +1057,94 @@ def _compute_resolution_from_histogram(
         # for this specific bin combination
         slice_tuple = bin_idx + (slice(None),)
         hist_counts = np.array(h_view[slice_tuple])
+        hist_variance = np.array(h_variance[slice_tuple])
 
+        failed = False
         # Check if we have enough data (at least 5 events)
         if np.sum(hist_counts) > 5:
-            try:
-                resolution = Confidence_numpy(
-                    hist=hist_counts,
-                    bins_mid=response_bin_centers,
-                    bin_width=response_bin_width,
-                    confLevel=0.87,
-                )
-                resolutions[bin_idx] = resolution
-                resolution_grid[bin_idx] = resolution
-            except Exception as e:
-                log.warning("Failed to compute resolution for bin %s: %s", bin_idx, e)
+            if GAUSSIAN_FIT_RESOLUTION:
+                try:
+                    x_fit = response_bin_centers.copy()
+                    y_fit = hist_counts.astype(float)
+                    y_fit_err = np.sqrt(hist_variance)  # Poisson errors
+
+                    if GAUSSIAN_FIT_CUT_TAILS:
+                        # Restrict to the 87% confidence interval around the mean
+                        total = y_fit.sum()
+                        if total > 0:
+                            _, lo_idx, hi_idx = Confidence_numpy(
+                                hist=y_fit,
+                                bins_mid=x_fit,
+                                bin_width=response_bin_width,
+                                confLevel=0.87,
+                                return_bins=True,
+                            )
+                            x_fit = x_fit[lo_idx : hi_idx + 1]
+                            y_fit = y_fit[lo_idx : hi_idx + 1]
+                            y_fit_err = y_fit_err[lo_idx : hi_idx + 1]
+
+                    if len(x_fit) >= 3 and y_fit.sum() > 0:
+                        peak_idx = int(np.argmax(y_fit))
+                        amplitude_p0 = float(y_fit[peak_idx])
+                        mean_p0 = float(x_fit[peak_idx])
+                        sigma_p0 = float(response_bin_width * 3)
+                        fit_res = perform_fit(
+                            x_fit,
+                            y_fit,
+                            y_err=y_fit_err,
+                            fit_function=gaussian_model,
+                            n_params=3,
+                            p0=(amplitude_p0, mean_p0, sigma_p0),
+                            bounds=([0, -np.inf, 0], [np.inf, np.inf, np.inf]),
+                        )
+                        # Exclude fit_func lambda — lambdas are not picklable and
+                        # multiprocessing serializes the return value of this function.
+                        gaussian_fits[bin_idx] = {
+                            k: v for k, v in fit_res.items() if k != "fit_func"
+                        }
+                        resolutions[bin_idx] = fit_res["params"][2]
+                        resolution_grid[bin_idx] = fit_res["params"][2]
+                        resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
+                    else:
+                        log.warning(
+                            "Not enough valid points for Gaussian fit in bin %s: n_points=%d, total_counts=%.1f",
+                            bin_idx,
+                            len(x_fit),
+                            y_fit.sum(),
+                        )
+                        failed = True
+                except Exception as e:
+                    log.error("Failed to fit Gaussian for bin %s: %s", bin_idx, e)
+                    failed = True
+            else:
+                try:
+                    resolution = Confidence_numpy(
+                        hist=hist_counts,
+                        bins_mid=response_bin_centers,
+                        bin_width=response_bin_width,
+                        confLevel=0.87,
+                    )
+                    resolutions[bin_idx] = resolution
+                    resolution_grid[bin_idx] = resolution
+                    resolutions_uncertainty[bin_idx] = (
+                        0  # No uncertainty estimate without fit
+                    )
+                except Exception as e:
+                    log.error("Failed to compute resolution for bin %s: %s", bin_idx, e)
+                    failed = True
         else:
-            log.debug("Skipping bin %s: insufficient data (%d points)", bin_idx, int(np.sum(hist_counts)))
+            log.debug(
+                "Skipping bin %s: insufficient data (%d points)",
+                bin_idx,
+                int(np.sum(hist_counts)),
+            )
+            failed = True
+
+        if failed:
+            log.warning("Setting resolution to NaN for bin %s due to failure", bin_idx)
+            resolutions[bin_idx] = np.nan
+            resolution_grid[bin_idx] = np.nan
+            resolutions_uncertainty[bin_idx] = 0
 
     return (
         response_var_name,
@@ -1048,6 +1154,8 @@ def _compute_resolution_from_histogram(
             "bin_var_names": bin_var_names,
             "resolutions": resolutions,
             "resolution_grid": resolution_grid,
+            "gaussian_fits": gaussian_fits,
+            "resolutions_uncertainty": resolutions_uncertainty,
         },
     )
 
@@ -1084,14 +1192,17 @@ def compute_binned_resolution_from_histograms(h_dict, bin_var_names, response_va
     if len(args_list) == 1 or args.workers == 1:
         # Single worker - no need for Pool overhead
         for arg_tuple in args_list:
-            log.info("Computing resolution for '%s' without multiprocessing...", arg_tuple[0])
+            log.info(
+                "Computing resolution for '%s' without multiprocessing...", arg_tuple[0]
+            )
             var_name, result = _compute_resolution_from_histogram(*arg_tuple)
             response_tot_dict[var_name] = result
     else:
         # Multi-worker processing
         log.info(
             "Computing binned resolution for %d response variables in parallel with %d workers...",
-            len(args_list), args.workers,
+            len(args_list),
+            args.workers,
         )
         with Pool(args.workers) as pool:
             results = pool.starmap(_compute_resolution_from_histogram, args_list)
@@ -1188,6 +1299,7 @@ def plot_variable_slices(
     category="",
     year="",
     var_type="mapping",
+    gaussian_fit_results=None,
 ):
     """
     Plot all 1D histogram slices from ND histograms.
@@ -1210,6 +1322,10 @@ def plot_variable_slices(
         Year string for annotation
     var_type : str
         Type of variables: "mapping" (default) or "response"
+    gaussian_fit_results : dict, optional
+        Maps variable name -> dict of bin_idx -> fit_result (from _compute_resolution_from_histogram).
+        When provided and GAUSSIAN_FIT_RESOLUTION is True, the Gaussian fit curve is overlaid on
+        each histogram slice.
 
     Returns
     -------
@@ -1255,7 +1371,9 @@ def plot_variable_slices(
             # Create output filename
             output_name = f"{output_dir}/histo_{variables_dict[var_name]['name_plot']}_slice_{category}"
 
-            log.debug("Creating plot for unbinned variables: %s...", list(group_dict.keys()))
+            log.debug(
+                "Creating plot for unbinned variables: %s...", list(group_dict.keys())
+            )
             # Plot using HEPPlotter
             plotter = (
                 HEPPlotter()
@@ -1310,13 +1428,16 @@ def plot_variable_slices(
                 }
 
             # check if all histograms in this group have empty data for this bin combination
-            if all(np.sum(h_var["data"].values()) == 0 for h_var in series_dict.values()):
+            if all(
+                np.sum(h_var["data"].values()) == 0 for h_var in series_dict.values()
+            ):
                 log.warning(
                     "All histograms in group %s are empty for bin combination %s, skipping plot.",
-                    bin_var_names, bin_idx,
+                    bin_var_names,
+                    bin_idx,
                 )
                 continue
-            
+
             if variables_dict[var_name].get("rebin_for_plotting", False):
                 series_dict = rebin_histogram(series_dict, 50, (0.01, 0.99))
 
@@ -1337,20 +1458,32 @@ def plot_variable_slices(
                     f"{bin_cfg['name_plot']}_{low_edge_str}to{high_edge_str}"
                 )
 
-            output_name = f"{output_dir}/{' '.join(filename_parts)}"
+            output_name = f"{output_dir}/{'_'.join(filename_parts)}"
 
             # Get the axis label from the first variable in this group
             axis_label = list(group_dict.values())[0].axes[-1].label
 
-            log.debug("Creating plot for bin combination %s with variables: %s...", bin_idx, list(group_dict.keys()))
+            log.debug(
+                "Creating plot for bin combination %s with variables: %s...",
+                bin_idx,
+                list(group_dict.keys()),
+            )
             # Plot using HEPPlotter
             plotter = (
                 HEPPlotter()
-                .set_plot_config(lumitext=f"{year} (13.6 TeV)" if year else "")
+                .set_plot_config(
+                    lumitext=f"{year} (13.6 TeV)" if year else "", figsize=(13, 13)
+                )
                 .set_data(series_dict, plot_type="1d")
                 .set_labels(xlabel=axis_label, ylabel="Events")
                 .set_output(output_name)
-                .set_options(grid=True, legend=True, y_log=True)
+                .set_options(
+                    grid=True,
+                    legend=True,
+                    y_log=True,
+                    split_legend=False,
+                    ylim_bottom_value=1,
+                )
                 .add_annotation(
                     0.05,
                     0.95,
@@ -1360,6 +1493,54 @@ def plot_variable_slices(
                     fontsize=20,
                 )
             )
+
+            # Overlay Gaussian fit curves when fit results are available
+            if gaussian_fit_results is not None and GAUSSIAN_FIT_RESOLUTION:
+                for i, var_name in enumerate(group_dict):
+
+                    var_fits = gaussian_fit_results.get(var_name, {})
+                    fit_res = var_fits.get(bin_idx)
+                    if fit_res is None or np.any(np.isnan(fit_res["params"])):
+                        continue
+                    h_1d = series_dict[var_name]["data"]
+                    axis = h_1d.axes[0]
+                    x_fine = np.linspace(axis.edges[0], axis.edges[-1], 300)
+                    amplitude = fit_res["params"][0]
+                    mu = fit_res["params"][1]
+                    sigma = fit_res["params"][2]
+
+                    y_fine = gaussian_model(x_fine, amplitude, mu, sigma)
+                    fit_label = (
+                        f"$\\sigma={abs(sigma):.3f} \\pm {fit_res['params_err'][2]:.3f}$\n"
+                        f"$\\chi^2/\\mathrm{{ndf}}={fit_res['chi2']:.0f}/{fit_res['dof']}$, "
+                        f"$p={fit_res['p_value']:.2f}$"
+                    )
+                    plotter.add_curve(
+                        x_fine,
+                        y_fine,
+                        color=get_color(var_name),
+                        linestyle="--",
+                        linewidth=2,
+                    )
+                    plotter.add_annotation(
+                        0.7,
+                        0.75 - 0.1 * i,
+                        fit_label,
+                        coord_type="axes",
+                        verticalalignment="top",
+                        fontsize=20,
+                        color=get_color(var_name),
+                    )
+
+                    if GAUSSIAN_FIT_CUT_TAILS:
+                        # plot the lines corresponding to the fit range
+                        plotter.add_line(
+                            "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
+                        )
+                        plotter.add_line(
+                            "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
+                        )
+
             plotters.append(plotter)
 
     # Run all plotters
@@ -1368,7 +1549,11 @@ def plot_variable_slices(
             log.debug("Plotting %s slice...", type_label)
             plotter.run()
     else:
-        log.info("Plotting %s slices in parallel with %d workers...", type_label, args.workers)
+        log.info(
+            "Plotting %s slices in parallel with %d workers...",
+            type_label,
+            args.workers,
+        )
         with Pool(args.workers) as pool:
             pool.map(run_plot, plotters)
 
@@ -1396,7 +1581,7 @@ def profile_means(h_mean_dict, mapping_vars):
     results = {}
 
     for mv, h_mean in h_mean_dict.items():
-        log.debug("Processing mapping variable: %s", mv)
+        log.info("Processing mapping variable: %s", mv)
         cfg = mapping_vars[mv]
         active_bin_vars = cfg["bin_vars"]
 
@@ -1495,7 +1680,14 @@ def plot_mapping_variable_linear_fit(
                 "x": [(x_axis.edges[:-1] + x_axis.edges[1:]) / 2, x_axis.widths / 2],
                 "y": [
                     results[var_name]["mean"].view().value,
-                    np.sqrt(results[var_name]["mean"].view().variance),
+                    np.sqrt(
+                        results[var_name]["mean"].view().variance
+                        / np.where(
+                            results[var_name]["mean"].view().count > 0,
+                            results[var_name]["mean"].view().count,
+                            np.inf,
+                        )
+                    ),
                 ],
             },
             "style": {"fmt": "o"},
@@ -1518,8 +1710,8 @@ def plot_mapping_variable_linear_fit(
         .add_annotation(
             x=0.05,
             y=0.7,
-            s=f"$\\chi^2/ndf$ {fit_results['chi2']/(fit_results['n_points'] - 2):.3f}\n"
-            + f"$p$-value {fit_results['p_value']:.3f}\n",
+            s=f"$\\chi^2/ndf=${fit_results['chi2']:.0f}/{fit_results['dof']}\n"
+            + f"$p$-value={fit_results['p_value']:.3f}\n",
         )
     ).run()
 
@@ -1596,10 +1788,11 @@ def save_txt_resolution(
         (k for k, v in bin_var_configs.items() if v.get("resolution_x_variable")),
         None,
     )
-    
-    
+
     if x_var is None:
-        log.warning("No resolution_x_variable found for %s, skipping txt.", response_var_name)
+        log.warning(
+            "No resolution_x_variable found for %s, skipping txt.", response_var_name
+        )
         return
 
     prefix = f"{response_var_name}_"
@@ -1611,10 +1804,9 @@ def save_txt_resolution(
     # Detect which bin variables are actually in the keys. In "mixed" mode,
     # bin_var_configs contains both regular and neutrino variables, but a given
     # response var only uses a subset of them.
-    first_key_suffix = next(iter(matching.keys()))[len(response_var_name):]
+    first_key_suffix = next(iter(matching.keys()))[len(response_var_name) :]
     vars_in_key = [
-        k for k in bin_var_configs
-        if k != x_var and f"_{k}_" in first_key_suffix
+        k for k in bin_var_configs if k != x_var and f"_{k}_" in first_key_suffix
     ]
     non_mapped = [k for k in vars_in_key if "txt_name" in bin_var_configs[k]]
     mapped = [k for k in vars_in_key if "txt_map_to" in bin_var_configs[k]]
@@ -1638,7 +1830,7 @@ def save_txt_resolution(
 
     rows = []
     for key, fit_res in matching.items():
-        suffix = key[len(response_var_name):]
+        suffix = key[len(response_var_name) :]
         bin_edges_raw = {}
         parse_ok = True
         for y_var in y_vars_hist:
@@ -1683,7 +1875,9 @@ def save_txt_resolution(
             continue
 
         rows.append(
-            row_cols + [n_vals, fit_res["x_min"], fit_res["x_max"]] + list(fit_res["params"])
+            row_cols
+            + [n_vals, fit_res["x_min"], fit_res["x_max"]]
+            + list(fit_res["params"])
         )
 
     if not rows:
@@ -1702,7 +1896,7 @@ def save_txt_resolution(
     filename = f"Run3{year_tag}_V1_NSC_MC_PtResolution_{jet_type}.txt"
     output_path = os.path.join(output_dir, filename)
     os.makedirs(output_dir, exist_ok=True)
-    
+
     with open(output_path, "w") as f:
         f.write(header + "\n")
         for row in rows:
@@ -1726,6 +1920,7 @@ def plot_mapping_variable_histograms(*, category, year, h_dict):
         var_type="mapping",
     )
 
+
 def get_bin_vars_for_mode(mode):
     if mode == "regular":
         return BIN_VARIABLES
@@ -1735,6 +1930,7 @@ def get_bin_vars_for_mode(mode):
         return BIN_VARIABLES_MIXED
     else:
         raise ValueError(f"Unknown mode: {mode}")
+
 
 def process_response_type(
     *,
@@ -1755,6 +1951,20 @@ def process_response_type(
             f"{args.output}/histograms_resolution_{category}{suffix}"
         )
         os.makedirs(response_histogram_dir, exist_ok=True)
+        # Extract Gaussian fit results from the precomputed resolution dicts
+        if GAUSSIAN_FIT_RESOLUTION and response_tot_dict:
+            gaussian_fit_results = {
+                var_name: result.get("gaussian_fits", {})
+                for var_name, result in response_tot_dict.items()
+            }
+            save_fit_results(
+                gaussian_fit_results,
+                f"{args.output}/gaussian_fit_results_{category}{suffix}.json",
+            )
+
+        else:
+            gaussian_fit_results = None
+
         plot_variable_slices(
             h_dict=response_h_dict,
             variables_dict=available_response_vars,
@@ -1763,6 +1973,7 @@ def process_response_type(
             category=category,
             year=year,
             var_type="response",
+            gaussian_fit_results=gaussian_fit_results,
         )
 
     if RESOLUTION_VS_PT_GEN:
@@ -1776,7 +1987,7 @@ def process_response_type(
             mapping_dict=MAPPING_VARIABLES,
             output_dir=output_dir,
             year=year,
-        )   
+        )
 
     if RESOLUTION_VS_PT_RECO:
         # Plot resolution vs mapped x variable (means) + fit + save fit results
@@ -1795,7 +2006,7 @@ def process_response_type(
         )
         save_fit_results(
             fit_results,
-            f"{args.output}/fit_results_{category}{suffix}.json",
+            f"{args.output}/resolution_fit_results_{category}{suffix}.json",
         )
 
         for resp_var_name, resp_var_cfg in available_response_vars.items():
@@ -1827,7 +2038,7 @@ def main():
         results = cat_data["results"]
 
         # Load linear fit results from file if available, otherwise recompute
-        if "linear_fit_maps" in cat_data:
+        if "linear_fit_maps" in cat_data and False:
             linear_fit_maps = cat_data["linear_fit_maps"]
             mapped_bin_edges = cat_data.get("mapped_bin_edges", {})
         else:
@@ -1846,13 +2057,11 @@ def main():
                     var_name=lf_var_name,
                     bin_var_configs=BIN_VARIABLES_MIXED,
                 )
-                mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
-                    BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"]
-                )
+                mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name][
+                    "fit_func"
+                ](BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"])
 
-        plot_mapping_variable_histograms(
-            category=category, year=year, h_dict=h_dict
-        )
+        plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
 
         # Process response variables from loaded data
         for mode in ["regular", "neutrino", "mixed"]:
@@ -1906,11 +2115,12 @@ def main():
     log.info("Total datasets found: %s", total_datasets_list)
     log.info("Year: %s", year)
 
-
     for category, col_var in cat_col.items():
+        log.info("Processing category '%s': flattening data...", category)
         col_var_flatten = flatten_data(col_var)
 
         # Process plot variables (contains both regular and neutrino versions)
+        log.info("Building mapping variable histograms for category '%s'...", category)
         h_dict, h_mean_dict = create_ND_histo(
             variables_dict=MAPPING_VARIABLES,
             data=col_var_flatten,
@@ -1934,7 +2144,7 @@ def main():
                 output_dir=args.output,
                 var_name=lf_var_name,
                 bin_var_configs=BIN_VARIABLES_MIXED,
-            )   
+            )
             mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
                 BIN_VARIABLES[lf_var_cfg["bin_vars"][0]]["bin_edges"]
             )
@@ -1978,6 +2188,11 @@ def main():
                 continue
 
             # Create ND histograms for response variables
+            log.info(
+                "Building response histograms for mode='%s', category='%s'...",
+                mode,
+                category,
+            )
             response_h_dict, response_h_mean_dict = create_ND_histo(
                 variables_dict=available_response_vars,
                 data=col_var_flatten,
@@ -1999,7 +2214,7 @@ def main():
                 "available_response_vars": available_response_vars,
                 "bin_vars": bin_vars,
             }
-            
+
         # Save all plotted data to coffea file
         output_coffea = os.path.join(args.output, f"plotted_data_{category}.coffea")
         save_plotted_data(
@@ -2010,11 +2225,11 @@ def main():
                 "histogram_data": category_data,
             },
         )
-        
-        # Plot 
+
+        # Plot
         plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
         for response_type, resp_data in category_data["response_data"].items():
-            
+
             process_response_type(
                 category=category,
                 year=year,
@@ -2026,9 +2241,9 @@ def main():
                 results_for_mapping=results,
                 linear_fit_maps=linear_fit_maps,
             )
-    
+
     log.info("All done!")
-            
+
 
 if __name__ == "__main__":
 
