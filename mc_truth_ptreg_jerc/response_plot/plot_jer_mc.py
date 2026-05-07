@@ -66,20 +66,20 @@ def _load_config(config_path):
 
     # Apply test mode overrides
     if cfg.get("test", False):
-        test_pu = np.array(cfg["test_pu_bins"])
-        test_eta = np.array(cfg["test_jet_eta_bins"])
-        test_pt = np.array(cfg["test_jet_pt_bins"])
+        test_pu = np.array(cfg["test_pu_bins"]) if "test_pu_bins" in cfg else None
+        test_eta = np.array(cfg["test_jet_eta_bins"]) if "test_jet_eta_bins" in cfg else None
+        test_pt = np.array(cfg["test_jet_pt_bins"]) if "test_jet_pt_bins" in cfg else None
         for bv_dict_key in ("bin_variables", "bin_variables_neutrino", "bin_variables_mixed"):
             if bv_dict_key not in cfg:
                 continue
             bv = cfg[bv_dict_key]
-            if "Pileup_nPU" in bv:
+            if test_pu is not None and "Pileup_nPU" in bv:
                 bv["Pileup_nPU"]["bin_edges"] = test_pu
             for eta_key in ("MatchedJets_eta", "MatchedJetsNeutrino_eta"):
-                if eta_key in bv:
+                if eta_key in bv and test_eta is not None:
                     bv[eta_key]["bin_edges"] = test_eta
             for pt_key in ("MatchedJets_pt", "MatchedJetsNeutrino_pt"):
-                if pt_key in bv:
+                if pt_key in bv and test_pt is not None:
                     bv[pt_key]["bin_edges"] = test_pt
 
     # Build bin_variables_mixed as the union of bin_variables and bin_variables_neutrino
@@ -1626,7 +1626,7 @@ def plot_variable_slices(
                 continue
 
             if variables_dict[var_name].get("rebin_for_plotting", False):
-                series_dict = rebin_histogram(series_dict, 50, (0.01, 0.99))
+                series_dict = rebin_histogram(series_dict, 60, (0.01, 0.99))
 
             # Create output filename with bin ranges
             filename_parts = [
@@ -1843,7 +1843,11 @@ def plot_mapping_variable_linear_fit(
     x_name = x_cfg["name_plot"]
     y_label = var_cfg["label"]
     y_name = var_cfg["name_plot"]
-    y_mean_label = f"$< {y_label.strip('$')} >$"
+    
+    _y_parts = y_label.split("$")
+    _y_math = _y_parts[1] if len(_y_parts) >= 3 else y_label.strip("$")
+    _y_units = _y_parts[2].strip() if len(_y_parts) >= 3 and _y_parts[2].strip() else ""
+    y_mean_label = f"$< {_y_math} >$" + (f" {_y_units}" if _y_units else "")
 
     # 2D histogram of mapping variable vs its bin variable
     var_2d = compute_projection(h_dict, mapping_vars, var_name)
