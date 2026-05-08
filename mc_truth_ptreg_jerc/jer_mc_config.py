@@ -26,11 +26,11 @@ localdir = os.path.dirname(os.path.abspath(__file__))
 default_parameters = defaults.get_default_parameters()
 defaults.register_configuration_dir("config_dir", localdir + "/params")
 
-DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK = False
-
+DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK = True
 year = os.environ.get("YEAR", "2022_preEE")
 print("YEAR", year)
 add_str = ""
+
 output_chunks_name = f"root://t3dcachedb03.psi.ch:1094//pnfs/psi.ch/cms/trivcat/store/user/mmalucch/out_jer_mc_ptreg/out_jer_closure_pnet_upart_{year}{add_str}/parquet_files"
 if DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK:
     print("Output chunks path:", output_chunks_name)
@@ -171,25 +171,7 @@ cfg = Configurator(
             "bysample": {},
         }
     },
-    variables={
-        "rho_pu": HistConf(
-            [
-                Axis(
-                    coll="Pileup",
-                    field="nPU",
-                    bins=PU_bins,
-                    label="Pileup_nPU",
-                ),
-                Axis(
-                    coll="Rho",
-                    field="fixedGridRhoFastjetAll",
-                    bins=rho_bins,
-                    label="Rho_fixedGridRhoFastjetAll",
-                ),
-            ],
-            storage="mean",
-        )
-    },
+    variables={},
     columns={
         "common": {
             "inclusive": (
