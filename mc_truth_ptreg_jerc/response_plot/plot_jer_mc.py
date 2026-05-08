@@ -1173,7 +1173,16 @@ def merge_nd_histogram_bins(h, bin_var_configs_new):
 
     storage = hist.storage.Mean() if is_mean else hist.storage.Double()
     h_new = hist.Hist(*new_axes, storage=storage)
-    h_new.view()[:] = arr
+    if is_mean:
+        # Assign field-by-field to handle dtype mismatches between coffea files
+        # saved with different boost_histogram versions (e.g. 2-field vs 3-field
+        # Mean storage). Fields absent in arr are left at zero.
+        view = h_new.view()
+        for field in arr.dtype.names:
+            if field in view.dtype.names:
+                view[field] = arr[field]
+    else:
+        h_new.view()[:] = arr
     return h_new, True
 
 
@@ -1247,6 +1256,7 @@ def _compute_resolution_from_histogram(
         hist_variance = np.array(h_variance[slice_tuple])
 
         failed = False
+        rebin_info_for_idx = None
         # Check if we have enough data (at least 5 events)
         if np.sum(hist_counts) > 5:
             if cfg["gaussian_fit_resolution"]:
@@ -1254,6 +1264,24 @@ def _compute_resolution_from_histogram(
                     x_fit = response_bin_centers.copy()
                     y_fit = hist_counts.astype(float)
                     y_fit_err = np.sqrt(hist_variance)  # Poisson errors
+
+                    if response_vars[response_var_name].get("rebin_for_plotting", False):
+                        # Build a temporary 1D histogram so rebin_histogram can operate on it
+                        h_1d_slice = hist.Hist(
+                            hist.axis.Variable(
+                                response_bin_edges,
+                                name=response_axis.name,
+                                label=response_axis.label,
+                                flow=False,
+                            )
+                        )
+                        h_1d_slice.view()[:] = hist_counts
+                        h_1d_rebinned, rebin_info = rebin_histogram(h_1d_slice)
+                        if rebin_info is not None:
+                            x_fit = h_1d_rebinned.axes[0].centers
+                            y_fit = h_1d_rebinned.values().astype(float)
+                            y_fit_err = np.sqrt(h_1d_rebinned.variances())
+                            rebin_info_for_idx = rebin_info
 
                     if cfg["gaussian_fit_cut_tails"]:
                         # Restrict to the 87% confidence interval around the mean
@@ -1289,6 +1317,8 @@ def _compute_resolution_from_histogram(
                         gaussian_fits[bin_idx] = {
                             k: v for k, v in fit_res.items() if k != "fit_func"
                         }
+                        if rebin_info_for_idx is not None:
+                            gaussian_fits[bin_idx]["fit_rebin_info"] = rebin_info_for_idx
                         resolutions[bin_idx] = fit_res["params"][2]
                         resolution_grid[bin_idx] = fit_res["params"][2]
                         resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
@@ -1399,63 +1429,49 @@ def compute_binned_resolution_from_histograms(h_dict, bin_var_names, response_va
     return response_tot_dict
 
 
-def rebin_histogram(series_dict, target_bins=50, quantile_range=(0.001, 0.999)):
+def rebin_histogram(h, quantile_range=(0.01, 0.99), min_events_per_bin=20):
     """
-    Rebin all 1D histograms in a dictionary to the same range and fewer bins.
-    All histograms will have the same range and binning for proper overlay comparison.
+    Rebin a 1D histogram automatically based on statistics.
+
+    The target number of bins is derived from the total event count so that each
+    bin has roughly ``min_events_per_bin`` entries, keeping statistical
+    fluctuations small.
 
     Parameters
     ----------
-    series_dict : dict
-        Dictionary mapping variable names to dicts with "data" (hist.Hist) and "style" keys
-    target_bins : int
-        Approximate number of bins desired after rebinning.
+    h : hist.Hist
+        1D histogram to rebin.
     quantile_range : tuple of float
-        Quantile range to trim the axis.
+        Fraction of the distribution to keep (tails are trimmed).
+    min_events_per_bin : int
+        Desired minimum events per bin; drives the auto target_bins computation.
 
     Returns
     -------
-    series_dict : dict
-        Dictionary with all histograms rebinned to the same range, preserving style information
+    h_rebinned : hist.Hist
+        Rebinned histogram.
+    rebin_info : tuple or None
+        ``(lo_edge, hi_edge, rebin_factor)`` describing what was applied, or
+        ``None`` if the histogram was empty and no rebinning was done.
     """
-    # First, compute combined counts across all histograms to find common range
-    all_counts = None
-    first_h = None
+    counts = h.values()
+    total = counts.sum()
 
-    for var_name, var_data in series_dict.items():
-        h = var_data["data"]
-        if h.values().sum() == 0:
-            continue
+    if total == 0:
+        log.warning("Histogram is empty, returning original without rebinning")
+        return h, None
 
-        if first_h is None:
-            first_h = h
+    target_bins = max(5, int(total / max(1, min_events_per_bin)))
 
-        if all_counts is None:
-            all_counts = np.array(h.values())
-        else:
-            # Add counts from this histogram
-            if len(all_counts) == len(h.values()):
-                all_counts = all_counts + np.array(h.values())
-
-    # Check if all histograms are empty
-    if all_counts is None or all_counts.sum() == 0:
-        log.warning("All histograms are empty, returning original dict")
-        return series_dict
-
-    # Get axis from first histogram
-    axis = first_h.axes[0]
+    axis = h.axes[0]
     centers = axis.centers
 
-    # Compute common range using combined counts
-    total = all_counts.sum()
-    cdf = np.cumsum(all_counts) / total
+    cdf = np.cumsum(counts) / total
     lo_idx = max(0, np.searchsorted(cdf, quantile_range[0]) - 1)
     hi_idx = min(len(centers), np.searchsorted(cdf, quantile_range[1]) + 1)
     n_bins_in_range = hi_idx - lo_idx
 
-    # Compute rebin factor for the common range.
-    # Use floor division so the output has *at least* target_bins bins.
-    # round() could overshoot (e.g. round(75/50)=2 → 38 bins instead of 50).
+    # Floor division so the output has *at least* target_bins bins.
     rebin_factor = max(1, n_bins_in_range // target_bins)
     remainder = n_bins_in_range % rebin_factor
     if remainder != 0:
@@ -1464,18 +1480,8 @@ def rebin_histogram(series_dict, target_bins=50, quantile_range=(0.001, 0.999)):
     lo_edge = axis.edges[lo_idx]
     hi_edge = axis.edges[hi_idx]
 
-    # Apply the same rebinning to all histograms
-    rebinned_dict = {}
-    for var_name, var_data in series_dict.items():
-        h = var_data["data"]
-        h_rebinned = h[lo_edge * 1j : hi_edge * 1j : rebin_factor * 1j]
-
-        rebinned_dict[var_name] = {
-            "data": h_rebinned,
-            "style": var_data["style"],
-        }
-
-    return rebinned_dict
+    h_rebinned = h[lo_edge * 1j : hi_edge * 1j : rebin_factor * 1j]
+    return h_rebinned, (lo_edge, hi_edge, rebin_factor)
 
 
 def plot_variable_slices(
@@ -1626,7 +1632,21 @@ def plot_variable_slices(
                 continue
 
             if variables_dict[var_name].get("rebin_for_plotting", False):
-                series_dict = rebin_histogram(series_dict, 60, (0.01, 0.99))
+                rebinned_series_dict = {}
+                for vn, var_data in series_dict.items():
+                    var_fit = (
+                        (gaussian_fit_results or {}).get(vn, {}).get(bin_idx)
+                        if gaussian_fit_results is not None
+                        else None
+                    )
+                    rebin_info = var_fit.get("fit_rebin_info") if var_fit is not None else None
+                    if rebin_info is not None:
+                        lo_edge, hi_edge, rf = rebin_info
+                        h_rb = var_data["data"][lo_edge * 1j : hi_edge * 1j : rf * 1j]
+                    else:
+                        h_rb, _ = rebin_histogram(var_data["data"])
+                    rebinned_series_dict[vn] = {"data": h_rb, "style": var_data["style"]}
+                series_dict = rebinned_series_dict
 
             # Create output filename with bin ranges
             filename_parts = [
