@@ -6,6 +6,9 @@ This repository is structured as an analysis configurations for [PocketCoffea](h
 
 ## Workflow
 
+In order to reduce the 
+
+
 ### Running the analysis
 
 To run the analysis on Tier3, use the following command:
@@ -18,4 +21,22 @@ To produce the response plots, use:
 
 ```bash
 submit_job_10min_25gb_8cpu python plot_MET.py -i <input-dir> -w 8 --histo --novars -o <output-plot-dir>
+```
+
+### Lxplus
+
+To run on lxplus, first activate the singularity and the venv. After you can pocket coffea using the `lxplus` executors `condor@lxplus` or `dask@lxplus`:
+
+```bash
+# activate singularity
+pocket_coffea
+
+# activate venv
+cd PocketCoffea
+source pocket_coffea_env/bin/activate
+export PYTHONPATH=`pwd`
+
+# run pocket coffea
+cd ../PtRegressionJERC/met_ptreg_performance 
+pocket-coffea run --cfg MET_studies_config_lxplus.py --custom-run-options ./params/lxplus_run_options_big.yaml -o <output-dir> -e condor@lxplus
 ```

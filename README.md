@@ -1,12 +1,12 @@
 # PtRegressionJERC
 
-Repository with PocketCoffea configurations to compute the MC Truth corrections, JER and MET-Type1 correction for regressed pT jets.
+Repository with [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) configurations to compute the MC Truth corrections, JER and MET-Type1 correction for regressed pT jets.
 
 ## Setup
 
 ### lxplus installation
 
-To setup a local installation on `lxplus`:
+To setup a local installation on `lxplus`,:
 
 ```bash
 # Clone the fork and checkout the desired branch
@@ -32,7 +32,7 @@ pip install -e .[dev]
 cd ../ 
 git clone git@github.com:matteomalucchi/PtRegressionJERC.git
 cd PtRegressionJERC
-pip install -r requirements.txt
+pip install -e ./
 
 # Install the HEPPlotter class
 pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
@@ -40,7 +40,7 @@ pip install --upgrade  --no-cache-dir git+https://github.com/matteomalucchi/Anal
 
 After that you should set an alias to activate the PocketCoffea environment because this is called automatically by the `exec.py` script.
 
-On `lxplus`, it can be done by adding the following line to your `~/.bashrc`:
+On `lxplus`, it can be done by adding the following line to your `.bashrc`:
 
 ```bash
 alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
@@ -48,6 +48,9 @@ alias pocket_coffea='apptainer shell --bind /afs -B /cvmfs/cms.cern.ch \
          -B ${XDG_RUNTIME_DIR}  --env KRB5CCNAME="FILE:${XDG_RUNTIME_DIR}/krb5cc"  \
          /cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-el9-stable'
 ```
+
+> [!IMPORTANT]
+> For further instructions about the installation of PocketCoffea, you can checkout the [Installation section](https://pocketcoffea.readthedocs.io/en/latest/installation.html#using-apptainer-for-local-development) in the documentation.
 
 ### Other systems installation
 
