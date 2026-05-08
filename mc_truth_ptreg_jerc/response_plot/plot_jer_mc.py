@@ -620,6 +620,13 @@ def plot_resolution_vs_x_variable(
                     if xlabel is None:
                         xlabel = f"{bin_var_configs[x_var_ref]['label']}"
 
+                if all(np.isnan(v) for v in resolutions_for_plot):
+                    log.warning(
+                        "All resolutions are NaN for %s, skipping.",
+                        response_var,
+                    )
+                    continue
+
                 graph_data[response_var] = {
                     "data": {
                         "x": [x_values, np.zeros_like(x_values)],
@@ -1553,6 +1560,9 @@ def plot_variable_slices(
             series_dict = {}
             for var_name, h_var in group_dict.items():
                 var_cfg = variables_dict[var_name]
+                if np.sum(h_var.values()) == 0:
+                    log.warning("Histogram %s is empty, skipping.", var_name)
+                    continue
                 series_dict[var_name] = {
                     "data": h_var,
                     "style": {
@@ -1560,6 +1570,12 @@ def plot_variable_slices(
                         "legend_name": var_cfg.get("legend_name", var_name),
                     },
                 }
+
+            if not series_dict:
+                log.warning(
+                    "All histograms in group are empty for unbinned case, skipping plot."
+                )
+                continue
 
             # Create output filename
             output_name = f"{output_dir}/histo_{variables_dict[var_name]['name_plot']}_slice_{category}"
@@ -1611,6 +1627,14 @@ def plot_variable_slices(
                 slice_tuple = bin_idx + (slice(None),)
                 h_1d = h_var[slice_tuple]
 
+                if np.sum(h_1d.values()) == 0:
+                    log.warning(
+                        "Histogram %s is empty for bin combination %s, skipping.",
+                        var_name,
+                        bin_idx,
+                    )
+                    continue
+
                 series_dict[var_name] = {
                     "data": h_1d,
                     "style": {
@@ -1620,10 +1644,7 @@ def plot_variable_slices(
                     },
                 }
 
-            # check if all histograms in this group have empty data for this bin combination
-            if all(
-                np.sum(h_var["data"].values()) == 0 for h_var in series_dict.values()
-            ):
+            if not series_dict:
                 log.warning(
                     "All histograms in group %s are empty for bin combination %s, skipping plot.",
                     bin_var_names,
@@ -1871,22 +1892,27 @@ def plot_mapping_variable_linear_fit(
 
     # 2D histogram of mapping variable vs its bin variable
     var_2d = compute_projection(h_dict, mapping_vars, var_name)
-    (
-        HEPPlotter()
-        .set_plot_config(lumitext=f"{year} (13.6 TeV)")
-        .set_options(legend=False, cbar_log=False)
-        .set_output(f"{output_dir}/{y_name}_vs_{x_name}_2d_{category}")
-        .set_data({"data": {"data": var_2d, "style": {}}}, plot_type="2d")
-        .set_labels(x_label, y_label)
-    ).run()
+    if np.sum(var_2d.values()) == 0:
+        log.warning("2D histogram for %s is empty, skipping plot.", var_name)
+    else:
+        (
+            HEPPlotter()
+            .set_plot_config(lumitext=f"{year} (13.6 TeV)")
+            .set_options(legend=False, cbar_log=False)
+            .set_output(f"{output_dir}/{y_name}_vs_{x_name}_2d_{category}")
+            .set_data({"data": {"data": var_2d, "style": {}}}, plot_type="2d")
+            .set_labels(x_label, y_label)
+        ).run()
 
     fit_results = perform_linear_fit(results[var_name]["mean"])
     log.debug("Linear fit results: %s", fit_results)
 
     x_axis = results[var_name]["mean"].axes[0]
     x_lin = np.linspace(x_axis.edges[0], x_axis.edges[-1], 100)
-    mean_dict = {
-        "data": {
+    mean_dict = {}
+    mean_counts = results[var_name]["mean"].view().count
+    if not np.all(mean_counts == 0):
+        mean_dict["data"] = {
             "data": {
                 "x": [(x_axis.edges[:-1] + x_axis.edges[1:]) / 2, x_axis.widths / 2],
                 "y": [
@@ -1894,37 +1920,42 @@ def plot_mapping_variable_linear_fit(
                     np.sqrt(
                         results[var_name]["mean"].view().variance
                         / np.where(
-                            results[var_name]["mean"].view().count > 0,
-                            results[var_name]["mean"].view().count,
+                            mean_counts > 0,
+                            mean_counts,
                             np.inf,
                         )
                     ),
                 ],
             },
             "style": {"fmt": "o"},
-        },
-        "linear fit": {
+        }
+        mean_dict["linear fit"] = {
             "data": {
                 "x": [x_lin, np.zeros(100)],
                 "y": [fit_results["fit_func"](x_lin), np.zeros(100)],
             },
             "style": {"linestyle": "-", "fmt": ""},
-        },
-    }
-    (
-        HEPPlotter()
-        .set_plot_config(lumitext=f"{year} (13.6 TeV)")
-        .set_options(set_ylim=False)
-        .set_output(f"{output_dir}/{y_name}_vs_{x_name}_fit_{category}")
-        .set_data(mean_dict, plot_type="graph")
-        .set_labels(x_label, y_mean_label)
-        .add_annotation(
-            x=0.05,
-            y=0.7,
-            s=f"$\\chi^2/ndf=${fit_results['chi2']:.0f}/{fit_results['dof']}\n"
-            + f"$p$-value={fit_results['p_value']:.3f}\n",
+        }
+
+    if not mean_dict:
+        log.warning(
+            "Mean histogram for %s has no data, skipping linear fit plot.", var_name
         )
-    ).run()
+    else:
+        (
+            HEPPlotter()
+            .set_plot_config(lumitext=f"{year} (13.6 TeV)")
+            .set_options(set_ylim=False)
+            .set_output(f"{output_dir}/{y_name}_vs_{x_name}_fit_{category}")
+            .set_data(mean_dict, plot_type="graph")
+            .set_labels(x_label, y_mean_label)
+            .add_annotation(
+                x=0.05,
+                y=0.7,
+                s=f"$\\chi^2/ndf=${fit_results['chi2']:.0f}/{fit_results['dof']}\n"
+                + f"$p$-value={fit_results['p_value']:.3f}\n",
+            )
+        ).run()
 
     return fit_results
 
