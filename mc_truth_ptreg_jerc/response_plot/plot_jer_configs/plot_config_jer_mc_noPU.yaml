@@ -98,7 +98,7 @@ mapping_variables:
     N_bins: 1000
     bin_limits: [0, 6000]
     bin_vars: [MatchedJets_eta, MatchedJets_pt]
-    legend_name: PNetReg
+    legend_name: PNet
     rebin_for_plotting: true
   MatchedJets_JetPtUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
@@ -106,7 +106,7 @@ mapping_variables:
     N_bins: 1000
     bin_limits: [0, 6000]
     bin_vars: [MatchedJets_eta, MatchedJets_pt]
-    legend_name: UparTReg
+    legend_name: UParT
     rebin_for_plotting: true
   MatchedJetsNeutrino_JetPtJEC:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
@@ -130,7 +130,7 @@ mapping_variables:
     N_bins: 1000
     bin_limits: [0, 6000]
     bin_vars: [MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: PNetRegNeutrino
+    legend_name: PNet incl. neutrinos
     rebin_for_plotting: true
   MatchedJetsNeutrino_JetPtUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
@@ -138,7 +138,7 @@ mapping_variables:
     N_bins: 1000
     bin_limits: [0, 6000]
     bin_vars: [MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: UparTRegNeutrino
+    legend_name: UParT incl. neutrinos
     rebin_for_plotting: true
 
 # ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ response_variables:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJets_eta, MatchedJets_pt]
-    legend_name: PNetReg
+    legend_name: PNet
     map_x_variable: MatchedJets_JetPtPNetReg
     is_reference: false
     txt_jet_name: AK4PFPNet
@@ -184,7 +184,7 @@ response_variables:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJets_eta, MatchedJets_pt]
-    legend_name: UParTReg
+    legend_name: UParT
     map_x_variable: MatchedJets_JetPtUparTReg
     is_reference: false
     txt_jet_name: AK4PFUParT
@@ -219,7 +219,7 @@ response_variables_neutrino:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: PNetRegNeutrino
+    legend_name: PNet incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
@@ -230,7 +230,7 @@ response_variables_neutrino:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: UParTRegNeutrino
+    legend_name: UParT incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
@@ -255,7 +255,7 @@ response_variables_mixed:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJets_eta, MatchedJets_pt]
-    legend_name: PNetReg
+    legend_name: PNet
     map_x_variable: MatchedJets_JetPtPNetReg
     is_reference: false
     txt_jet_name: AK4PFPNet
@@ -266,7 +266,7 @@ response_variables_mixed:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJets_eta, MatchedJets_pt]
-    legend_name: UParTReg
+    legend_name: UParT
     map_x_variable: MatchedJets_JetPtUparTReg
     is_reference: false
     txt_jet_name: AK4PFUParT
@@ -277,7 +277,7 @@ response_variables_mixed:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: PNetRegNeutrino
+    legend_name: PNet incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
@@ -288,7 +288,7 @@ response_variables_mixed:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: UParTRegNeutrino
+    legend_name: UParT incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
