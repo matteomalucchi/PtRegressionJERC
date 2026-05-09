@@ -2,7 +2,7 @@
 
 Repository to compute MC Truth corrections and JER MC for regressed pT jets.
 
-This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) and was originally hosted [here](https://github.com/matteomalucchi/AnalysisConfigs/tree/legacy-jme-config/configs/jme).
+This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) and was originally hosted [at this link](https://github.com/matteomalucchi/AnalysisConfigs/tree/legacy-jme-config/configs/jme).
 
 ## Workflow
 

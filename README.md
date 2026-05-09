@@ -29,6 +29,9 @@ source pocket_coffea_env/bin/activate
 # Install in EDITABLE mode
 pip install -e .[dev]
 
+# Set the PYTHONPATH to make sure the editable PocketCoffea installation is picked up
+export PYTHONPATH=`pwd`
+
 cd ../ 
 git clone git@github.com:matteomalucchi/PtRegressionJERC.git
 cd PtRegressionJERC
@@ -109,4 +112,41 @@ To activate the environment, you can use the alias defined above:
 
 ```bash
 pocket_coffea
+```
+
+## Troubleshooting (lxplus)
+
+### Condor jobs fail with `ModuleNotFoundError: No module named 'utils_configs'`
+
+The `configs` package (from [AnalysisConfigs](https://github.com/matteomalucchi/AnalysisConfigs)) is installed by pip into `~/.local/lib/python3.11/site-packages/` instead of the venv, even when the venv is active. This is a known pip behaviour with `--system-site-packages` venvs. Interactive sessions work because Python picks up user site-packages, but condor workers run with `PYTHONNOUSERSITE=1` and cannot find the package.
+
+To verify where `utils_configs` is installed:
+
+```bash
+python -c "import utils_configs; print(utils_configs.__file__)"
+# Should print: .../pocket_coffea_<env>/lib/python3.11/site-packages/utils_configs/__init__.py
+# If it prints ~/.local/..., follow the fix below
+```
+
+Fix: remove the user-local install and reinstall into the venv (inside the singularity with the venv active):
+
+```bash
+rm -rf ~/.local/lib/python3.11/site-packages/utils_configs
+rm -rf ~/.local/lib/python3.11/site-packages/configs-*.dist-info
+pip install --no-cache-dir git+https://github.com/matteomalucchi/AnalysisConfigs.git
+```
+
+### Changes to PocketCoffea source are not picked up
+
+The singularity image ships its own `pocket_coffea` at `/usr/local/lib/python3.11/site-packages/`, which can take priority over the editable install in the venv. Fix: add a `.pth` file to the venv's site-packages that puts the AFS source directory on `sys.path` before the system install (run once, inside the singularity with the venv active, from the `PocketCoffea` directory):
+
+```bash
+echo "$(pwd)" >> $(python3 -c "import site; print(site.getsitepackages()[0])")/pocket_coffea_source.pth
+```
+
+Verify the fix:
+
+```bash
+python -c "import pocket_coffea; print(pocket_coffea.__file__)"
+# Should print: /afs/.../PocketCoffea/pocket_coffea/__init__.py
 ```
