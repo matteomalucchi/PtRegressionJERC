@@ -5,8 +5,8 @@ import os
 import sys
 import shlex
 
-from mc_truth_ptreg_jerc.args_exec import args
-from mc_truth_ptreg_jerc.params.binning import eta_bins, eta_bins_upart, eta_sign_dict, eta_sign_dict_upart
+from args_exec import args
+from params.binning import eta_bins, eta_bins_upart, eta_sign_dict, eta_sign_dict_upart
 
 # Define a list of eta bins
 if not args.upart:
