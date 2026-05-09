@@ -9,6 +9,6 @@ local-virtualenv: true
 # jobs-dir: "test"
 
 
-custom-setup-commands:
-  - source /afs/cern.ch/user/m/mmalucch/PocketCoffea/pocket_coffea_met_env/bin/activate
-  - export PYTHONPATH=/afs/cern.ch/user/m/mmalucch/PocketCoffea:$PYTHONPATH
+# custom-setup-commands:
+#   - source /afs/cern.ch/user/m/mmalucch/PocketCoffea/pocket_coffea_met_env/bin/activate
+#   - export PYTHONPATH=/afs/cern.ch/user/m/mmalucch/PocketCoffea:$PYTHONPATH
