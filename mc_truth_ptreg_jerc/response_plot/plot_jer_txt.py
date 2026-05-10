@@ -25,6 +25,7 @@ import os
 import sys
 import re
 import argparse
+import logging
 
 import matplotlib
 matplotlib.use("Agg")
@@ -37,6 +38,8 @@ import numpy as np
 import mplhep as hep
 from utils_configs.plot.HEPPlotter import HEPPlotter
 
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Style constants
@@ -112,7 +115,18 @@ def _parse_jer_txt(path):
         x_min = float(toks[idx]); idx += 1
         x_max = float(toks[idx]); idx += 1
         params = [float(v) for v in toks[idx: idx + n_vals - 2]]
-        if any(not np.isfinite(p) for p in params):
+        nan_param_indices = [i for i, p in enumerate(params) if not np.isfinite(p)]
+        if nan_param_indices:
+            log.error(
+                "Non-finite (NaN/Inf) fit parameter(s) at index %s in line: %r "
+                "(bin_edges=%s, x_min=%s, x_max=%s, params=%s) — skipping row",
+                nan_param_indices,
+                line,
+                bin_edges,
+                x_min,
+                x_max,
+                params,
+            )
             continue
         rows.append(dict(bin_edges=bin_edges, x_min=x_min, x_max=x_max, params=params))
 
