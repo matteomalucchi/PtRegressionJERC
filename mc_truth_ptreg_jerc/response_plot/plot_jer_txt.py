@@ -13,9 +13,12 @@ Output:
 
 Usage
 -----
+    # single file
     python plot_jer_txt.py Run3Summer22_V1_NSC_MC_PtResolution_AK4PFPNet.txt \\
-        --pt-values 80 150 300 600 \\
-        -o jer_vs_eta
+        --pt-values 80 150 300 600 -o plots/
+
+    # all txt files in a directory (shell expands the glob)
+    python plot_jer_txt.py /path/to/txt/*.txt --pt-values 80 150 300 600 -o plots/
 """
 
 import os
@@ -52,6 +55,16 @@ _BASE_COLORS = [cycle["color"] for cycle in color_dict]
 #     "#e377c2",  # pink
 # ]
 _MARKERS = ["o", "s", "^", "D", "v", "P", "*", "X", "<", ">"]
+
+_YEAR_MAP = {
+    "2022_preEE":    "Summer22",
+    "2022_postEE":   "Summer22EE",
+    "2023_preBPix":  "Summer23",
+    "2023_postBPix": "Summer23BPix",
+    "2024":          "Winter24",
+}
+
+PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +151,65 @@ def _rgba(base, alpha):
 
 
 # ---------------------------------------------------------------------------
+# Label helpers
+# ---------------------------------------------------------------------------
+
+def _latex_label(var_name):
+    """Map a JERC variable name to a LaTeX-formatted axis/legend label."""
+    _map = {
+        "jeteta": r"Jet $\eta$",
+        "eta":    r"$\eta$",
+        "rho":    r"$\rho$",
+        "jetpt":  r"Jet $p_\mathrm{T}$",
+        "pt":     r"$p_\mathrm{T}$",
+    }
+    return _map.get(var_name.lower(), var_name)
+
+
+def _extract_year(path, year_map=None):
+    """Return a year/era label from the txt file name.
+
+    If *year_map* is provided (dict mapping display-label → season-token,
+    e.g. {"2022_preEE": "Summer22"}), the filename is searched for each
+    season-token and the matching display-label is returned.
+    Falls back to a plain 4-digit year regex when no map is given or matches.
+    """
+    basename = os.path.basename(path)
+    if year_map:
+        # Sort by token length descending so "Summer22EE" is tried before "Summer22"
+        for label, token in sorted(year_map.items(), key=lambda kv: len(str(kv[1])), reverse=True):
+            if str(token) in basename:
+                return label
+    m = re.search(r"(20\d{2})", basename)
+    if m:
+        return m.group(1)
+    m = re.search(r"(?:Summer|Winter|Fall|Autumn|Spring)(\d{2})", basename, re.IGNORECASE)
+    if m:
+        return f"20{m.group(1)}"
+    return None
+
+
+def _extract_jet_algo(path):
+    """Return the jet algorithm name (e.g. AK4PFPuppi) from the txt file name, or None."""
+    basename = os.path.splitext(os.path.basename(path))[0]
+    m = re.search(r"(AK\d+\w+)", basename, re.IGNORECASE)
+    return m.group(1) if m else None
+
+
+def _format_jet_algo(algo):
+    """Format a raw jet algorithm string for display.
+
+    Strips the 'AK4PF' prefix, then applies readable substitutions:
+      'Plus'     -> ' incl. '
+      'Neutrino' -> 'neutrino'
+    """
+    s = re.sub(r"^AK\d+PF", "", algo)
+    s = s.replace("Plus", " incl. ")
+    s = s.replace("Neutrino", "neutrino")
+    return s
+
+
+# ---------------------------------------------------------------------------
 # Main plotting function
 # ---------------------------------------------------------------------------
 
@@ -161,6 +233,10 @@ def plot_jer_vs_eta(
     bin_vars = header["bin_vars"]
     x_var = header["x_var"]
     formula = header["formula"]
+
+    year = _extract_year(txt_path, year_map=_YEAR_MAP)
+    jet_algo = _extract_jet_algo(txt_path)
+    lumi_text = f"{year} (13.6 TeV)" if year else "(13.6 TeV)"
 
     # identify eta and rho variables from bin_vars
     eta_var = next((v for v in bin_vars if "eta" in v.lower()), bin_vars[0])
@@ -247,25 +323,38 @@ def plot_jer_vs_eta(
     plotter = (
         HEPPlotter("CMS")
         .set_plot_config(
+            figsize=(20, 13),
+            lumitext=lumi_text,
             data_formats=list(data_formats),
         )
         .set_output(output_base)
         .set_labels(
-            xlabel=eta_var,
-            ylabel="Resolution",
+            xlabel=_latex_label(eta_var),
+            ylabel="Jet Energy Resolution",
         )
         .set_data(series_dict, plot_type="graph")
         .set_options(
             legend=False,           # we add the custom legend below
             set_ylim=True,
             ylim_bottom_value=0.0,
-            ylim_top_value=0.25,
+            ylim_top_value=0.3,
             grid=True,
+            # enable_watermark=False,
         )
+    )
+
+    annotation_text = f"{PUPPI_JET_STRING}\n{_format_jet_algo(jet_algo)}" if jet_algo else PUPPI_JET_STRING
+    plotter.add_annotation(
+        0.05, 0.98, annotation_text,
+        ha="left", va="top",
+        fontsize="medium",
     )
 
     fig = plotter.get_figure()
     ax = fig.axes[0]
+
+    # shrink the axes to leave room for the two external legends on the right
+    fig.subplots_adjust(right=0.62)
 
     # ---- custom two-part legend ----
 
@@ -280,7 +369,7 @@ def plot_jer_vs_eta(
                 marker=_MARKERS[i_pt % len(_MARKERS)],
                 linestyle="none",
                 markersize=6,
-                label=f"{x_var} = {pt_val:.0f} GeV",
+                label=f"{_latex_label(x_var)} = {pt_val:.0f}",
             )
         )
 
@@ -294,18 +383,17 @@ def plot_jer_vs_eta(
             mpatches.Patch(
                 facecolor=(0.3, 0.3, 0.3, alpha),
                 edgecolor="none",
-                label=f"rho in [{rho_bin[0]:.1f}, {rho_bin[1]:.1f}]",
+                label=rf"$\rho \in [{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$",
             )
         )
 
     # Place both legends outside the axes to the right, stacked vertically.
-    # bbox_inches="tight" in savefig captures them.
     leg_pt = ax.legend(
         handles=pt_handles,
-        bbox_to_anchor=(1.02, 1.0),
+        bbox_to_anchor=(1.0, 1.0),
         loc="upper left",
-        title=f"{x_var} [GeV]",
-        fontsize="small",
+        title=f"{_latex_label(x_var)} [GeV]",
+        fontsize="x-small",
         title_fontsize="small",
         framealpha=0.85,
     )
@@ -313,10 +401,10 @@ def plot_jer_vs_eta(
 
     ax.legend(
         handles=rho_handles,
-        bbox_to_anchor=(1.02, 0.0),
+        bbox_to_anchor=(1.0, 0.0),
         loc="lower left",
-        title="rho bins\n(lighter = lower rho)",
-        fontsize="small",
+        title=r"$\rho$ bins [GeV/Area]" + "\n" + r"(lighter = lower $\rho$)",
+        fontsize="x-small",
         title_fontsize="small",
         framealpha=0.85,
     )
@@ -326,7 +414,7 @@ def plot_jer_vs_eta(
     os.makedirs(out_dir, exist_ok=True)
     for fmt in data_formats:
         out_path = f"{output_base}.{fmt}"
-        fig.savefig(out_path, bbox_inches="tight", dpi=300)
+        fig.savefig(out_path, bbox_inches="tight", dpi=300, pad_inches=0.05)
         print(f"Saved: {out_path}")
     plt.close(fig)
 
@@ -342,7 +430,8 @@ def main():
     )
     parser.add_argument(
         "input",
-        help="JERC resolution txt file",
+        nargs="+",
+        help="JERC resolution txt file(s); shell globs like '*.txt' are accepted",
     )
     parser.add_argument(
         "--pt-values",
@@ -353,23 +442,27 @@ def main():
     )
     parser.add_argument(
         "-o", "--output",
-        default="jer_vs_eta",
-        help="Output base path without extension (default: jer_vs_eta)",
+        default=".",
+        help="Output directory (default: current directory)",
     )
     parser.add_argument(
         "--formats",
-        nargs="+", default=["png", "pdf"],
-        help="Output file formats (default: png pdf)",
+        nargs="+", default=["png", "pdf", "svg"],
+        help="Output file formats (default: png pdf svg)",
     )
 
     args = parser.parse_args()
 
-    plot_jer_vs_eta(
-        txt_path=args.input,
-        pt_values=args.pt_values,
-        output_base=args.output,
-        data_formats=args.formats,
-    )
+    os.makedirs(args.output, exist_ok=True)
+    for txt_path in args.input:
+        stem = os.path.splitext(os.path.basename(txt_path))[0]
+        output_base = os.path.join(args.output, stem)
+        plot_jer_vs_eta(
+            txt_path=txt_path,
+            pt_values=args.pt_values,
+            output_base=output_base,
+            data_formats=args.formats,
+        )
 
 
 if __name__ == "__main__":
