@@ -2208,6 +2208,18 @@ def save_txt_resolution(
     with open(output_path, "w") as f:
         f.write(header + "\n")
         for row in rows:
+            nan_indices = [
+                i
+                for i, v in enumerate(row)
+                if not isinstance(v, (int, np.integer)) and np.isnan(float(v))
+            ]
+            if nan_indices:
+                log.error(
+                    "NaN values detected in txt row at column(s) %s: %s — file '%s' may be corrupt",
+                    nan_indices,
+                    row,
+                    output_path,
+                )
             f.write("  ".join(_fmt(v) for v in row) + "\n")
     log.info("Saved resolution txt to %s", output_path)
 
