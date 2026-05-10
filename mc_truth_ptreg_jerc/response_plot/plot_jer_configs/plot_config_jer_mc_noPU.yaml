@@ -1,5 +1,4 @@
 # Boolean flags
-test: false
 mixed_mode: true
 resolution_vs_pt_gen: true
 resolution_vs_pt_reco: true

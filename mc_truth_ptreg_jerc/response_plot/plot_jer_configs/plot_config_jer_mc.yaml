@@ -1,5 +1,4 @@
 # Boolean flags
-test: true
 mixed_mode: true
 resolution_vs_pt_gen: true
 resolution_vs_pt_reco: true
@@ -99,6 +98,7 @@ mapping_variables:
     N_bins: 1000
     bin_vars: [Pileup_nPU]
     linear_fit: true
+    fit_with_mean_bin_var: false
     txt_name: Rho
     rebin_for_plotting: true
   MatchedJets_JetPtJEC:

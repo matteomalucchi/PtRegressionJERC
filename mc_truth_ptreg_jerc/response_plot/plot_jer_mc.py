@@ -51,7 +51,7 @@ def setup_logging(output_dir: str) -> None:
     log.info("Logging to %s", log_path)
 
 
-def _load_config(config_path):
+def _load_config(config_path, test_override=False):
     """Load and process the YAML configuration file."""
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
@@ -65,7 +65,7 @@ def _load_config(config_path):
                 var_cfg["bin_edges"] = np.array(var_cfg["bin_edges"])
 
     # Apply test mode overrides
-    if cfg.get("test", False):
+    if test_override:
         test_pu = np.array(cfg["test_pu_bins"]) if "test_pu_bins" in cfg else None
         test_eta = np.array(cfg["test_jet_eta_bins"]) if "test_jet_eta_bins" in cfg else None
         test_pt = np.array(cfg["test_jet_pt_bins"]) if "test_jet_pt_bins" in cfg else None
@@ -173,9 +173,15 @@ parser.add_argument(
         "is left unchanged."
     ),
 )
+parser.add_argument(
+    "--test",
+    action="store_true",
+    default=False,
+    help="Run in test mode with reduced bin arrays (overrides the 'test' flag in the YAML config)",
+)
 
 args = parser.parse_args()
-cfg = _load_config(args.config)
+cfg = _load_config(args.config, test_override=args.test)
 
 
 PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
@@ -857,9 +863,13 @@ def create_ND_histo(variables_dict, data, bin_var_configs):
         Maps variable name to hist.Hist object with Count storage.
     h_mean_dict : dict
         Maps variable name to hist.Hist object with Mean storage.
+    h_mean_bin_var_dict : dict
+        Maps bin variable name to a 1D hist.Hist with Mean storage of that
+        variable in its own bins (used to compute mean bin-var value per bin).
     """
     h_dict = {}
     h_mean_dict = {}
+    h_mean_bin_var_dict = {}
     n_vars = len(variables_dict)
 
     for i, (var_name, var_cfg) in enumerate(variables_dict.items()):
@@ -928,7 +938,18 @@ def create_ND_histo(variables_dict, data, bin_var_configs):
             h_mean.fill(**fill_kwargs_bin, sample=arr)
             h_mean_dict[var_name] = h_mean
 
-    return h_dict, h_mean_dict
+            # For each bin variable, build a 1D Mean histogram of that variable
+            # in its own bins so callers can use mean bin values instead of centers.
+            for bv_name, bv_axis in zip(bin_var_names, axes_bin):
+                if bv_name not in h_mean_bin_var_dict:
+                    h_mean_bv = hist.Hist(bv_axis, storage=hist.storage.Mean())
+                    h_mean_bv.fill(
+                        **{bv_name: fill_kwargs_bin[bv_name]},
+                        sample=fill_kwargs_bin[bv_name],
+                    )
+                    h_mean_bin_var_dict[bv_name] = h_mean_bv
+
+    return h_dict, h_mean_dict, h_mean_bin_var_dict
 
 
 def compute_means(h_dict, mapping_vars):
@@ -987,7 +1008,7 @@ def compute_projection(h_dict, mapping_vars, mapping_var_key):
     return h_reduced
 
 
-def perform_linear_fit(h_mean_hist):
+def perform_linear_fit(h_mean_hist, x_values=None):
     """
     Perform a weighted linear fit of a 1D Mean histogram.
 
@@ -995,6 +1016,9 @@ def perform_linear_fit(h_mean_hist):
     ----------
     h_mean_hist : hist.Hist
         A 1D histogram with Mean storage (e.g. mean of a mapping variable vs its bin variable).
+    x_values : array-like, optional
+        If provided, use these values as the x coordinates instead of the bin centers.
+        Must have the same length as the number of bins. NaN entries are excluded from the fit.
 
     Returns
     -------
@@ -1010,7 +1034,7 @@ def perform_linear_fit(h_mean_hist):
     if not hasattr(x_axis, "centers"):
         raise ValueError("Histogram axis does not expose centers")
 
-    x = np.array(x_axis.centers)
+    x = np.array(x_values) if x_values is not None else np.array(x_axis.centers)
     view = h_mean_hist.view()
     y = np.array(view.value)
     count = np.array(view.count)
@@ -1725,7 +1749,7 @@ def plot_variable_slices(
                 .set_options(
                     grid=True,
                     legend=True,
-                    legend_pos="upper right",
+                    legend_loc="upper right",
                     y_log=True,
                     split_legend=False,
                     ylim_bottom_value=1,
@@ -1883,6 +1907,13 @@ def load_plotted_data(input_path):
     return data_dict
 
 
+def _make_mean_label(label):
+    parts = label.split("$")
+    math = parts[1] if len(parts) >= 3 else label.strip("$")
+    units = parts[2].strip() if len(parts) >= 3 and parts[2].strip() else ""
+    return f"$< {math} >$" + (f" {units}" if units else "")
+
+
 def plot_mapping_variable_linear_fit(
     h_dict,
     results,
@@ -1893,20 +1924,23 @@ def plot_mapping_variable_linear_fit(
     *,
     var_name,
     bin_var_configs,
+    h_mean_bin_var_dict=None,
 ):
+    log.info("Plotting linear fit for mapping variable '%s' vs its bin variable...", var_name)
     var_cfg = mapping_vars[var_name]
     x_var_name = var_cfg["bin_vars"][0]
     x_cfg = bin_var_configs[x_var_name]
+    
+    # Optionally use mean bin-var value per bin instead of the bin center.
+    use_mean_bin_var = var_cfg.get("fit_with_mean_bin_var", False)
 
     x_label = x_cfg["label"]
     x_name = x_cfg["name_plot"]
     y_label = var_cfg["label"]
     y_name = var_cfg["name_plot"]
-    
-    _y_parts = y_label.split("$")
-    _y_math = _y_parts[1] if len(_y_parts) >= 3 else y_label.strip("$")
-    _y_units = _y_parts[2].strip() if len(_y_parts) >= 3 and _y_parts[2].strip() else ""
-    y_mean_label = f"$< {_y_math} >$" + (f" {_y_units}" if _y_units else "")
+
+    y_mean_label = _make_mean_label(y_label)
+    x_plot_label = _make_mean_label(x_label) if use_mean_bin_var else x_label
 
     # 2D histogram of mapping variable vs its bin variable
     var_2d = compute_projection(h_dict, mapping_vars, var_name)
@@ -1922,17 +1956,31 @@ def plot_mapping_variable_linear_fit(
             .set_labels(x_label, y_label)
         ).run()
 
-    fit_results = perform_linear_fit(results[var_name]["mean"])
+    x_values = None
+    if use_mean_bin_var and h_mean_bin_var_dict and x_var_name in h_mean_bin_var_dict:
+        bv_view = h_mean_bin_var_dict[x_var_name].view()
+        x_values = np.where(bv_view.count > 0, bv_view.value, np.nan)
+    elif use_mean_bin_var:
+        log.warning(
+            "fit_with_mean_bin_var requested for %s but mean bin-var histogram for '%s' "
+            "is not available; falling back to bin centers.",
+            var_name,
+            x_var_name,
+        )
+
+    fit_results = perform_linear_fit(results[var_name]["mean"], x_values=x_values)
     log.debug("Linear fit results: %s", fit_results)
 
     x_axis = results[var_name]["mean"].axes[0]
-    x_lin = np.linspace(x_axis.edges[0], x_axis.edges[-1], 100)
+    x_lin = np.linspace(x_values[0]*0.9, x_values[-1]*1.1, 100) if x_values is not None else np.linspace(x_axis.edges[0], x_axis.edges[-1], 100)
+    x_centers = x_values if x_values is not None else (x_axis.edges[:-1] + x_axis.edges[1:]) / 2
+    x_width = None if x_values is not None else (x_axis.widths / 2)
     mean_dict = {}
     mean_counts = results[var_name]["mean"].view().count
     if not np.all(mean_counts == 0):
         mean_dict["data"] = {
             "data": {
-                "x": [(x_axis.edges[:-1] + x_axis.edges[1:]) / 2, x_axis.widths / 2],
+                "x": [x_centers, x_width],
                 "y": [
                     results[var_name]["mean"].view().value,
                     np.sqrt(
@@ -1966,7 +2014,7 @@ def plot_mapping_variable_linear_fit(
             .set_options(set_ylim=False)
             .set_output(f"{output_dir}/{y_name}_vs_{x_name}_fit_{category}")
             .set_data(mean_dict, plot_type="graph")
-            .set_labels(x_label, y_mean_label)
+            .set_labels(x_plot_label, y_mean_label)
             .add_annotation(
                 x=0.05,
                 y=0.7,
@@ -2197,7 +2245,7 @@ def plot_1d_inclusive_distributions(
             .set_options(
                 grid=True,
                 legend=True,
-                legend_pos="upper right",
+                legend_loc="upper right",
                 y_log=True,
                 split_legend=False,
                 ylim_bottom_value=1,
@@ -2434,12 +2482,15 @@ def main():
         cat_data = loaded_data["histogram_data"]
         h_dict = cat_data["h_dict"]
         results = cat_data["results"]
+        h_mean_bin_var_dict = cat_data.get("h_mean_bin_var_dict", {})
 
-        # Load linear fit results from file if available, otherwise recompute
+        # Load linear fit results from file if available, otherwise recompute.
+        # Skip entirely when --refit is active: the refit block below will
+        # redo the fits after merging histogram bins.
         if "linear_fit_maps" in cat_data and not args.refit:
             linear_fit_maps = cat_data["linear_fit_maps"]
             mapped_bin_edges = cat_data.get("mapped_bin_edges", {})
-        else:
+        elif not args.refit:
             linear_fit_maps = {}
             mapped_bin_edges = {}
             for lf_var_name, lf_var_cfg in cfg["mapping_variables"].items():
@@ -2454,6 +2505,7 @@ def main():
                     output_dir=args.output,
                     var_name=lf_var_name,
                     bin_var_configs=cfg["bin_variables_mixed"],
+                    h_mean_bin_var_dict=h_mean_bin_var_dict,
                 )
                 mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name][
                     "fit_func"
@@ -2486,6 +2538,13 @@ def main():
                     "profile means for the original binning will be reused."
                 )
 
+            # Merge mean bin-var histograms if present.
+            if h_mean_bin_var_dict:
+                h_mean_bin_var_dict = {
+                    vn: merge_nd_histogram_bins(h, bin_var_configs_all)[0]
+                    for vn, h in h_mean_bin_var_dict.items()
+                }
+
             # Redo linear fits with the merged histograms.
             linear_fit_maps = {}
             mapped_bin_edges = {}
@@ -2501,6 +2560,7 @@ def main():
                     output_dir=args.output,
                     var_name=lf_var_name,
                     bin_var_configs=cfg["bin_variables_mixed"],
+                    h_mean_bin_var_dict=h_mean_bin_var_dict,
                 )
                 mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
                     cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"]
@@ -2591,7 +2651,7 @@ def main():
 
         # Process plot variables (contains both regular and neutrino versions)
         log.info("Building mapping variable histograms for category '%s'...", category)
-        h_dict, h_mean_dict = create_ND_histo(
+        h_dict, h_mean_dict, h_mean_bin_var_dict = create_ND_histo(
             variables_dict=cfg["mapping_variables"],
             data=col_var_flatten,
             bin_var_configs=cfg["bin_variables_mixed"],
@@ -2614,6 +2674,7 @@ def main():
                 output_dir=args.output,
                 var_name=lf_var_name,
                 bin_var_configs=cfg["bin_variables_mixed"],
+                h_mean_bin_var_dict=h_mean_bin_var_dict,
             )
             mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
                 cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"]
@@ -2623,6 +2684,7 @@ def main():
         category_data = {
             "h_dict": h_dict,
             "h_mean_dict": h_mean_dict,
+            "h_mean_bin_var_dict": h_mean_bin_var_dict,
             "results": results,
             "linear_fit_maps": linear_fit_maps,
             "mapped_bin_edges": mapped_bin_edges,
@@ -2663,7 +2725,7 @@ def main():
                 mode,
                 category,
             )
-            response_h_dict, response_h_mean_dict = create_ND_histo(
+            response_h_dict, response_h_mean_dict, _ = create_ND_histo(
                 variables_dict=available_response_vars,
                 data=col_var_flatten,
                 bin_var_configs=bin_vars,

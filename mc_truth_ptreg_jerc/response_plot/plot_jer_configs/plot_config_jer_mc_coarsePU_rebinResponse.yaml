@@ -1,15 +1,14 @@
 # Boolean flags
-test: false
 mixed_mode: true
-resolution_vs_pt_gen: true
-resolution_vs_pt_reco: true
-histograms_map: true
-histograms_response: true
+resolution_vs_pt_gen: false
+resolution_vs_pt_reco: false
+histograms_map: false
+histograms_response: false
 gaussian_fit_resolution: true
 gaussian_fit_cut_tails: true
 
 # Bin arrays (anchors allow reuse below without duplication)
-pu_bins: &pu_bins [0, 20, 30, 40, 50, 60, 70, 100]
+pu_bins: &pu_bins [0, 20, 30, 40, 50, 60, 100]
 jet_eta_bins: &jet_eta_bins
   [-5.191, -3.839, -3.489, -3.139, -2.964, -2.853, -2.65, -2.5, -2.322,
    -2.172, -2.043, -1.93, -1.74, -1.566, -1.305, -1.044, -0.783, -0.522,
@@ -99,6 +98,7 @@ mapping_variables:
     N_bins: 1000
     bin_vars: [Pileup_nPU]
     linear_fit: true
+    fit_with_mean_bin_var: false
     txt_name: Rho
     rebin_for_plotting: true
   MatchedJets_JetPtJEC:
