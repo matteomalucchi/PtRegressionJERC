@@ -548,6 +548,8 @@ def plot_resolution_vs_x_variable(
 
         y_bin_shape = tuple(len(bin_edges_dict[v]) - 1 for v in y_vars_ref)
 
+        y_bin_label_dict = build_bin_label_dict(y_bin_shape, y_vars_ref, bin_edges_dict)
+
         plotters = {}
 
         for y_bin_idx in np.ndindex(y_bin_shape):
@@ -659,28 +661,20 @@ def plot_resolution_vs_x_variable(
             else:
                 filename_parts = ["resolution", f"x_{x_np}"]
 
-            for y_var_name, y_idx in y_vars:
-                bin_idx = y_bin_idx[y_vars.index((y_var_name, y_idx))]
-                low_edge_str = f"{bin_edges_dict[y_var_name][bin_idx]}".replace(
-                    ".", "p"
-                ).replace("-", "m")
-                high_edge_str = f"{bin_edges_dict[y_var_name][bin_idx+1]}".replace(
-                    ".", "p"
-                ).replace("-", "m")
+            annotation_text = PUPPI_JET_STRING
+            fit_result_string = ""
+            for y_var_name, _ in y_vars:
+                low_edge, high_edge = y_bin_label_dict[y_bin_idx]["edges"][y_var_name]
+                low_edge_str = f"{low_edge}".replace(".", "p").replace("-", "m")
+                high_edge_str = f"{high_edge}".replace(".", "p").replace("-", "m")
                 filename_parts.append(
                     f"{bin_var_configs[y_var_name]['name_plot']}_{low_edge_str}to{high_edge_str}"
                 )
-            output_name = "_".join(filename_parts)
-
-            annotation_text = PUPPI_JET_STRING
-            fit_result_string = ""
-            for y_var_name, y_idx in y_vars:
-                bin_idx = y_bin_idx[y_vars.index((y_var_name, y_idx))]
-                low_edge = bin_edges_dict[y_var_name][bin_idx]
-                high_edge = bin_edges_dict[y_var_name][bin_idx + 1]
                 label = bin_var_configs[y_var_name].get("label", y_var_name)
-                annotation_text += f"\n{low_edge} < {label} < {high_edge}"
+                annotation_text += "\n" + _format_bin_annotation_line(low_edge, high_edge, label)
                 fit_result_string += f"_{y_var_name}_{low_edge}to{high_edge}"
+                
+            output_name = "_".join(filename_parts)
 
             if fit_resolution:
                 fit_data = {}
@@ -736,7 +730,7 @@ def plot_resolution_vs_x_variable(
                 graph_data.update(fit_data)
                 all_fit_results.update(fit_results)
 
-            log.debug("Creating plot for bin combination %s", y_bin_idx)
+            log.debug("Creating plot for bin combination %s", y_bin_label_dict[y_bin_idx]["label"])
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
@@ -1193,6 +1187,35 @@ def merge_nd_histogram_bins(h, bin_var_configs_new):
     return h_new, True
 
 
+def build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict):
+    """Build a dict mapping bin_idx tuples to a dict with a human-readable label
+    string and per-variable (low, high) edge pairs.
+
+    Each entry: {"label": str, "edges": {var_name: (low, high)}}
+    """
+    result = {}
+    for bin_idx in np.ndindex(bin_shape):
+        parts = []
+        edges_per_var = {}
+        for i, var_name in enumerate(bin_var_names):
+            edges = bin_edges_dict[var_name]
+            low, high = edges[bin_idx[i]], edges[bin_idx[i] + 1]
+            edges_per_var[var_name] = (low, high)
+            if isinstance(low, (int, np.integer)) and isinstance(high, (int, np.integer)):
+                parts.append(f"{var_name}: [{low}, {high})")
+            else:
+                parts.append(f"{var_name}: [{low:.2f}, {high:.2f})")
+        result[bin_idx] = {"label": ", ".join(parts), "edges": edges_per_var}
+    return result
+
+
+def _format_bin_annotation_line(low_edge, high_edge, label):
+    """Format one bin variable as a single annotation line (no newline)."""
+    if isinstance(low_edge, (int, np.integer)) and isinstance(high_edge, (int, np.integer)):
+        return f"{low_edge} <= {label} < {high_edge}"
+    return f"{low_edge:.2f} < {label} < {high_edge:.2f}"
+
+
 def _compute_resolution_from_histogram(
     response_var_name, h_response, bin_var_names, response_vars
 ):
@@ -1237,6 +1260,8 @@ def _compute_resolution_from_histogram(
     # Extract bin edges for all bin variables
     bin_edges_dict = {ax.name: np.array(ax.edges) for ax in hist_bin_axes}
 
+    bin_label_dict = build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict)
+
     # Get response axis info
     response_axis = h_response.axes[response_axis_idx]
     response_bin_edges = np.array(response_axis.edges)
@@ -1264,8 +1289,8 @@ def _compute_resolution_from_histogram(
 
         failed = False
         rebin_info_for_idx = None
-        # Check if we have enough data (at least 5 events)
-        if np.sum(hist_counts) > 5:
+        # Check if we have enough data (at least 50 events)
+        if np.sum(hist_counts) > 50:
             if cfg["gaussian_fit_resolution"]:
                 try:
                     x_fit = response_bin_centers.copy()
@@ -1332,13 +1357,13 @@ def _compute_resolution_from_histogram(
                     else:
                         log.warning(
                             "Not enough valid points for Gaussian fit in bin %s: n_points=%d, total_counts=%.1f",
-                            bin_idx,
+                            bin_label_dict[bin_idx]["label"],
                             len(x_fit),
                             y_fit.sum(),
                         )
                         failed = True
                 except Exception as e:
-                    log.error("Failed to fit Gaussian for bin %s: %s", bin_idx, e)
+                    log.error("Failed to fit Gaussian for bin %s: %s", bin_label_dict[bin_idx]["label"], e)
                     failed = True
             else:
                 try:
@@ -1354,18 +1379,18 @@ def _compute_resolution_from_histogram(
                         0  # No uncertainty estimate without fit
                     )
                 except Exception as e:
-                    log.error("Failed to compute resolution for bin %s: %s", bin_idx, e)
+                    log.error("Failed to compute resolution for bin %s: %s", bin_label_dict[bin_idx]["label"], e)
                     failed = True
         else:
             log.debug(
                 "Skipping bin %s: insufficient data (%d points)",
-                bin_idx,
+                bin_label_dict[bin_idx]["label"],
                 int(np.sum(hist_counts)),
             )
             failed = True
 
         if failed:
-            log.warning("Setting resolution to NaN for bin %s due to failure", bin_idx)
+            log.warning("Setting resolution to NaN for bin %s due to failure", bin_label_dict[bin_idx]["label"])
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
             resolutions_uncertainty[bin_idx] = 0
@@ -1602,21 +1627,18 @@ def plot_variable_slices(
         first_h = list(group_dict.values())[0]
         bin_shape = tuple(len(first_h.axes[i]) for i in range(n_bin_axes))
 
+        bin_edges_dict_plot = {
+            v: bin_var_configs[v]["bin_edges"] for v in bin_var_names
+        }
+        bin_label_dict = build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict_plot)
+
         # Iterate over all bin combinations
         for bin_idx in np.ndindex(bin_shape):
             # Build annotation text from bin ranges
             annotation_text = f"{PUPPI_JET_STRING}\n"
-            for i, bin_i in enumerate(bin_idx):
-                bin_var_name = bin_var_names[i]
-                bin_cfg = bin_var_configs[bin_var_name]
-                bin_edges = bin_cfg["bin_edges"]
-                low_edge = bin_edges[bin_i]
-                high_edge = bin_edges[bin_i + 1]
-                label = bin_cfg.get("label", bin_var_name)
-                if isinstance(low_edge, np.int64) and isinstance(high_edge, np.int64):
-                    annotation_text += f"{low_edge} <= {label} < {high_edge}\n"
-                else:
-                    annotation_text += f"{low_edge:.2f} < {label} < {high_edge:.2f}\n"
+            for bin_var_name, (low_edge, high_edge) in bin_label_dict[bin_idx]["edges"].items():
+                label = bin_var_configs[bin_var_name].get("label", bin_var_name)
+                annotation_text += _format_bin_annotation_line(low_edge, high_edge, label) + "\n"
 
             # Collect histograms for this bin combination
             series_dict = {}
@@ -1631,7 +1653,7 @@ def plot_variable_slices(
                     log.warning(
                         "Histogram %s is empty for bin combination %s, skipping.",
                         var_name,
-                        bin_idx,
+                        bin_label_dict[bin_idx]["label"],
                     )
                     continue
 
@@ -1648,7 +1670,7 @@ def plot_variable_slices(
                 log.warning(
                     "All histograms in group %s are empty for bin combination %s, skipping plot.",
                     bin_var_names,
-                    bin_idx,
+                    bin_label_dict[bin_idx]["label"],
                 )
                 continue
 
@@ -1674,16 +1696,11 @@ def plot_variable_slices(
                 f"histo_{variables_dict[var_name]['name_plot']}_slice",
                 category,
             ]
-            for i, bin_i in enumerate(bin_idx):
-                bin_var_name = bin_var_names[i]
-                bin_cfg = bin_var_configs[bin_var_name]
-                bin_edges = bin_cfg["bin_edges"]
-                low_edge_str = f"{bin_edges[bin_i]}".replace(".", "p").replace("-", "m")
-                high_edge_str = f"{bin_edges[bin_i + 1]}".replace(".", "p").replace(
-                    "-", "m"
-                )
+            for bin_var_name, (low_edge, high_edge) in bin_label_dict[bin_idx]["edges"].items():
+                low_edge_str = f"{low_edge}".replace(".", "p").replace("-", "m")
+                high_edge_str = f"{high_edge}".replace(".", "p").replace("-", "m")
                 filename_parts.append(
-                    f"{bin_cfg['name_plot']}_{low_edge_str}to{high_edge_str}"
+                    f"{bin_var_configs[bin_var_name]['name_plot']}_{low_edge_str}to{high_edge_str}"
                 )
 
             output_name = f"{output_dir}/{'_'.join(filename_parts)}"
@@ -1693,7 +1710,7 @@ def plot_variable_slices(
 
             log.debug(
                 "Creating plot for bin combination %s with variables: %s...",
-                bin_idx,
+                bin_label_dict[bin_idx]["label"],
                 list(group_dict.keys()),
             )
             # Plot using HEPPlotter
@@ -1708,6 +1725,7 @@ def plot_variable_slices(
                 .set_options(
                     grid=True,
                     legend=True,
+                    legend_pos="upper right",
                     y_log=True,
                     split_legend=False,
                     ylim_bottom_value=1,
@@ -2146,6 +2164,145 @@ def save_txt_resolution(
     log.info("Saved resolution txt to %s", output_path)
 
 
+def plot_1d_inclusive_distributions(
+    *,
+    response_h_dict,
+    mapping_h_dict,
+    available_response_vars,
+    mapping_vars,
+    bin_var_configs,
+    output_dir,
+    category,
+    year,
+):
+    """
+    Plot inclusive 1D distributions of response, mapping, and binning variables.
+
+    For each variable, the ND histogram is projected onto the variable axis alone
+    (all bin axes are summed over), giving a dataset-inclusive 1D distribution.
+    Response and mapping variables that share the same ``name_plot`` are overlaid
+    on a single canvas. Each binning variable gets its own plot.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    log.info("Plotting inclusive 1D distributions for category '%s' in %s", category, output_dir)
+    annotation_base = PUPPI_JET_STRING + "\nInclusive"
+
+    def _make_plotter(series_dict, xlabel, output_name):
+        return (
+            HEPPlotter()
+            .set_plot_config(lumitext=f"{year} (13.6 TeV)" if year else "", figsize=(13, 13))
+            .set_data(series_dict, plot_type="1d")
+            .set_labels(xlabel=xlabel, ylabel="Events")
+            .set_output(output_name)
+            .set_options(
+                grid=True,
+                legend=True,
+                legend_pos="upper right",
+                y_log=True,
+                split_legend=False,
+                ylim_bottom_value=1,
+            )
+            .add_annotation(
+                0.05,
+                0.95,
+                annotation_base,
+                coord_type="axes",
+                verticalalignment="top",
+                fontsize=20,
+            )
+        )
+
+    # --- response variables: group by name_plot, overlay on one canvas ---
+    response_groups = {}
+    for var_name, h_nd in response_h_dict.items():
+        if var_name not in available_response_vars:
+            continue
+        name_plot = available_response_vars[var_name].get("name_plot", var_name)
+        response_groups.setdefault(name_plot, {})[var_name] = h_nd
+
+    for name_plot, group in response_groups.items():
+        series_dict = {}
+        xlabel = None
+        for var_name, h_nd in group.items():
+            h_1d = h_nd.project(var_name)
+            if np.sum(h_1d.values()) == 0:
+                continue
+            if available_response_vars[var_name].get("rebin_for_plotting", False):
+                h_1d, _ = rebin_histogram(h_1d)
+            if xlabel is None:
+                xlabel = h_nd.axes[var_name].label
+            series_dict[var_name] = {
+                "data": h_1d,
+                "style": {
+                    "color": get_color(var_name),
+                    "legend_name": available_response_vars[var_name].get("legend_name", var_name),
+                    "linewidth": 2,
+                },
+            }
+        if not series_dict:
+            continue
+        output_name = f"{output_dir}/inclusive_response_{name_plot}_{category}"
+        _make_plotter(series_dict, xlabel or name_plot, output_name).run()
+
+    # --- mapping variables: group by name_plot, overlay on one canvas ---
+    mapping_groups = {}
+    for var_name, h_nd in mapping_h_dict.items():
+        if var_name not in mapping_vars:
+            continue
+        name_plot = mapping_vars[var_name].get("name_plot", var_name)
+        mapping_groups.setdefault(name_plot, {})[var_name] = h_nd
+
+    for name_plot, group in mapping_groups.items():
+        series_dict = {}
+        xlabel = None
+        for var_name, h_nd in group.items():
+            h_1d = h_nd.project(var_name)
+            if np.sum(h_1d.values()) == 0:
+                continue
+            if mapping_vars[var_name].get("rebin_for_plotting", False):
+                h_1d, _ = rebin_histogram(h_1d)
+            if xlabel is None:
+                xlabel = h_nd.axes[var_name].label
+            series_dict[var_name] = {
+                "data": h_1d,
+                "style": {
+                    "color": get_color(var_name),
+                    "legend_name": mapping_vars[var_name].get("legend_name", var_name),
+                    "linewidth": 2,
+                },
+            }
+        if not series_dict:
+            continue
+        output_name = f"{output_dir}/inclusive_mapping_{name_plot}_{category}"
+        _make_plotter(series_dict, xlabel or name_plot, output_name).run()
+
+    # --- bin variables: project from any available ND histogram ---
+    seen_bin_vars = {}
+    for h_nd in list(mapping_h_dict.values()) + list(response_h_dict.values()):
+        for axis in h_nd.axes:
+            bv_name = axis.name
+            if bv_name in bin_var_configs and bv_name not in seen_bin_vars:
+                h_1d = h_nd.project(bv_name)
+                if np.sum(h_1d.values()) > 0:
+                    seen_bin_vars[bv_name] = h_1d
+
+    for bv_name, h_1d in seen_bin_vars.items():
+        bv_cfg = bin_var_configs[bv_name]
+        xlabel = bv_cfg.get("label", bv_name)
+        series_dict = {
+            bv_name: {
+                "data": h_1d,
+                "style": {
+                    "color": None,
+                    "legend_name": xlabel,
+                    "linewidth": 2,
+                },
+            }
+        }
+        output_name = f"{output_dir}/inclusive_binvar_{bv_cfg['name_plot']}_{category}"
+        _make_plotter(series_dict, xlabel, output_name).run()
+
+
 def plot_mapping_variable_histograms(*, category, year, h_dict):
     if args.histo or cfg["histograms_map"]:
         plot_var_output_dir = f"{args.output}/histograms_mapping_variables_{category}"
@@ -2279,7 +2436,7 @@ def main():
         results = cat_data["results"]
 
         # Load linear fit results from file if available, otherwise recompute
-        if "linear_fit_maps" in cat_data and False:
+        if "linear_fit_maps" in cat_data and not args.refit:
             linear_fit_maps = cat_data["linear_fit_maps"]
             mapped_bin_edges = cat_data.get("mapped_bin_edges", {})
         else:
@@ -2387,6 +2544,17 @@ def main():
                 bin_vars=bin_vars,
                 results_for_mapping=results,
                 linear_fit_maps=linear_fit_maps,
+            )
+            inclusive_dir = f"{args.output}/inclusive_1d_{category}_{mode}"
+            plot_1d_inclusive_distributions(
+                response_h_dict=response_h_dict,
+                mapping_h_dict=h_dict,
+                available_response_vars=available_response_vars,
+                mapping_vars=cfg["mapping_variables"],
+                bin_var_configs=bin_vars,
+                output_dir=inclusive_dir,
+                category=category,
+                year=year,
             )
         return
 
@@ -2535,13 +2703,24 @@ def main():
             process_response_type(
                 category=category,
                 year=year,
-                mode=mode,
+                mode=response_type,
                 response_h_dict=resp_data["response_h_dict"],
                 response_tot_dict=resp_data["response_tot_dict"],
                 available_response_vars=resp_data["available_response_vars"],
                 bin_vars=resp_data["bin_vars"],
                 results_for_mapping=results,
                 linear_fit_maps=linear_fit_maps,
+            )
+            inclusive_dir = f"{args.output}/inclusive_1d_{category}_{response_type}"
+            plot_1d_inclusive_distributions(
+                response_h_dict=resp_data["response_h_dict"],
+                mapping_h_dict=h_dict,
+                available_response_vars=resp_data["available_response_vars"],
+                mapping_vars=cfg["mapping_variables"],
+                bin_var_configs=resp_data["bin_vars"],
+                output_dir=inclusive_dir,
+                category=category,
+                year=year,
             )
 
     log.info("All done!")
