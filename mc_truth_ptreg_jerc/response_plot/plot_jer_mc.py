@@ -994,6 +994,12 @@ def compute_means(h_dict, mapping_vars):
 
     for mv in map_vars:
         log.debug("Processing mapping variable: %s", mv)
+        if mv not in mapping_vars:
+            log.warning(
+                "Mapping variable '%s' found in histogram dict but not in mapping_vars config; skipping.",
+                mv,
+            )
+            continue
         map_cfg = mapping_vars[mv]
         active_bin_vars = map_cfg["bin_vars"]
 
@@ -1676,6 +1682,12 @@ def plot_variable_slices(
     variables_by_bin_name_plots = {}
     canonical_bin_axes = {}
     for var_name, h_var in h_dict.items():
+        if var_name not in variables_dict:
+            log.warning(
+                "Variable '%s' found in histogram dict but not in variables config; skipping.",
+                var_name,
+            )
+            continue
         n_bin_axes = h_var.ndim - 1
         concrete_axes = tuple(h_var.axes[i].name for i in range(n_bin_axes))
         if cfg["mixed_mode"]:
@@ -1949,6 +1961,12 @@ def profile_means(h_mean_dict, mapping_vars):
 
     for mv, h_mean in h_mean_dict.items():
         log.info("Processing mapping variable: %s", mv)
+        if mv not in mapping_vars:
+            log.warning(
+                "Mapping variable '%s' found in coffea file but not in mapping_vars config; skipping.",
+                mv,
+            )
+            continue
         map_cfg = mapping_vars[mv]
         active_bin_vars = map_cfg["bin_vars"]
 
