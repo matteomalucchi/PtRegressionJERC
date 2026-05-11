@@ -276,12 +276,12 @@ def plot_jer_vs_eta(
 
     for i_pt, pt_val in enumerate(pt_values):
         base_color = _BASE_COLORS[i_pt % len(_BASE_COLORS)]
-        marker = _MARKERS[i_pt % len(_MARKERS)]
         has_data = False
 
         for i_rho, rho_bin in enumerate(rho_bins):
             alpha = float(rho_alphas[i_rho])
             color = _rgba(base_color, alpha)
+            marker = _MARKERS[i_rho % len(_MARKERS)]
 
             xs, ys = [], []
             for row in rows:
@@ -381,32 +381,32 @@ def plot_jer_vs_eta(
 
     # ---- custom two-part legend ----
 
-    # Part 1: one proxy entry per JetPt value (full-alpha base colour)
+    # Part 1: one proxy per JetPt value — colour (hue) encodes pt, no marker
     pt_handles = []
     for i_pt, pt_val in pt_values_used:
         color_full = _rgba(_BASE_COLORS[i_pt % len(_BASE_COLORS)], 1.0)
         pt_handles.append(
-            mlines.Line2D(
-                [], [],
-                color=color_full,
-                marker=_MARKERS[i_pt % len(_MARKERS)],
-                linestyle="none",
-                markersize=6,
-                label=f"{_latex_label(x_var)} = {pt_val:.0f}",
+            mpatches.Patch(
+                facecolor=color_full,
+                edgecolor="none",
+                label=f"{pt_val:.0f} GeV",
             )
         )
 
-    # Part 2: one proxy entry per Rho bin (greyscale gradient: light → dark)
+    # Part 2: one proxy per rho bin — marker shape + shade encodes rho
     rho_handles = []
     for i_rho, rho_bin in enumerate(rho_bins):
         if rho_bin is None:
             continue
         alpha = float(rho_alphas[i_rho])
         rho_handles.append(
-            mpatches.Patch(
-                facecolor=(0.3, 0.3, 0.3, alpha),
-                edgecolor="none",
-                label=rf"$\rho \in [{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$",
+            mlines.Line2D(
+                [], [],
+                color=(0.3, 0.3, 0.3, alpha),
+                marker=_MARKERS[i_rho % len(_MARKERS)],
+                linestyle="none",
+                markersize=8,
+                label=rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$",
             )
         )
 
@@ -426,7 +426,7 @@ def plot_jer_vs_eta(
         handles=rho_handles,
         bbox_to_anchor=(1.0, 0.0),
         loc="lower left",
-        title=r"$\rho$ bins [GeV/Area]" + "\n" + r"(lighter = lower $\rho$)",
+        title=r"$\rho$ [GeV/Area]",
         fontsize="x-small",
         title_fontsize="small",
         framealpha=0.85,
