@@ -118,9 +118,10 @@ def _parse_jer_txt(path):
         nan_param_indices = [i for i, p in enumerate(params) if not np.isfinite(p)]
         if nan_param_indices:
             log.error(
-                "Non-finite (NaN/Inf) fit parameter(s) at index %s in line: %r "
+                "Non-finite (NaN/Inf) fit parameter(s) at index %s in file '%s' in line: %r "
                 "(bin_edges=%s, x_min=%s, x_max=%s, params=%s) — skipping row",
                 nan_param_indices,
+                path,
                 line,
                 bin_edges,
                 x_min,
@@ -232,6 +233,7 @@ def plot_jer_vs_eta(
     pt_values,
     output_base,
     data_formats=("png", "pdf"),
+    eta_max=None,
 ):
     """
     Read *txt_path* and produce a resolution-vs-eta plot.
@@ -288,6 +290,9 @@ def plot_jer_vs_eta(
                     continue
                 eta_lo, eta_hi = row["bin_edges"][eta_var]
                 eta_c = 0.5 * (eta_lo + eta_hi)
+
+                if eta_max is not None and abs(eta_c) >= eta_max:
+                    continue
 
                 # Clamp pt to the fitted range instead of skipping
                 pt_eval = max(row["x_min"], min(pt_val, row["x_max"]))
@@ -351,7 +356,7 @@ def plot_jer_vs_eta(
             legend=False,           # we add the custom legend below
             set_ylim=True,
             ylim_bottom_value=0.0,
-            ylim_top_value=0.3,
+            ylim_top_value=0.3 if eta_max is None else 0.2,
             grid=True,
             # enable_watermark=False,
         )
@@ -366,6 +371,10 @@ def plot_jer_vs_eta(
 
     fig = plotter.get_figure()
     ax = fig.axes[0]
+
+    if eta_max is not None:
+        for sign in (-1, 1):
+            ax.axvline(sign * eta_max, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
 
     # shrink the axes to leave room for the two external legends on the right
     fig.subplots_adjust(right=0.62)
@@ -476,6 +485,13 @@ def main():
             pt_values=args.pt_values,
             output_base=output_base,
             data_formats=args.formats,
+        )
+        plot_jer_vs_eta(
+            txt_path=txt_path,
+            pt_values=args.pt_values,
+            output_base=output_base + "_abseta_lt_2p5",
+            data_formats=args.formats,
+            eta_max=2.5,
         )
 
 
