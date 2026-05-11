@@ -5,7 +5,9 @@ resolution_vs_pt_reco: true
 histograms_map: true
 histograms_response: true
 gaussian_fit_resolution: true
-gaussian_fit_cut_tails: true
+gaussian_fit_cut_tails: [0.87]
+gaussian_fit_max_sigma_rel_err: 1.0
+min_events_for_fit: 50
 
 # Bin arrays (anchors allow reuse below without duplication)
 pu_bins: &pu_bins [0, 20, 30, 40, 50, 60, 70, 100]

@@ -630,8 +630,9 @@ def plot_resolution_vs_x_variable(
 
                 if all(np.isnan(v) for v in resolutions_for_plot):
                     log.warning(
-                        "All resolutions are NaN for %s, skipping.",
+                        "All resolutions are NaN for %s in bin %s, skipping plot",
                         response_var,
+                        y_bin_label_dict[y_bin_idx]["label"],
                     )
                     continue
 
@@ -671,8 +672,8 @@ def plot_resolution_vs_x_variable(
             fit_result_string = ""
             for y_var_name, _ in y_vars:
                 low_edge, high_edge = y_bin_label_dict[y_bin_idx]["edges"][y_var_name]
-                low_edge_str = f"{low_edge}".replace(".", "p").replace("-", "m")
-                high_edge_str = f"{high_edge}".replace(".", "p").replace("-", "m")
+                low_edge_str = (f"{low_edge}" if isinstance(low_edge, (int, np.integer)) else f"{low_edge}".replace(".", "p")).replace("-", "m")
+                high_edge_str = (f"{high_edge}" if isinstance(high_edge, (int, np.integer)) else f"{high_edge}".replace(".", "p")).replace("-", "m")
                 filename_parts.append(
                     f"{bin_var_configs[y_var_name]['name_plot']}_{low_edge_str}to{high_edge_str}"
                 )
@@ -764,7 +765,7 @@ def plot_resolution_vs_x_variable(
                 .set_output(f"{output_dir}/{output_name}")
                 .add_annotation(
                     0.05,
-                    0.7,
+                    0.75,
                     annotation_text,
                     horizontalalignment="left",
                     verticalalignment="top",
@@ -1313,8 +1314,8 @@ def _compute_resolution_from_histogram(
 
         failed = False
         rebin_info_for_idx = None
-        # Check if we have enough data (at least 50 events)
-        if np.sum(hist_counts) > 50:
+        # Check if we have enough data
+        if np.sum(hist_counts) > cfg.get("min_events_for_fit", 50):
             if cfg["gaussian_fit_resolution"]:
                 try:
                     x_fit = response_bin_centers.copy()
@@ -1338,36 +1339,90 @@ def _compute_resolution_from_histogram(
                             y_fit = h_1d_rebinned.values().astype(float)
                             y_fit_err = np.sqrt(h_1d_rebinned.variances())
                             rebin_info_for_idx = rebin_info
+                    _cut_cfg = cfg.get("gaussian_fit_cut_tails", False)
+                    if isinstance(_cut_cfg, list):
+                        ci_values_to_try = [float(v) if v not in (None, False) else None for v in _cut_cfg]
+                    elif _cut_cfg is False or _cut_cfg is None:
+                        ci_values_to_try = [None]
+                    else:
+                        ci_values_to_try = [float(_cut_cfg)]
 
-                    if cfg["gaussian_fit_cut_tails"]:
-                        # Restrict to the 87% confidence interval around the mean
-                        total = y_fit.sum()
-                        if total > 0:
-                            _, lo_idx, hi_idx = Confidence_numpy(
-                                hist=y_fit,
-                                bins_mid=x_fit,
-                                bin_width=response_bin_width,
-                                confLevel=0.87,
-                                return_bins=True,
+                    max_rel_err = cfg.get("gaussian_fit_max_sigma_rel_err", 1.0)
+                    x_fit_base = x_fit.copy()
+                    y_fit_base = y_fit.copy()
+                    y_fit_err_base = y_fit_err.copy()
+                    fit_res = None
+                    fit_accepted = False
+
+                    for ci in ci_values_to_try:
+                        x_fit_try = x_fit_base.copy()
+                        y_fit_try = y_fit_base.copy()
+                        y_fit_err_try = y_fit_err_base.copy()
+
+                        if ci is not None:
+                            total = y_fit_try.sum()
+                            if total > 0:
+                                _, lo_idx, hi_idx = Confidence_numpy(
+                                    hist=y_fit_try,
+                                    bins_mid=x_fit_try,
+                                    bin_width=response_bin_width,
+                                    confLevel=ci,
+                                    return_bins=True,
+                                )
+                                x_fit_try = x_fit_try[lo_idx : hi_idx + 1]
+                                y_fit_try = y_fit_try[lo_idx : hi_idx + 1]
+                                y_fit_err_try = y_fit_err_try[lo_idx : hi_idx + 1]
+
+                        if len(x_fit_try) < 3 or y_fit_try.sum() <= 0:
+                            log.debug(
+                                "CI=%s: not enough points in bin %s, trying next CI",
+                                ci, bin_label_dict[bin_idx]["label"],
                             )
-                            x_fit = x_fit[lo_idx : hi_idx + 1]
-                            y_fit = y_fit[lo_idx : hi_idx + 1]
-                            y_fit_err = y_fit_err[lo_idx : hi_idx + 1]
+                            continue
 
-                    if len(x_fit) >= 3 and y_fit.sum() > 0:
-                        peak_idx = int(np.argmax(y_fit))
-                        amplitude_p0 = float(y_fit[peak_idx])
-                        mean_p0 = float(x_fit[peak_idx])
-                        sigma_p0 = float(response_bin_width * 3)
-                        fit_res = perform_fit(
-                            x_fit,
-                            y_fit,
-                            y_err=y_fit_err,
+                        peak_idx = int(np.argmax(y_fit_try))
+                        fit_res_try = perform_fit(
+                            x_fit_try,
+                            y_fit_try,
+                            y_err=y_fit_err_try,
                             fit_function=gaussian_model,
                             n_params=3,
-                            p0=(amplitude_p0, mean_p0, sigma_p0),
+                            p0=(
+                                float(y_fit_try[peak_idx]),
+                                float(x_fit_try[peak_idx]),
+                                float(response_bin_width * 3),
+                            ),
                             bounds=([0, -np.inf, 0], [np.inf, np.inf, np.inf]),
                         )
+                        fit_res = fit_res_try
+                        x_fit = x_fit_try
+                        y_fit = y_fit_try
+                        y_fit_err = y_fit_err_try
+
+                        _params = fit_res_try["params"]
+                        _params_err = fit_res_try["params_err"]
+                        if np.any(np.isnan(_params)) or np.any(np.isnan(_params_err)):
+                            log.debug(
+                                "CI=%s: fit returned NaN params in bin %s, trying next CI",
+                                ci, bin_label_dict[bin_idx]["label"],
+                            )
+                            continue
+                        _sigma = abs(_params[2])
+                        if _sigma > 0 and _params_err[2] / _sigma >= max_rel_err:
+                            log.debug(
+                                "CI=%s: sigma rel. err. %.2f >= %.2f in bin %s, trying next CI",
+                                ci, _params_err[2] / _sigma, max_rel_err,
+                                bin_label_dict[bin_idx]["label"],
+                            )
+                            continue
+                        log.debug(
+                            "CI=%s: fit successful in bin %s (sigma=%.4f +/- %.4f)",
+                            ci, bin_label_dict[bin_idx]["label"], _params[2], _params_err[2],
+                        )
+                        fit_accepted = True
+                        break
+
+                    if fit_res is not None:
                         # Exclude fit_func lambda — lambdas are not picklable and
                         # multiprocessing serializes the return value of this function.
                         gaussian_fits[bin_idx] = {
@@ -1375,19 +1430,29 @@ def _compute_resolution_from_histogram(
                         }
                         if rebin_info_for_idx is not None:
                             gaussian_fits[bin_idx]["fit_rebin_info"] = rebin_info_for_idx
-                        resolutions[bin_idx] = fit_res["params"][2]
-                        resolution_grid[bin_idx] = fit_res["params"][2]
-                        resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
+                        if fit_accepted:
+                            resolutions[bin_idx] = fit_res["params"][2]
+                            resolution_grid[bin_idx] = fit_res["params"][2]
+                            resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
+                        else:
+                            log.warning(
+                                "Fit quality too poor for bin %s for '%s' (best sigma rel. err. >= %.2f): setting resolution to NaN",
+                                bin_label_dict[bin_idx]["label"], response_var_name, max_rel_err,
+                            )
+                            resolutions[bin_idx] = np.nan
+                            resolution_grid[bin_idx] = np.nan
+                            resolutions_uncertainty[bin_idx] = 0
                     else:
                         log.warning(
-                            "Not enough valid points for Gaussian fit in bin %s: n_points=%d, total_counts=%.1f",
+                            "Not enough valid points for Gaussian fit in bin %s for '%s': n_points=%d, total_counts=%.1f",
                             bin_label_dict[bin_idx]["label"],
-                            len(x_fit),
-                            y_fit.sum(),
+                            response_var_name,
+                            len(x_fit_base),
+                            y_fit_base.sum(),
                         )
                         failed = True
                 except Exception as e:
-                    log.error("Failed to fit Gaussian for bin %s: %s", bin_label_dict[bin_idx]["label"], e)
+                    log.error("Failed to fit Gaussian for bin %s for '%s': %s", bin_label_dict[bin_idx]["label"], response_var_name, e)
                     failed = True
             else:
                 try:
@@ -1403,7 +1468,7 @@ def _compute_resolution_from_histogram(
                         0  # No uncertainty estimate without fit
                     )
                 except Exception as e:
-                    log.error("Failed to compute resolution for bin %s: %s", bin_label_dict[bin_idx]["label"], e)
+                    log.error("Failed to compute resolution for bin %s for '%s': %s", bin_label_dict[bin_idx]["label"], response_var_name, e)
                     failed = True
         else:
             log.debug(
@@ -1414,7 +1479,7 @@ def _compute_resolution_from_histogram(
             failed = True
 
         if failed:
-            log.warning("Setting resolution to NaN for bin %s due to failure", bin_label_dict[bin_idx]["label"])
+            log.warning("Setting resolution to NaN for bin %s for '%s' due to failure", bin_label_dict[bin_idx]["label"], response_var_name)
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
             resolutions_uncertainty[bin_idx] = 0
@@ -1802,7 +1867,7 @@ def plot_variable_slices(
                         color=get_color(var_name),
                     )
 
-                    if cfg["gaussian_fit_cut_tails"]:
+                    if cfg.get("gaussian_fit_cut_tails", False):
                         # plot the lines corresponding to the fit range
                         plotter.add_line(
                             "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"

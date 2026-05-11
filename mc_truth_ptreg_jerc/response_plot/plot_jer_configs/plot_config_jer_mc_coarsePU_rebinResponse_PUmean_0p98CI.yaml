@@ -1,11 +1,11 @@
 # Boolean flags
 mixed_mode: true
-resolution_vs_pt_gen: false
-resolution_vs_pt_reco: false
+resolution_vs_pt_gen: true
+resolution_vs_pt_reco: true
 histograms_map: false
-histograms_response: false
+histograms_response: true
 gaussian_fit_resolution: true
-gaussian_fit_cut_tails: [0.87]
+gaussian_fit_cut_tails: [0.98, 0.87]
 gaussian_fit_max_sigma_rel_err: 1.0
 min_events_for_fit: 50
 
@@ -21,9 +21,9 @@ jet_pt_bins: &jet_pt_bins
    200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000]
 
 # Reduced bin arrays used when test: true
-test_pu_bins: [0, 50, 100]
-test_jet_eta_bins: [-5.191, 0.0, 5.191]
-test_jet_pt_bins: [8, 50, 120, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000]
+test_pu_bins: [0, 40, 50, 100]
+test_jet_eta_bins: [-5.191, 2.964, 3.139, 5.191]
+test_jet_pt_bins: [8, 27, 30, 35, 40, 45, 57, 72, 90, 120, 150,200, 300, 400, 550, 750]
 
 # Response histogram settings (anchors for reuse in response_variables)
 n_bins_response: &n_bins_response 150
@@ -100,7 +100,7 @@ mapping_variables:
     N_bins: 1000
     bin_vars: [Pileup_nPU]
     linear_fit: true
-    fit_with_mean_bin_var: false
+    fit_with_mean_bin_var: true
     txt_name: Rho
     rebin_for_plotting: true
   MatchedJets_JetPtJEC:
