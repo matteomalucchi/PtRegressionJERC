@@ -738,6 +738,22 @@ def plot_resolution_vs_x_variable(
                 all_fit_results.update(fit_results)
 
             log.debug("Creating plot for bin combination %s", y_bin_label_dict[y_bin_idx]["label"])
+
+            ylim_bottom = cfg["y_lim_resolution"][0]
+            ylim_top = cfg["y_lim_resolution"][1]
+            data_y_max = ylim_bottom
+            for gd in graph_data.values():
+                y_vals = np.asarray(gd["data"]["y"][0], dtype=float)
+                y_err = gd["data"]["y"][1]
+                if y_err is not None:
+                    y_err = np.asarray(y_err, dtype=float)
+                    y_vals = y_vals + np.abs(y_err)
+                finite = y_vals[np.isfinite(y_vals)]
+                if len(finite):
+                    data_y_max = max(data_y_max, float(finite.max()))
+            if data_y_max > ylim_top*0.6:
+                ylim_top = cfg["y_lim_resolution"][1] + 0.15
+
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
@@ -758,8 +774,8 @@ def plot_resolution_vs_x_variable(
                     x_log=True,
                     split_legend=False,
                     reference_to_den=False,
-                    ylim_bottom_value=cfg["y_lim_resolution"][0],
-                    ylim_top_value=cfg["y_lim_resolution"][1],
+                    ylim_bottom_value=ylim_bottom,
+                    ylim_top_value=ylim_top,
                     set_ylim_ratio=0.5,
                 )
                 .set_output(f"{output_dir}/{output_name}")
@@ -777,12 +793,12 @@ def plot_resolution_vs_x_variable(
                     chi2_str = f"$\\chi^2$/ndf={fit_res['chi2']:.1f}/{fit_res['dof']}, p={fit_res['p_value']:.2f}"
                     plotter.add_annotation(
                         0.7,
-                        0.6 - i * 0.05,
+                        0.65 - i * 0.07,
                         chi2_str,
                         color=get_color(response_var.replace(fit_result_string, "")),
                         horizontalalignment="left",
                         verticalalignment="top",
-                        fontsize=13,
+                        fontsize=15,
                     )
 
             plotters[y_bin_idx] = plotter
@@ -1652,21 +1668,33 @@ def plot_variable_slices(
     )
     log.info("Plotting %s slices for %s...", type_label, category)
 
-    # Group variables by their bin structure (they may have different bin_vars)
-    variables_by_bin_axes = {}
+    # Group variables by their bin structure.
+    # In mixed_mode, use name_plot of each bin axis as the key so that regular
+    # and neutrino histograms (which share the same name_plot) are plotted
+    # together. Canonical concrete axis names (from the first histogram in each
+    # group) are stored separately for bin_var_configs lookups.
+    variables_by_bin_name_plots = {}
+    canonical_bin_axes = {}
     for var_name, h_var in h_dict.items():
         n_bin_axes = h_var.ndim - 1
-        bin_var_names_for_var = tuple([h_var.axes[i].name for i in range(n_bin_axes)])
-
-        if bin_var_names_for_var not in variables_by_bin_axes:
-            variables_by_bin_axes[bin_var_names_for_var] = {}
-        variables_by_bin_axes[bin_var_names_for_var][var_name] = h_var
+        concrete_axes = tuple(h_var.axes[i].name for i in range(n_bin_axes))
+        if cfg["mixed_mode"]:
+            group_key = tuple(
+                bin_var_configs.get(ax, {}).get("name_plot", ax)
+                for ax in concrete_axes
+            )
+        else:
+            group_key = concrete_axes
+        if group_key not in variables_by_bin_name_plots:
+            variables_by_bin_name_plots[group_key] = {}
+            canonical_bin_axes[group_key] = concrete_axes
+        variables_by_bin_name_plots[group_key][var_name] = h_var
 
     plotters = []
 
     # Process each bin structure group separately
-    for bin_var_names_tuple, group_dict in variables_by_bin_axes.items():
-        bin_var_names = list(bin_var_names_tuple)
+    for name_plot_key, group_dict in variables_by_bin_name_plots.items():
+        bin_var_names = list(canonical_bin_axes[name_plot_key])
         n_bin_axes = len(bin_var_names)
 
         if n_bin_axes == 0:
@@ -1857,13 +1885,17 @@ def plot_variable_slices(
                         linestyle="--",
                         linewidth=2,
                     )
+                    col = i // 3
+                    row = i % 3
+                    ann_x = 0.05 + col * 0.3
+                    ann_y = 0.75 - row * 0.07
                     plotter.add_annotation(
-                        0.7,
-                        0.75 - 0.1 * i,
+                        ann_x,
+                        ann_y,
                         fit_label,
                         coord_type="axes",
                         verticalalignment="top",
-                        fontsize=20,
+                        fontsize=15,
                         color=get_color(var_name),
                     )
 
