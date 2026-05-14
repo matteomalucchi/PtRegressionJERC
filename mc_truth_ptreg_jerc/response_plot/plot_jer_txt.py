@@ -246,12 +246,48 @@ def plot_jer_vs_eta(
     data_formats : iterable of file extensions to save
     """
     header, rows = _parse_jer_txt(txt_path)
+    year = _extract_year(txt_path, year_map=_YEAR_MAP)
+    jet_algo = _extract_jet_algo(txt_path)
+    plot_jer_vs_eta_from_data(
+        header=header,
+        rows=rows,
+        pt_values=pt_values,
+        output_base=output_base,
+        data_formats=data_formats,
+        eta_max=eta_max,
+        year=year,
+        jet_algo=jet_algo,
+    )
+
+
+def plot_jer_vs_eta_from_data(
+    header,
+    rows,
+    pt_values,
+    output_base,
+    data_formats=("png", "pdf"),
+    eta_max=None,
+    year=None,
+    jet_algo=None,
+):
+    """
+    Same as :func:`plot_jer_vs_eta` but receives already-parsed header/rows.
+
+    Used by :mod:`plot_jer_json` to share the plotting logic without reading
+    from a JERC txt file.
+
+    Parameters
+    ----------
+    header   : dict with keys ``bin_vars``, ``x_var``, ``formula``
+    rows     : list of dicts with keys ``bin_edges``, ``x_min``, ``x_max``,
+               ``params`` (see :func:`_parse_jer_txt`)
+    year     : optional year label for the lumi text
+    jet_algo : optional jet algorithm string for the annotation
+    """
     bin_vars = header["bin_vars"]
     x_var = header["x_var"]
     formula = header["formula"]
 
-    year = _extract_year(txt_path, year_map=_YEAR_MAP)
-    jet_algo = _extract_jet_algo(txt_path)
     lumi_text = f"{year} (13.6 TeV)" if year else "(13.6 TeV)"
 
     # identify eta and rho variables from bin_vars

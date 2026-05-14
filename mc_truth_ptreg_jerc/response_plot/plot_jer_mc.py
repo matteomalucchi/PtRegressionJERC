@@ -1,4 +1,5 @@
 import logging
+import re
 
 # Suppress noisy third-party loggers before any imports that trigger them
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -2389,6 +2390,249 @@ def save_txt_resolution(
     log.info("Saved resolution txt to %s", output_path)
 
 
+_INPUT_DESCRIPTIONS = {
+    "JetEta": "pseudorapidity of the jet",
+    "JetPt": (
+        "pT of the jet before specific correction "
+        "(for JER and uncertainties: after all corrections applied)"
+    ),
+    "Rho": "energy density rho (as measure of PU)",
+}
+
+
+def _convert_formula_to_jerc_json(fit_formula):
+    """
+    Convert an internal fit formula like
+        sqrt([0]*abs([0])/(x*x)+[1]*[1]*pow(x,[3])+[2]*[2])
+    to the standard JERC correctionlib convention with x clamped to a per-row
+    [x_min, x_max] range and parameter indices shifted by 2, so that the new
+    parameters list is [x_min, x_max, *original_params]:
+        sqrt([2]*abs([2])/(max(min(x,[1]),[0])*max(min(x,[1]),[0]))+[3]*[3]*pow(max(min(x,[1]),[0]),[5])+[4]*[4])
+    """
+    if not fit_formula:
+        return fit_formula
+    shifted = re.sub(r"\[(\d+)\]", lambda m: f"[{int(m.group(1)) + 2}]", fit_formula)
+    clamped = re.sub(r"(?<![\w\]])x(?![\w])", "max(min(x,[1]),[0])", shifted)
+    return clamped
+
+
+def save_json_resolution(
+    fit_results,
+    response_var_name,
+    response_var_cfg,
+    bin_var_configs,
+    linear_fit_maps,
+    mapping_vars,
+    output_dir,
+    year,
+):
+    """
+    Save NSC resolution fit results in correctionlib JSON format.
+
+    The output is a CorrectionSet with a single Correction whose ``data`` is a
+    nested ``Binning`` tree over the bin variables (e.g. JetEta then Rho),
+    with leaves being ``Formula`` nodes. The formula and parameter convention
+    follows the standard JERC json layout (see jerc2json):
+      parameters = [x_min, x_max, *fit_params]
+      expression = original formula with x clamped to [x_min, x_max]
+    """
+    from correctionlib import schemav2 as cs
+
+    def get_txt_name(var_name):
+        bin_var_cfg = bin_var_configs[var_name]
+        if "txt_name" in bin_var_cfg:
+            return bin_var_cfg["txt_name"]
+        mapped_to = bin_var_cfg.get("txt_map_to")
+        if mapped_to and mapped_to in mapping_vars:
+            return mapping_vars[mapped_to].get("txt_name", mapped_to)
+        return var_name
+
+    x_var = next(
+        (k for k, v in bin_var_configs.items() if v.get("resolution_x_variable")),
+        None,
+    )
+    if x_var is None:
+        log.warning(
+            "No resolution_x_variable found for %s, skipping json.", response_var_name
+        )
+        return
+
+    prefix = f"{response_var_name}_"
+    matching = {k: v for k, v in fit_results.items() if k.startswith(prefix)}
+    if not matching:
+        log.warning("No fit results for %s, skipping json output.", response_var_name)
+        return
+
+    first_key_suffix = next(iter(matching.keys()))[len(response_var_name) :]
+    vars_in_key = [
+        k for k in bin_var_configs if k != x_var and f"_{k}_" in first_key_suffix
+    ]
+    non_mapped = [k for k in vars_in_key if "txt_name" in bin_var_configs[k]]
+    mapped = [k for k in vars_in_key if "txt_map_to" in bin_var_configs[k]]
+    y_vars = non_mapped + mapped
+    y_vars_hist = vars_in_key
+
+    first_res = next(iter(matching.values()))
+    raw_formula = first_res.get("fit_formula") or "unknown"
+    json_formula = _convert_formula_to_jerc_json(raw_formula)
+
+    bin_entries = {}
+    for key, fit_res in matching.items():
+        suffix = key[len(response_var_name) :]
+        bin_edges_raw = {}
+        parse_ok = True
+        for y_var in y_vars_hist:
+            marker = f"_{y_var}_"
+            idx = suffix.find(marker)
+            if idx == -1:
+                parse_ok = False
+                break
+            val_start = idx + len(marker)
+            val_end = len(suffix)
+            for other_var in y_vars_hist:
+                other_idx = suffix.find(f"_{other_var}_", val_start)
+                if other_idx != -1 and other_idx < val_end:
+                    val_end = other_idx
+            try:
+                lo_str, hi_str = suffix[val_start:val_end].split("to", 1)
+                bin_edges_raw[y_var] = (float(lo_str), float(hi_str))
+            except ValueError:
+                parse_ok = False
+                break
+
+        if not parse_ok:
+            log.warning(
+                "Could not parse bin edges from key '%s', skipping json row.", key
+            )
+            continue
+
+        mapped_edges = []
+        build_ok = True
+        for y_var in y_vars:
+            if y_var not in bin_edges_raw:
+                build_ok = False
+                break
+            lo, hi = bin_edges_raw[y_var]
+            bin_var_cfg = bin_var_configs[y_var]
+            if "txt_map_to" in bin_var_cfg:
+                fit_map = (linear_fit_maps or {}).get(bin_var_cfg["txt_map_to"])
+                if fit_map is not None:
+                    lo, hi = fit_map["fit_func"](np.array([lo, hi]))
+            mapped_edges.append((float(lo), float(hi)))
+
+        if not build_ok:
+            log.warning(
+                "Missing bin variable in json row for key '%s', skipping.", key
+            )
+            continue
+
+        params = [float(p) for p in fit_res["params"]]
+        if any(not np.isfinite(p) for p in params):
+            log.error(
+                "Non-finite fit parameter(s) for key '%s' — skipping JSON entry.", key
+            )
+            continue
+
+        bin_entries[tuple(mapped_edges)] = {
+            "x_min": float(fit_res["x_min"]),
+            "x_max": float(fit_res["x_max"]),
+            "params": params,
+        }
+
+    if not bin_entries:
+        log.warning(
+            "No valid entries for %s, skipping JSON output.", response_var_name
+        )
+        return
+
+    def _build_tree(level, prefix_edges):
+        if level == len(y_vars):
+            entry = bin_entries[tuple(prefix_edges)]
+            return cs.Formula(
+                nodetype="formula",
+                expression=json_formula,
+                parser="TFormula",
+                variables=[get_txt_name(x_var)],
+                parameters=[entry["x_min"], entry["x_max"], *entry["params"]],
+            )
+
+        bins_at_level = sorted(
+            {
+                edges[level]
+                for edges in bin_entries
+                if all(edges[i] == prefix_edges[i] for i in range(level))
+            }
+        )
+
+        edges_list = [bins_at_level[0][0]]
+        content = []
+        for lo, hi in bins_at_level:
+            if lo != edges_list[-1]:
+                log.warning(
+                    "Non-contiguous bins at level %d (var %s): expected lo=%s, got %s",
+                    level,
+                    y_vars[level],
+                    edges_list[-1],
+                    lo,
+                )
+                edges_list.append(lo)
+            edges_list.append(hi)
+            content.append(_build_tree(level + 1, prefix_edges + [(lo, hi)]))
+
+        return cs.Binning(
+            nodetype="binning",
+            input=get_txt_name(y_vars[level]),
+            edges=edges_list,
+            content=content,
+            flow="error",
+        )
+
+    data_tree = _build_tree(0, [])
+
+    def _make_input(var_name):
+        return cs.Variable(
+            name=var_name,
+            type="real",
+            description=_INPUT_DESCRIPTIONS.get(var_name, f"value of {var_name}"),
+        )
+
+    inputs = [_make_input(get_txt_name(y_vars[0]))]
+    inputs.append(_make_input(get_txt_name(x_var)))
+    for y_var in y_vars[1:]:
+        inputs.append(_make_input(get_txt_name(y_var)))
+
+    year_tag = cfg["year_map"].get(year, year)
+    jet_type = response_var_cfg.get("txt_jet_name", "AK4PFPuppi")
+    correction_name = f"Run3{year_tag}_V1_NSC_MC_PtResolution_{jet_type}"
+    description = (
+        f"PtResolution for {jet_type} jets, created from {year_tag}_V1_NSC_MC "
+        f"by PtRegressionJERC/plot_jer_mc.py"
+    )
+
+    correction = cs.Correction(
+        name=correction_name,
+        description=description,
+        version=1,
+        inputs=inputs,
+        output=cs.Variable(
+            name="correction", type="real", description="resolution (sigma_pT / pT)"
+        ),
+        data=data_tree,
+    )
+    cset = cs.CorrectionSet(
+        schema_version=2,
+        description=description,
+        corrections=[correction],
+    )
+
+    filename = f"{correction_name}.json"
+    output_path = os.path.join(output_dir, filename)
+    os.makedirs(output_dir, exist_ok=True)
+    with open(output_path, "w") as f:
+        f.write(cset.model_dump_json(exclude_unset=True, indent=2))
+    log.info("Saved resolution JSON to %s", output_path)
+
+
 def plot_1d_inclusive_distributions(
     *,
     response_h_dict,
@@ -2633,6 +2877,16 @@ def process_response_type(
 
         for resp_var_name, resp_var_cfg in available_response_vars.items():
             save_txt_resolution(
+                fit_results=fit_results,
+                response_var_name=resp_var_name,
+                response_var_cfg=resp_var_cfg,
+                bin_var_configs=bin_vars,
+                linear_fit_maps=linear_fit_maps,
+                mapping_vars=cfg["mapping_variables"],
+                output_dir=args.output,
+                year=year,
+            )
+            save_json_resolution(
                 fit_results=fit_results,
                 response_var_name=resp_var_name,
                 response_var_cfg=resp_var_cfg,
