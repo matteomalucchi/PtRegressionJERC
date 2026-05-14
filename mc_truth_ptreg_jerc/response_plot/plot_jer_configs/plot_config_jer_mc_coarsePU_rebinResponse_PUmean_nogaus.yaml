@@ -2,10 +2,10 @@
 mixed_mode: true
 resolution_vs_pt_gen: true
 resolution_vs_pt_reco: true
-histograms_map: true
-histograms_response: true
-gaussian_fit_resolution: true
-gaussian_fit_cut_tails: [0.98, 0.87]
+histograms_map: false
+histograms_response: false
+gaussian_fit_resolution: false
+gaussian_fit_cut_tails: false
 gaussian_fit_max_sigma_rel_err: 1.0
 min_events_for_fit: 50
 
@@ -21,9 +21,9 @@ jet_pt_bins: &jet_pt_bins
    200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000]
 
 # Reduced bin arrays used when test: true
-test_pu_bins: [0,20, 40, 50, 100]
-test_jet_eta_bins: [-5.191,-3.839, 2.964, 3.139, 5.191]
-test_jet_pt_bins: [8, 10, 12, 15, 17, 20, 23, 27, 30, 35, 40, 45, 57, 72, 90, 120, 150, 200, 300, 400, 550]
+test_pu_bins: [0, 40, 50, 100]
+test_jet_eta_bins: [-5.191, 0.0, 0.261, 5.191]
+test_jet_pt_bins: [8, 50, 120, 200, 300, 400, 550, 750, 5000]
 
 # Response histogram settings (anchors for reuse in response_variables)
 n_bins_response: &n_bins_response 150

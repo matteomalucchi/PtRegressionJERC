@@ -389,7 +389,7 @@ def plot_jer_vs_eta(
             mpatches.Patch(
                 facecolor=color_full,
                 edgecolor="none",
-                label=f"{pt_val:.0f} GeV",
+                label=f"{pt_val:.0f}",
             )
         )
 

@@ -158,7 +158,8 @@ python plot_jer_mc.py \
     [--novars] \
     [-m <max_parquet>] \
     [-l <precomputed.coffea>] \
-    [--refit]
+    [--refit] \
+    [--test]
 ```
 
 #### Arguments
@@ -174,6 +175,7 @@ python plot_jer_mc.py \
 | `-m`/`--max-parquet` | `None` (all) | Limit the number of parquet files loaded per dataset (useful for quick tests) |
 | `-l`/`--load` | `None` | Path to a precomputed coffea file produced by a previous run; skips data loading and histogram filling |
 | `--refit` | off | When used with `--load`, re-merge histogram bins according to the current YAML config (coarser binning) and recompute all Gaussian fits before plotting |
+| `--test` | off | Run in test mode with reduced bin arrays (overrides the `test` flag in the YAML config) |
 
 #### Typical workflows
 
@@ -210,15 +212,7 @@ python plot_jer_mc.py -i /work/<user>/out_jer_... -o test_out \
 
 ### Plot configuration file (`plot_jer_configs/`)
 
-The YAML configuration file controls every aspect of the binning, variables, response histograms, and plot style. Several pre-made configurations exist in `response_plot/plot_jer_configs/`:
-
-| File | Description |
-|---|---|
-| `plot_config_jer_mc.yaml` | Default fine-grained PU and response binning |
-| `plot_config_jer_mc_coarsePU.yaml` | Coarser PU bins |
-| `plot_config_jer_mc_coarsePU_rebinResponse.yaml` | Coarse PU + response histograms saved with fine bins but rebinned for plotting |
-| `plot_config_jer_mc_noPU.yaml` | Single inclusive PU bin (no PU splitting) |
-| `plot_config_jer_mc_singlePU.yaml` | Single PU bin configuration |
+The YAML configuration file controls every aspect of the binning, variables, response histograms, and plot style. Several pre-made configurations exist in `response_plot/plot_jer_configs/`.
 
 #### Boolean flags
 
