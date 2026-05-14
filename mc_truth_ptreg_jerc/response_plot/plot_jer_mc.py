@@ -1248,8 +1248,10 @@ def build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict):
             edges = bin_edges_dict[var_name]
             low, high = edges[bin_idx[i]], edges[bin_idx[i] + 1]
             edges_per_var[var_name] = (low, high)
-            if isinstance(low, (int, np.integer)) and isinstance(high, (int, np.integer)):
-                parts.append(f"{var_name}: [{low}, {high})")
+            def _is_int_like(v):
+                return isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+            if _is_int_like(low) and _is_int_like(high):
+                parts.append(f"{var_name}: [{int(low)}, {int(high)})")
             else:
                 parts.append(f"{var_name}: [{low:.2f}, {high:.2f})")
         result[bin_idx] = {"label": ", ".join(parts), "edges": edges_per_var}
@@ -1258,8 +1260,8 @@ def build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict):
 
 def _format_bin_annotation_line(low_edge, high_edge, label):
     """Format one bin variable as a single annotation line (no newline)."""
-    if isinstance(low_edge, (int, np.integer)) and isinstance(high_edge, (int, np.integer)):
-        return f"{low_edge} <= {label} < {high_edge}"
+    if low_edge.is_integer() and high_edge.is_integer():
+        return f"{int(low_edge)} <= {label} < {int(high_edge)}"
     return f"{low_edge:.2f} < {label} < {high_edge:.2f}"
 
 
@@ -1376,6 +1378,8 @@ def _compute_resolution_from_histogram(
                     fit_res = None
                     fit_accepted = False
 
+                    # Collect fit results for all CI values, then select the best by p-value.
+                    fit_candidates = []  # (ci, fit_res, x_fit_try, y_fit_try, y_fit_err_try, is_valid)
                     for ci in ci_values_to_try:
                         x_fit_try = x_fit_base.copy()
                         y_fit_try = y_fit_base.copy()
@@ -1397,7 +1401,7 @@ def _compute_resolution_from_histogram(
 
                         if len(x_fit_try) < 3 or y_fit_try.sum() <= 0:
                             log.debug(
-                                "CI=%s: not enough points in bin %s, trying next CI",
+                                "CI=%s: not enough points in bin %s, skipping",
                                 ci, bin_label_dict[bin_idx]["label"],
                             )
                             continue
@@ -1416,33 +1420,45 @@ def _compute_resolution_from_histogram(
                             ),
                             bounds=([0, -np.inf, 0], [np.inf, np.inf, np.inf]),
                         )
-                        fit_res = fit_res_try
-                        x_fit = x_fit_try
-                        y_fit = y_fit_try
-                        y_fit_err = y_fit_err_try
 
                         _params = fit_res_try["params"]
                         _params_err = fit_res_try["params_err"]
-                        if np.any(np.isnan(_params)) or np.any(np.isnan(_params_err)):
+                        _has_nan = np.any(np.isnan(_params)) or np.any(np.isnan(_params_err))
+                        if _has_nan:
+                            _is_valid = False
                             log.debug(
-                                "CI=%s: fit returned NaN params in bin %s, trying next CI",
+                                "CI=%s: fit returned NaN params in bin %s",
                                 ci, bin_label_dict[bin_idx]["label"],
                             )
-                            continue
-                        _sigma = abs(_params[2])
-                        if _sigma > 0 and _params_err[2] / _sigma >= max_rel_err:
-                            log.debug(
-                                "CI=%s: sigma rel. err. %.2f >= %.2f in bin %s, trying next CI",
-                                ci, _params_err[2] / _sigma, max_rel_err,
-                                bin_label_dict[bin_idx]["label"],
-                            )
-                            continue
-                        log.debug(
-                            "CI=%s: fit successful in bin %s (sigma=%.4f +/- %.4f)",
-                            ci, bin_label_dict[bin_idx]["label"], _params[2], _params_err[2],
+                        else:
+                            _sigma = abs(_params[2])
+                            _sigma_rel_err_ok = _sigma <= 0 or _params_err[2] / _sigma < max_rel_err
+                            _is_valid = _sigma_rel_err_ok
+                            if not _sigma_rel_err_ok:
+                                log.debug(
+                                    "CI=%s: sigma rel. err. %.2f >= %.2f in bin %s",
+                                    ci, _params_err[2] / _sigma, max_rel_err,
+                                    bin_label_dict[bin_idx]["label"],
+                                )
+                        fit_candidates.append(
+                            (ci, fit_res_try, x_fit_try, y_fit_try, y_fit_err_try, _is_valid)
                         )
-                        fit_accepted = True
-                        break
+
+                    # Select the candidate with the highest p-value (lowest chi2/ndf).
+                    # Prefer valid candidates; fall back to best invalid if none are valid.
+                    if fit_candidates:
+                        valid_candidates = [c for c in fit_candidates if c[5]]
+                        pool = valid_candidates if valid_candidates else fit_candidates
+                        best = max(
+                            pool,
+                            key=lambda c: c[1]["p_value"] if not np.isnan(c[1]["p_value"]) else -np.inf,
+                        )
+                        ci_best, fit_res, x_fit, y_fit, y_fit_err, fit_accepted = best
+                        log.debug(
+                            "Selected CI=%s for bin %s (p_value=%.4f, chi2/ndf=%.2f/%d, accepted=%s)",
+                            ci_best, bin_label_dict[bin_idx]["label"],
+                            fit_res["p_value"], fit_res["chi2"], fit_res["dof"], fit_accepted,
+                        )
 
                     if fit_res is not None:
                         # Exclude fit_func lambda — lambdas are not picklable and
@@ -1450,6 +1466,8 @@ def _compute_resolution_from_histogram(
                         gaussian_fits[bin_idx] = {
                             k: v for k, v in fit_res.items() if k != "fit_func"
                         }
+                        if fit_candidates:
+                            gaussian_fits[bin_idx]["ci_best"] = ci_best
                         if rebin_info_for_idx is not None:
                             gaussian_fits[bin_idx]["fit_rebin_info"] = rebin_info_for_idx
                         if fit_accepted:
@@ -1486,9 +1504,25 @@ def _compute_resolution_from_histogram(
                     )
                     resolutions[bin_idx] = resolution
                     resolution_grid[bin_idx] = resolution
-                    resolutions_uncertainty[bin_idx] = (
-                        0  # No uncertainty estimate without fit
-                    )
+                    ntot = np.sum(hist_counts)
+                    if ntot > 0:
+                        # mean = sum(n_i * x_i) / N
+                        mean = np.sum(hist_counts * response_bin_centers) / ntot
+                        # mu2 = sum(n_i * (x_i - mean)^2) / N  [variance = RMS^2]
+                        mu2 = np.sum(hist_counts * (response_bin_centers - mean) ** 2) / ntot
+                        # mu4 = sum(n_i * (x_i - mean)^4) / N  [4th central moment]
+                        mu4 = np.sum(hist_counts * (response_bin_centers - mean) ** 4) / ntot
+                        # uncertainty on variance estimator (high N): sigma(s^2) = sqrt((mu4 - mu2^2) / N)
+                        # uncertainty on RMS via error propagation d(RMS)/d(s^2) = 1/(2*RMS):
+                        #   sigma(RMS) = sigma(s^2) / (2 * RMS)
+                        #             = sqrt((mu4 - mu2^2) / N) / (2 * sqrt(mu2))
+                        #             = sqrt((mu4 - mu2^2) / (4 * N * mu2))
+                        # reduces to RMS/sqrt(2N) for a Gaussian where mu4 = 3*mu2^2
+                        resolutions_uncertainty[bin_idx] = (
+                            np.sqrt((mu4 - mu2**2) / (4 * ntot * mu2)) if mu2 > 0 else 0
+                        )
+                    else:
+                        resolutions_uncertainty[bin_idx] = 0
                 except Exception as e:
                     log.error("Failed to compute resolution for bin %s for '%s': %s", bin_label_dict[bin_idx]["label"], response_var_name, e)
                     failed = True
@@ -1757,10 +1791,10 @@ def plot_variable_slices(
         bin_shape = tuple(len(first_h.axes[i]) for i in range(n_bin_axes))
 
         bin_edges_dict_plot = {
-            v: bin_var_configs[v]["bin_edges"] for v in bin_var_names
+            first_h.axes[i].name: np.array(first_h.axes[i].edges)
+            for i in range(n_bin_axes)
         }
         bin_label_dict = build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict_plot)
-
         # Iterate over all bin combinations
         for bin_idx in np.ndindex(bin_shape):
             # Build annotation text from bin ranges
@@ -1919,6 +1953,22 @@ def plot_variable_slices(
                         plotter.add_line(
                             "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
                         )
+                        _ci_label = fit_res.get("ci_best")
+                        if _ci_label is not None:
+                            _ci_str = f"CI={_ci_label:.2f}"
+                            _amp = fit_res["params"][0]
+                            for _x_line, _ha in ((fit_res["x_min"], "right"), (fit_res["x_max"], "left")):
+                                plotter.add_annotation(
+                                    _x_line,
+                                    _amp,
+                                    _ci_str,
+                                    coord_type="data",
+                                    fontsize=10,
+                                    color=get_color(var_name),
+                                    ha=_ha,
+                                    va="center",
+                                    rotation=90,
+                                )
 
             plotters.append(plotter)
 
