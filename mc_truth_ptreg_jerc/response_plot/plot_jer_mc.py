@@ -1321,6 +1321,8 @@ def _compute_resolution_from_histogram(
     resolutions_uncertainty = {}
     resolution_grid = np.full(bin_shape, np.nan)
     gaussian_fits = {}
+    rebin_infos = {}
+    ci_intervals = {}
 
     log.info("Processing resolution for '%s'...", response_var_name)
 
@@ -1340,29 +1342,35 @@ def _compute_resolution_from_histogram(
         rebin_info_for_idx = None
         # Check if we have enough data
         if np.sum(hist_counts) > cfg.get("min_events_for_fit", 50):
+            x_fit = response_bin_centers.copy()
+            y_fit = hist_counts.astype(float)
+            y_fit_err = np.sqrt(hist_variance)  # Poisson errors
+            bin_width_for_fit = response_bin_width
+
+            if response_vars[response_var_name].get("rebin_for_plotting", False):
+                # Build a temporary 1D histogram so rebin_histogram can operate on it
+                h_1d_slice = hist.Hist(
+                    hist.axis.Variable(
+                        response_bin_edges,
+                        name=response_axis.name,
+                        label=response_axis.label,
+                        flow=False,
+                    )
+                )
+                h_1d_slice.view()[:] = hist_counts
+                h_1d_rebinned, rebin_info = rebin_histogram(h_1d_slice)
+                if rebin_info is not None:
+                    x_fit = h_1d_rebinned.axes[0].centers
+                    y_fit = h_1d_rebinned.values().astype(float)
+                    y_fit_err = np.sqrt(h_1d_rebinned.variances())
+                    rebin_info_for_idx = rebin_info
+                    bin_width_for_fit = response_bin_width * rebin_info[2]
+
+            if rebin_info_for_idx is not None:
+                rebin_infos[bin_idx] = rebin_info_for_idx
+
             if cfg["gaussian_fit_resolution"]:
                 try:
-                    x_fit = response_bin_centers.copy()
-                    y_fit = hist_counts.astype(float)
-                    y_fit_err = np.sqrt(hist_variance)  # Poisson errors
-
-                    if response_vars[response_var_name].get("rebin_for_plotting", False):
-                        # Build a temporary 1D histogram so rebin_histogram can operate on it
-                        h_1d_slice = hist.Hist(
-                            hist.axis.Variable(
-                                response_bin_edges,
-                                name=response_axis.name,
-                                label=response_axis.label,
-                                flow=False,
-                            )
-                        )
-                        h_1d_slice.view()[:] = hist_counts
-                        h_1d_rebinned, rebin_info = rebin_histogram(h_1d_slice)
-                        if rebin_info is not None:
-                            x_fit = h_1d_rebinned.axes[0].centers
-                            y_fit = h_1d_rebinned.values().astype(float)
-                            y_fit_err = np.sqrt(h_1d_rebinned.variances())
-                            rebin_info_for_idx = rebin_info
                     _cut_cfg = cfg.get("gaussian_fit_cut_tails", False)
                     if isinstance(_cut_cfg, list):
                         ci_values_to_try = [float(v) if v not in (None, False) else None for v in _cut_cfg]
@@ -1391,7 +1399,7 @@ def _compute_resolution_from_histogram(
                                 _, lo_idx, hi_idx = Confidence_numpy(
                                     hist=y_fit_try,
                                     bins_mid=x_fit_try,
-                                    bin_width=response_bin_width,
+                                    bin_width=bin_width_for_fit,
                                     confLevel=ci,
                                     return_bins=True,
                                 )
@@ -1416,7 +1424,7 @@ def _compute_resolution_from_histogram(
                             p0=(
                                 float(y_fit_try[peak_idx]),
                                 float(x_fit_try[peak_idx]),
-                                float(response_bin_width * 3),
+                                float(bin_width_for_fit * 3),
                             ),
                             bounds=([0, -np.inf, 0], [np.inf, np.inf, np.inf]),
                         )
@@ -1496,22 +1504,25 @@ def _compute_resolution_from_histogram(
                     failed = True
             else:
                 try:
-                    resolution = Confidence_numpy(
-                        hist=hist_counts,
-                        bins_mid=response_bin_centers,
-                        bin_width=response_bin_width,
-                        confLevel=0.87,
+                    _ci_conf_level = cfg.get("ci_conf_level", 0.87)
+                    resolution, lo_idx, hi_idx = Confidence_numpy(
+                        hist=y_fit,
+                        bins_mid=x_fit,
+                        bin_width=bin_width_for_fit,
+                        confLevel=_ci_conf_level,
+                        return_bins=True,
                     )
                     resolutions[bin_idx] = resolution
                     resolution_grid[bin_idx] = resolution
-                    ntot = np.sum(hist_counts)
+                    ci_intervals[bin_idx] = (float(x_fit[lo_idx]), float(x_fit[hi_idx]))
+                    ntot = np.sum(y_fit)
                     if ntot > 0:
                         # mean = sum(n_i * x_i) / N
-                        mean = np.sum(hist_counts * response_bin_centers) / ntot
+                        mean = np.sum(y_fit * x_fit) / ntot
                         # mu2 = sum(n_i * (x_i - mean)^2) / N  [variance = RMS^2]
-                        mu2 = np.sum(hist_counts * (response_bin_centers - mean) ** 2) / ntot
+                        mu2 = np.sum(y_fit * (x_fit - mean) ** 2) / ntot
                         # mu4 = sum(n_i * (x_i - mean)^4) / N  [4th central moment]
-                        mu4 = np.sum(hist_counts * (response_bin_centers - mean) ** 4) / ntot
+                        mu4 = np.sum(y_fit * (x_fit - mean) ** 4) / ntot
                         # uncertainty on variance estimator (high N): sigma(s^2) = sqrt((mu4 - mu2^2) / N)
                         # uncertainty on RMS via error propagation d(RMS)/d(s^2) = 1/(2*RMS):
                         #   sigma(RMS) = sigma(s^2) / (2 * RMS)
@@ -1549,6 +1560,8 @@ def _compute_resolution_from_histogram(
             "resolutions": resolutions,
             "resolution_grid": resolution_grid,
             "gaussian_fits": gaussian_fits,
+            "rebin_infos": rebin_infos,
+            "ci_intervals": ci_intervals,
             "resolutions_uncertainty": resolutions_uncertainty,
         },
     )
@@ -1670,6 +1683,8 @@ def plot_variable_slices(
     year="",
     var_type="mapping",
     gaussian_fit_results=None,
+    rebin_infos_results=None,
+    resolution_results=None,
 ):
     """
     Plot all 1D histogram slices from ND histograms.
@@ -1846,6 +1861,8 @@ def plot_variable_slices(
                         else None
                     )
                     rebin_info = var_fit.get("fit_rebin_info") if var_fit is not None else None
+                    if rebin_info is None and rebin_infos_results is not None:
+                        rebin_info = (rebin_infos_results or {}).get(vn, {}).get(bin_idx)
                     if rebin_info is not None:
                         lo_edge, hi_edge, rf = rebin_info
                         h_rb = var_data["data"][lo_edge * 1j : hi_edge * 1j : rf * 1j]
@@ -1903,72 +1920,102 @@ def plot_variable_slices(
                 )
             )
 
-            # Overlay Gaussian fit curves when fit results are available
-            if gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]:
+            # Annotate sigma and overlay Gaussian fit curves when available
+            if resolution_results is not None:
                 for i, var_name in enumerate(group_dict):
-
-                    var_fits = gaussian_fit_results.get(var_name, {})
-                    fit_res = var_fits.get(bin_idx)
-                    if fit_res is None or np.any(np.isnan(fit_res["params"])):
+                    res_entry = (resolution_results.get(var_name) or {}).get(bin_idx)
+                    if res_entry is None or np.isnan(res_entry[0]):
                         continue
-                    h_1d = series_dict[var_name]["data"]
-                    axis = h_1d.axes[0]
-                    x_fine = np.linspace(axis.edges[0], axis.edges[-1], 300)
-                    amplitude = fit_res["params"][0]
-                    mu = fit_res["params"][1]
-                    sigma = fit_res["params"][2]
-
-                    y_fine = gaussian_model(x_fine, amplitude, mu, sigma)
-                    fit_label = (
-                        f"$\\sigma={abs(sigma):.3f} \\pm {fit_res['params_err'][2]:.3f}$\n"
-                        f"$\\chi^2/\\mathrm{{ndf}}={fit_res['chi2']:.0f}/{fit_res['dof']}$, "
-                        f"$p={fit_res['p_value']:.2f}$"
-                    )
-                    plotter.add_curve(
-                        x_fine,
-                        y_fine,
-                        color=get_color(var_name),
-                        linestyle="--",
-                        linewidth=2,
-                    )
+                    sigma_val, sigma_err, ci_bounds = res_entry
                     col = i // 3
                     row = i % 3
                     ann_x = 0.05 + col * 0.3
                     ann_y = 0.75 - row * 0.07
+                    sigma_label = f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
+
+                    if gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]:
+                        var_fits = gaussian_fit_results.get(var_name, {})
+                        fit_res = var_fits.get(bin_idx)
+                        if fit_res is not None and not np.any(np.isnan(fit_res["params"])):
+                            sigma_label += (
+                                f"\n$\\chi^2/\\mathrm{{ndf}}={fit_res['chi2']:.0f}/{fit_res['dof']}$, "
+                                f"$p={fit_res['p_value']:.2f}$"
+                            )
+                            h_1d = series_dict[var_name]["data"]
+                            axis = h_1d.axes[0]
+                            x_fine = np.linspace(axis.edges[0], axis.edges[-1], 300)
+                            y_fine = gaussian_model(
+                                x_fine,
+                                fit_res["params"][0],
+                                fit_res["params"][1],
+                                fit_res["params"][2],
+                            )
+                            plotter.add_curve(
+                                x_fine,
+                                y_fine,
+                                color=get_color(var_name),
+                                linestyle="--",
+                                linewidth=2,
+                            )
+                            if cfg.get("gaussian_fit_cut_tails", False):
+                                plotter.add_line(
+                                    "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
+                                )
+                                plotter.add_line(
+                                    "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
+                                )
+                                _ci_label = fit_res.get("ci_best")
+                                if _ci_label is not None:
+                                    _ci_str = f"CI={_ci_label:.2f}"
+                                    _amp = fit_res["params"][0]
+                                    for _x_line, _ha in ((fit_res["x_min"], "right"), (fit_res["x_max"], "left")):
+                                        plotter.add_annotation(
+                                            _x_line,
+                                            _amp,
+                                            _ci_str,
+                                            coord_type="data",
+                                            fontsize=10,
+                                            color=get_color(var_name),
+                                            ha=_ha,
+                                            va="center",
+                                            rotation=90,
+                                        )
+
+                    if ci_bounds is not None and not (
+                        gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]
+                    ) and False:
+                        x_lo, x_hi = ci_bounds
+                        _ci_str = f"CI={cfg.get('ci_conf_level', 0.87):.2f}"
+                        plotter.add_line(
+                            "v", x=x_lo, color=get_color(var_name), linestyle="dotted"
+                        )
+                        plotter.add_line(
+                            "v", x=x_hi, color=get_color(var_name), linestyle="dotted"
+                        )
+                        h_1d = series_dict[var_name]["data"]
+                        _amp = float(h_1d.values().max()) if h_1d.values().max() > 0 else 1.0
+                        for _x_line, _ha in ((x_lo, "right"), (x_hi, "left")):
+                            plotter.add_annotation(
+                                _x_line,
+                                _amp,
+                                _ci_str,
+                                coord_type="data",
+                                fontsize=10,
+                                color=get_color(var_name),
+                                ha=_ha,
+                                va="center",
+                                rotation=90,
+                            )
+
                     plotter.add_annotation(
                         ann_x,
                         ann_y,
-                        fit_label,
+                        sigma_label,
                         coord_type="axes",
                         verticalalignment="top",
                         fontsize=15,
                         color=get_color(var_name),
                     )
-
-                    if cfg.get("gaussian_fit_cut_tails", False):
-                        # plot the lines corresponding to the fit range
-                        plotter.add_line(
-                            "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
-                        )
-                        plotter.add_line(
-                            "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
-                        )
-                        _ci_label = fit_res.get("ci_best")
-                        if _ci_label is not None:
-                            _ci_str = f"CI={_ci_label:.2f}"
-                            _amp = fit_res["params"][0]
-                            for _x_line, _ha in ((fit_res["x_min"], "right"), (fit_res["x_max"], "left")):
-                                plotter.add_annotation(
-                                    _x_line,
-                                    _amp,
-                                    _ci_str,
-                                    coord_type="data",
-                                    fontsize=10,
-                                    color=get_color(var_name),
-                                    ha=_ha,
-                                    va="center",
-                                    rotation=90,
-                                )
 
             plotters.append(plotter)
 
@@ -2587,6 +2634,31 @@ def process_response_type(
         else:
             gaussian_fit_results = None
 
+        rebin_infos_results = (
+            {
+                var_name: result.get("rebin_infos", {})
+                for var_name, result in response_tot_dict.items()
+            }
+            if response_tot_dict
+            else None
+        )
+
+        resolution_results = (
+            {
+                var_name: {
+                    bin_idx: (
+                        res,
+                        result.get("resolutions_uncertainty", {}).get(bin_idx, 0),
+                        result.get("ci_intervals", {}).get(bin_idx),
+                    )
+                    for bin_idx, res in result.get("resolutions", {}).items()
+                }
+                for var_name, result in response_tot_dict.items()
+            }
+            if response_tot_dict
+            else None
+        )
+
         plot_variable_slices(
             h_dict=response_h_dict,
             variables_dict=available_response_vars,
@@ -2596,6 +2668,8 @@ def process_response_type(
             year=year,
             var_type="response",
             gaussian_fit_results=gaussian_fit_results,
+            rebin_infos_results=rebin_infos_results,
+            resolution_results=resolution_results,
         )
 
     if cfg["resolution_vs_pt_gen"]:
