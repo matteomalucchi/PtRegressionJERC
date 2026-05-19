@@ -790,9 +790,9 @@ def plot_resolution_vs_x_variable(
 
             if fit_resolution:
                 for i, (response_var, fit_res) in enumerate(fit_results.items()):
-                    chi2_str = f"$\\chi^2$/ndf={fit_res['chi2']:.1f}/{fit_res['dof']}, p={fit_res['p_value']:.2f}"
+                    chi2_str = f"$\\chi^2$/ndf={fit_res['chi2']:.0f}/{fit_res['dof']}, p={fit_res['p_value']:.2f}"
                     plotter.add_annotation(
-                        0.7,
+                        0.69,
                         0.65 - i * 0.07,
                         chi2_str,
                         color=get_color(response_var.replace(fit_result_string, "")),
