@@ -100,6 +100,14 @@ cd ../PtRegressionJERC/met_ptreg_performance
 pocket-coffea run --cfg MET_studies_config_lxplus.py --custom-run-options ./params/lxplus_run_options_big.yaml -o <output-dir> -e condor@lxplus
 ```
 
+If running on `lxplus`, there will be an output file for each worker in the `dir_name` directory and you can merge them using:
+
+```bash
+cd <output-dir>
+pocket-coffea merge-outputs -o output_all.coffea output_job_*.coffea
+```
+
+
 > [!IMPORTANT]
 > Before running, update the `output_chunks_name` path in `MET_studies_config_lxplus.py` to point to your own EOS area:
 >
