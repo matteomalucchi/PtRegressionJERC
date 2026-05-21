@@ -173,7 +173,7 @@ def _eval_formula(formula_str, x, params):
     """
     expr = formula_str
     for i, p in enumerate(params):
-        expr = expr.replace(f"[{i}]", repr(float(p)))
+        expr = re.sub(rf"\[[a-zA-Z]*{i}\]", repr(float(p)), expr)
     expr = (
         expr.replace("pow(", "np.power(")
            .replace("sqrt(", "np.sqrt(")
@@ -264,6 +264,19 @@ def _file_label(path):
 def _short_stem(path):
     """Return the input filename stem (no extension) as the output base name."""
     return os.path.splitext(os.path.basename(path))[0]
+
+
+def _combine_file_label(data):
+    """Return a short human-readable label for a file in a combined plot.
+
+    Combines the year and formatted jet-algo; falls back to the stem when
+    neither can be extracted (e.g. custom txt files with non-standard names).
+    """
+    year     = data.get("year") or ""
+    jet_algo = data.get("jet_algo")
+    algo_fmt = _format_jet_algo(jet_algo) if jet_algo else ""
+    parts    = [p for p in [year, algo_fmt] if p]
+    return " ".join(parts) if parts else data.get("stem", "")
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +492,67 @@ def compute_ratio_points(data_num, data_den):
 
 
 # ---------------------------------------------------------------------------
-# Layer 2b – eta-range filter (applied after extraction, before plotting)
+# Layer 2b – combine multiple JERCData dicts into one overlaid dataset
+# ---------------------------------------------------------------------------
+
+def combine_jerc_data(data_list):
+    """
+    Merge multiple JERCData dicts for overlaid plotting on a single canvas.
+
+    Only the central rho bin from each file is retained so the rho dimension
+    does not clutter the overlay.  The file index then plays the role that the
+    rho-bin index normally plays inside plot_jerc_series:
+      - colour  → JetPt value  (unchanged)
+      - marker  → file index
+      - alpha   → file index (lighter = first file, darker = last file)
+
+    To signal combine-mode to plot_jerc_series, rho_bins is set to a list of
+    per-file label strings instead of the usual (lo, hi) tuples.
+    """
+    n_files = len(data_list)
+    file_alphas = np.linspace(0.5, 1.0, n_files) if n_files > 1 else np.array([1.0])
+    file_labels = [_combine_file_label(d) for d in data_list]
+
+    all_points = []
+    pt_seen    = {}
+    for i_file, data in enumerate(data_list):
+        rho_bins = data["rho_bins"]
+        if rho_bins == [None]:
+            central_rho_bin = None
+        else:
+            central_rho_bin = rho_bins[len(rho_bins) // 2]
+
+        for p in data["points"]:
+            if rho_bins != [None] and p["rho_bin"] != central_rho_bin:
+                continue
+            all_points.append({**p, "i_rho": i_file, "rho_bin": file_labels[i_file]})
+            pt_seen[p["i_pt"]] = p["pt_val"]
+
+    lumi_texts = list(dict.fromkeys(d["lumi_text"] for d in data_list))
+    lumi_text  = " / ".join(lumi_texts) if len(lumi_texts) > 1 else lumi_texts[0]
+
+    algos    = list(dict.fromkeys(d["jet_algo"] for d in data_list if d["jet_algo"]))
+    jet_algo = algos[0] if len(algos) == 1 else None
+
+    base = data_list[0]
+    return {
+        "points":         all_points,
+        "rho_bins":       file_labels,      # strings → signals combine-mode
+        "rho_alphas":     file_alphas,
+        "pt_values_used": sorted(pt_seen.items()),
+        "eta_var":        base["eta_var"],
+        "x_var":          base["x_var"],
+        "year":           base["year"],
+        "jet_algo":       jet_algo,
+        "lumi_text":      lumi_text,
+        "label":          " vs ".join(file_labels),
+        "stem":           "combined",
+        "content_type":   base.get("content_type", "Resolution"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Layer 2c – eta-range filter (applied after extraction, before plotting)
 # ---------------------------------------------------------------------------
 
 def _filter_eta(data, eta_max):
@@ -516,12 +589,17 @@ def _add_detector_region_lines(ax, symmetric=False):
             ax.axvline(eta, color="black", linestyle=ls, linewidth=0.8, zorder=1,
                        ymin=0.03, ymax=0.78)
 
-    # Draw the first boundary at or just beyond xmax to mark where the current detector region ends
+    # Draw the first boundary at or just beyond the true data edge to mark where the
+    # current detector region ends.  Use ax.dataLim (no matplotlib margin) so that a
+    # boundary sitting exactly at the data edge is found first rather than being skipped
+    # in favour of the next one further out.  Also skip drawing if the boundary already
+    # fell inside the padded xlim and was rendered by the main loop above.
+    data_xmax = ax.dataLim.x1
     first_outside = next(
-        ((eta, ls) for eta, ls in boundaries if eta >= xmax and eta > xmin),
+        ((eta, ls) for eta, ls in boundaries if eta >= data_xmax and eta > xmin),
         None,
     )
-    if first_outside is not None:
+    if first_outside is not None and not (xmin < first_outside[0] < xmax):
         ax.axvline(first_outside[0], color="black", linestyle=first_outside[1],
                    linewidth=0.8, zorder=1, ymin=0.03, ymax=0.78)
 
@@ -696,7 +774,7 @@ def plot_jerc_series(
     #         ax.axvline(sign * eta_max, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
 
     if draw_detector_regions:
-        _add_detector_region_lines(ax, symmetric=(draw_detector_regions == "symmetric"))
+        _add_detector_region_lines(ax, symmetric=fold_eta)
 
     if no_rho:
         # Single legend: colour+marker per pT value, placed inside the plot
@@ -732,7 +810,10 @@ def plot_jerc_series(
             for i_pt, pt_val in pt_values_used
         ]
 
-        # Legend part 2: one line/marker per rho bin (only those present in the data)
+        # Detect combine-mode: rho_bins contains label strings instead of (lo,hi) tuples
+        is_combine = any(isinstance(rb, str) for rb in rho_bins)
+
+        # Legend part 2: one line/marker per rho bin (or per file in combine-mode)
         rho_handles = [
             mlines.Line2D(
                 [], [],
@@ -740,7 +821,10 @@ def plot_jerc_series(
                 marker=_MARKERS[i_rho % len(_MARKERS)],
                 linestyle="none",
                 markersize=8,
-                label=rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$",
+                label=(
+                    rho_bin if is_combine
+                    else rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$"
+                ),
             )
             for i_rho, rho_bin in enumerate(rho_bins)
             if rho_bin is not None and i_rho in present_i_rho
@@ -761,7 +845,7 @@ def plot_jerc_series(
             handles=rho_handles,
             bbox_to_anchor=(1.0, 0.0),
             loc="lower left",
-            title=r"$\rho$ [GeV/Area]",
+            title="File" if is_combine else r"$\rho$ [GeV/Area]",
             fontsize="x-small",
             title_fontsize="small",
             framealpha=0.85,
@@ -820,7 +904,7 @@ def plot_jerc_vs_eta(
             data_formats=data_formats,
             eta_max=eta_max,
             fold_eta=True,
-            draw_detector_regions="symmetric",
+            draw_detector_regions=True,
         )
 
 
@@ -852,6 +936,8 @@ def plot_jerc_ratio_vs_eta(
         data_formats=data_formats,
         eta_max=eta_max,
         hline=1.0,
+        fold_eta=True,
+        draw_detector_regions="symmetric",
     )
 
 
@@ -898,6 +984,15 @@ def main():
         metavar="ETA",
         help="|eta| upper limit for the restricted-range plots (default: 2.5)",
     )
+    parser.add_argument(
+        "--combine",
+        action="store_true",
+        help=(
+            "Overlay all input files on a single plot.  "
+            "Only the central rho bin is used; files are distinguished by marker and alpha.  "
+            "Colours still encode JetPt.  Individual per-file plots are still produced."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -915,6 +1010,17 @@ def main():
         output_base = os.path.join(args.output, data["stem"])
         plot_jerc_vs_eta(data, output_base, data_formats=args.formats)
         plot_jerc_vs_eta(data, output_base + eta_max_suffix, data_formats=args.formats, eta_max=args.eta_max)
+
+    if args.combine:
+        if len(args.input) < 2:
+            log.warning("--combine requires at least 2 input files; skipping combined plot.")
+        else:
+            combined = combine_jerc_data([extracted[p] for p in args.input])
+            stems = [extracted[p]["stem"] for p in args.input]
+            combined_name = "combined_" + "__vs__".join(stems)
+            output_base = os.path.join(args.output, combined_name)
+            plot_jerc_vs_eta(combined, output_base, data_formats=args.formats)
+            plot_jerc_vs_eta(combined, output_base + eta_max_suffix, data_formats=args.formats, eta_max=args.eta_max)
 
     if not args.no_ratio:
         for path_a, path_b in combinations(args.input, 2):
