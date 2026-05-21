@@ -54,6 +54,51 @@ The plotting script reads the coffea output files and produces three categories 
 
 3. **1D and 2D response histograms** — Per-bin distributions of $R$, $u_\parallel$, $u_\perp$ (and their scaled versions) as 1D histograms, and 2D histograms of response vs binning variable with profile plots of the mean and resolutions. These are produced only when the `--histo` flag is passed.
 
+
+## Adding new datasets
+
+New datasets are defined in [`datasets/datasets_definitions.json`](datasets/datasets_definitions.json). Each entry follows the PocketCoffea format:
+
+```json
+{
+    "MySample": {
+        "sample": "MySample",
+        "json_output": "datasets/MySample.json",
+        "files": [
+            {
+                "das_names": [
+                    "/DAS/path/to/dataset/NANOAODSIM"
+                ],
+                "metadata": {
+                    "year": "2022_preEE",
+                    "isMC": true,
+                    "xsec": 1234.0
+                }
+            }
+        ]
+    }
+}
+```
+
+After adding the entry, build the dataset JSON files (inside the singularity with the venv active):
+
+```bash
+# Restricting to European sites — recommended from lxplus
+pocket-coffea build-datasets --cfg datasets/datasets_definitions.json -o -rs 'T[123]_(FR|IT|DE|BE|CH|UK)_\w+'
+```
+
+This generates `datasets/MySample_redirector.json` (and variants) with the actual file lists. Then update `MET_studies_config_lxplus.py` to reference the new dataset JSON and sample name:
+
+```python
+datasets={
+    "jsons": [f"{localdir}/datasets/MySample_redirector.json"],
+    "filter": {"samples": ["MySample"], "year": ["2022_preEE"]},
+},
+```
+
+For more details on dataset building options (whitelist/blacklist sites, local prefixes, etc.) see the [PocketCoffea datasets documentation](https://pocketcoffea.readthedocs.io/en/latest/datasets.html).
+
+
 ## Workflow
 
 ### Running the analysis
@@ -115,45 +160,8 @@ pocket-coffea merge-outputs -o output_all.coffea output_job_*.coffea
 > output_chunks_name = "root://eosuser.cern.ch//eos/user/<initial>/<username>/..."
 > ```
 
-### Adding new datasets
-
-New datasets are defined in [`datasets/datasets_definitions.json`](datasets/datasets_definitions.json). Each entry follows the PocketCoffea format:
-
-```json
-{
-    "MySample": {
-        "sample": "MySample",
-        "json_output": "datasets/MySample.json",
-        "files": [
-            {
-                "das_names": [
-                    "/DAS/path/to/dataset/NANOAODSIM"
-                ],
-                "metadata": {
-                    "year": "2022_preEE",
-                    "isMC": true,
-                    "xsec": 1234.0
-                }
-            }
-        ]
-    }
-}
-```
-
-After adding the entry, build the dataset JSON files (inside the singularity with the venv active):
+To produce the response plots, use:
 
 ```bash
-# Restricting to European sites — recommended from lxplus
-pocket-coffea build-datasets --cfg datasets/datasets_definitions.json -o -rs 'T[123]_(FR|IT|DE|BE|CH|UK)_\w+'
+python plot_MET.py -i <input-dir> -w 8 --histo -o <output-plot-dir>
 ```
-
-This generates `datasets/MySample_redirector.json` (and variants) with the actual file lists. Then update `MET_studies_config_lxplus.py` to reference the new dataset JSON and sample name:
-
-```python
-datasets={
-    "jsons": [f"{localdir}/datasets/MySample_redirector.json"],
-    "filter": {"samples": ["MySample"], "year": ["2022_preEE"]},
-},
-```
-
-For more details on dataset building options (whitelist/blacklist sites, local prefixes, etc.) see the [PocketCoffea datasets documentation](https://pocketcoffea.readthedocs.io/en/latest/datasets.html).
