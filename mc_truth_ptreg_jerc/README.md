@@ -210,6 +210,60 @@ python plot_jer_mc.py -i /work/<user>/out_jer_... -o test_out \
 
 ---
 
+### Plotting JERC txt files with `plot_jerc_txt.py`
+
+`response_plot/plot_jerc_txt.py` reads one or more JME-format resolution (or L2Relative correction) txt files and produces publication-quality plots of the resolution (or jet response) as a function of jet $\eta$, evaluated at a set of user-chosen $p_T$ values.
+
+#### What the script does
+
+1. **Parses the JERC txt format** — reads the file header (bin variables, x variable, formula string) and each row of bin edges and formula parameters. Rows with non-finite parameters are logged and skipped.
+2. **Evaluates the formula** — for every combination of (JetPt, $\eta$ bin, $\rho$ bin), the ROOT `TFormula` string is evaluated numerically via numpy. Unphysical combinations (where $E_\text{jet} = p_T \cosh|\eta| \geq E_\text{beam}/2$) are silently dropped.
+3. **Produces resolution-vs-$\eta$ plots** — one plot per input file, with:
+   - **Color + marker** per $p_T$ evaluation value.
+   - **Alpha shading** per $\rho$ bin (lighter = lower $\rho$, darker = higher $\rho$). When no $\rho$ binning is present a single opaque marker per $p_T$ is used.
+   - **CMS detector-region lines and labels** (Barrel, EC1, EC2, HF) overlaid on the $\eta$ axis.
+   - A full-range plot (all $\eta$) and a restricted-range plot ($|\eta| < $ `--eta-max`, default 2.5) are saved for each file.
+4. **Handles L2Relative correction files** — when the txt header declares `Correction L2Relative`, the script inverts the correction ($1/c$) and plots it as the simulated jet response with a horizontal reference line at 1.
+5. **Produces pairwise ratio plots** — for every pair of input files, plots the point-wise ratio (numerator / denominator) as a function of $\eta$ with a horizontal line at 1. Ratio plots are also saved in the restricted-$\eta$ range. Use `--no-ratio` to skip this step.
+
+#### Command-line usage
+
+```bash
+cd response_plot/
+
+# single file
+python plot_jerc_txt.py Run3Summer22_V1_NSC_MC_PtResolution_AK4PFPuppi.txt \
+    --pt-values 80 150 300 600 -o plots/
+
+# all txt files in a directory (shell expands the glob)
+python plot_jerc_txt.py /path/to/txt/*.txt --pt-values 80 150 300 600 -o plots/
+```
+
+#### Arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `input` | required | One or more JERC resolution/correction txt files; shell globs (`*.txt`) are accepted |
+| `--pt-values` | `50 100 300 600 1000 3000` | JetPt [GeV] values at which to evaluate the resolution formula |
+| `-o`/`--output` | `.` | Output directory for all plots |
+| `--formats` | `png pdf svg` | Output file formats |
+| `--no-ratio` | off | Skip pairwise ratio plots |
+| `--eta-max` | `2.5` | $|\eta|$ upper limit for the restricted-range plots |
+
+#### Output files
+
+For each input file `<stem>.txt` the script writes:
+
+- `<output>/<stem>.<fmt>` — full-$\eta$ resolution (or response) plot.
+- `<output>/<stem>_abseta_lt_<eta_max>.<fmt>` — restricted-$\eta$ version.
+
+For each pair of files `<stem_a>` and `<stem_b>`:
+
+- `<output>/ratio_<stem_a>__over__<stem_b>.<fmt>` — full-$\eta$ ratio plot.
+- `<output>/ratio_<stem_a>__over__<stem_b>_abseta_lt_<eta_max>.<fmt>` — restricted-$\eta$ ratio.
+
+---
+
 ### Plot configuration file (`plot_jer_configs/`)
 
 The YAML configuration file controls every aspect of the binning, variables, response histograms, and plot style. Several pre-made configurations exist in `response_plot/plot_jer_configs/`.
