@@ -99,16 +99,17 @@ PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
 # Keys are substrings matched against the txt filename stem.
 # L2L3Residual must come before L2Residual so the longer key wins.
 _JERC_CONFIG = {
-    "L2L3Residual": {
-        "ylabel": "Jet response MC / data",
+    "L2Relative": {
+        "ylabel": "Simulated jet response",
         "ylim": (0.8, 1.4),
         "ylim_eta_restricted": (0.8, 1.4),
-        "lumitext": None,       # None → use data["lumi_text"]
-        "cmstext": "Preliminary",
+        "lumitext": None,
+        "cmstext": "Simulation Preliminary",
         "fold_eta": True,
         "draw_detector_regions": True,
-        "plot_inverse": False,
+        "plot_inverse": True,
         "hline": 1.0,
+        "plot_vs_pt": False,
     },
     "L2Residual": {
         "ylabel": r"$R^\mathrm{sim}/R^\mathrm{data}$",
@@ -120,17 +121,20 @@ _JERC_CONFIG = {
         "draw_detector_regions": True,
         "plot_inverse": False,
         "hline": 1.0,
+        "plot_vs_pt": False,
     },
-    "L2Relative": {
-        "ylabel": "Simulated jet response",
+    "L2L3Residual": {
+        "ylabel": "Jet response MC / data",
         "ylim": (0.8, 1.4),
         "ylim_eta_restricted": (0.8, 1.4),
-        "lumitext": None,
-        "cmstext": "Simulation Preliminary",
+        "lumitext": None,       # None → use data["lumi_text"]
+        "cmstext": "Preliminary",
         "fold_eta": True,
         "draw_detector_regions": True,
         "plot_inverse": True,
         "hline": 1.0,
+        "plot_vs_pt": True,    # True → also produce a vs-pt smooth-curve plot
+        "onlyL3Residual": True,
     },
     "MC_JER": {
         "ylabel": "Jet Energy Resolution",
@@ -142,6 +146,7 @@ _JERC_CONFIG = {
         "draw_detector_regions": True,
         "plot_inverse": False,
         "hline": None,
+        "plot_vs_pt": False,     # JER as f(pT) is natural; enabled by default
     },
     "JERSF": {
         "ylabel": "Jet Energy Resolution Scale Factor",
@@ -153,6 +158,7 @@ _JERC_CONFIG = {
         "draw_detector_regions": True,
         "plot_inverse": False,
         "hline": 1.0,
+        "plot_vs_pt": False,
     },
 }
 
@@ -166,6 +172,7 @@ _DEFAULT_JERC_CONFIG = {
     "draw_detector_regions": True,
     "plot_inverse": False,
     "hline": None,
+    "plot_vs_pt": False,
 }
 
 
@@ -276,6 +283,44 @@ def _eval_formula(formula_str, x, params):
     return float(
         eval(expr, {"np": np, "x": float(x), "max": max, "min": min})
     )  # noqa: S307
+
+
+def _extract_l3residual_formula(formula):
+    """Split a compound L2L3Residual formula and return (l3_formula, param_offset).
+
+    Expects formula = L2Relative_factor * L3Residual_factor.  Returns the
+    L3Residual factor with its [i] indices re-numbered from 0, plus the
+    original index offset so callers can slice per-row params accordingly.
+    """
+    # Split at top-level '*' (ignore '*' inside parentheses)
+    parts = []
+    depth = 0
+    buf = []
+    for ch in formula:
+        if ch == "(":
+            depth += 1
+            buf.append(ch)
+        elif ch == ")":
+            depth -= 1
+            buf.append(ch)
+        elif ch == "*" and depth == 0:
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    if buf:
+        parts.append("".join(buf))
+
+    l3_part = parts[-1]
+    indices = [int(m.group(1)) for m in re.finditer(r"\[(\d+)\]", l3_part)]
+    if not indices:
+        return l3_part, 0
+    offset = min(indices)
+
+    def _reindex(m):
+        return f"[{int(m.group(1)) - offset}]"
+
+    return re.sub(r"\[(\d+)\]", _reindex, l3_part), offset
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +435,49 @@ def _combine_file_label(data):
     return " ".join(parts) if parts else data.get("stem", "")
 
 
+def _combined_lumi_text(data_list):
+    """Return a compact era label for multi-file overlays.
+
+    Collapses to "Run 3 (13.6 TeV)" or "Run 2 (13 TeV)" when all files share
+    the same beam energy; falls back to joining individual lumi strings.
+    """
+    lumi_texts = list(dict.fromkeys(d["lumi_text"] for d in data_list))
+    if len(lumi_texts) == 1:
+        return lumi_texts[0]
+    energies = {"13.6 TeV" if "13.6" in lt else "13 TeV" for lt in lumi_texts}
+    if energies == {"13.6 TeV"}:
+        return "Run 3 (13.6 TeV)"
+    if energies == {"13 TeV"}:
+        return "Run 2 (13 TeV)"
+    return " / ".join(lumi_texts)
+
+
+def _make_combined_name(data_list, max_basename=200):
+    """Build a filesystem-safe combined output base name (no extension).
+
+    Uses per-file short labels (year + jet algo). Falls back to a short MD5
+    hash when the result would still exceed *max_basename* characters.
+    """
+    import hashlib
+
+    def _slug(d):
+        return (
+            _combine_file_label(d)
+            .replace(", ", "_")
+            .replace(" ", "_")
+            .replace(",", "")
+        )
+
+    labels = [_slug(d) for d in data_list]
+    name = "combined_" + "_vs_".join(labels)
+    if len(name) <= max_basename:
+        return name
+    h = hashlib.md5(
+        "__vs__".join(d.get("stem", str(i)) for i, d in enumerate(data_list)).encode()
+    ).hexdigest()[:8]
+    return f"combined_{labels[0]}_and_{len(data_list) - 1}more_{h}"
+
+
 # ---------------------------------------------------------------------------
 # Layer 1 – extract evaluated JERC points from a single txt file
 # ---------------------------------------------------------------------------
@@ -427,6 +515,11 @@ def extract_jerc_points(txt_path, pt_values):
     x_var = header["x_var"]
     formula = header["formula"]
     content_type = header.get("content_type", "Resolution")
+
+    cfg = _get_jerc_config(_short_stem(txt_path))
+    param_offset = 0
+    if cfg.get("onlyL3Residual"):
+        formula, param_offset = _extract_l3residual_formula(formula)
 
     eta_var = next((v for v in bin_vars if "eta" in v.lower()), bin_vars[0])
     # Only treat a variable as rho if its name actually contains "rho";
@@ -470,8 +563,9 @@ def extract_jerc_points(txt_path, pt_values):
                     continue
 
                 pt_eval = max(row["x_min"], min(pt_val, row["x_max"]))
+                row_params = row["params"][param_offset:]
                 try:
-                    y = _eval_formula(formula, pt_eval, row["params"])
+                    y = _eval_formula(formula, pt_eval, row_params)
                 except Exception:
                     log.error(
                         "Error evaluating formula for pt=%s, eta_bin=%s, rho_bin=%s in file '%s' in line: %r "
@@ -646,8 +740,7 @@ def combine_jerc_data(data_list):
             all_points.append({**p, "i_rho": i_file, "rho_bin": file_labels[i_file]})
             pt_seen[p["i_pt"]] = p["pt_val"]
 
-    lumi_texts = list(dict.fromkeys(d["lumi_text"] for d in data_list))
-    lumi_text = " / ".join(lumi_texts) if len(lumi_texts) > 1 else lumi_texts[0]
+    lumi_text = _combined_lumi_text(data_list)
 
     algos = list(dict.fromkeys(d["jet_algo"] for d in data_list if d["jet_algo"]))
     jet_algo = algos[0] if len(algos) == 1 else None
@@ -665,7 +758,151 @@ def combine_jerc_data(data_list):
         "lumi_text": lumi_text,
         "label": " vs ".join(file_labels),
         "stem": "combined",
+        "config_stem": base["stem"],  # inherit config (ylim, ylabel…) from first file
         "content_type": base.get("content_type", "Resolution"),
+    }
+
+
+def extract_jerc_vs_pt_curves(txt_path, eta_range, n_pts=300):
+    """
+    Evaluate the JERC formula on a fine pt grid for a given |eta| window.
+
+    Returns a JERCData-like dict with x_mode="pt" that can be passed
+    directly to plot_jerc_series or combine_jerc_vs_pt_curves.
+
+    Parameters
+    ----------
+    txt_path  : path to the JERC txt file
+    eta_range : (eta_lo, eta_hi) — the |eta| window to select
+    n_pts     : number of pt grid points (log-spaced 10–5000 GeV)
+    """
+    eta_lo, eta_hi = eta_range
+    stem = _short_stem(txt_path)
+    cfg = _get_jerc_config(stem)
+
+    header, rows = _parse_jerc_txt(txt_path)
+    bin_vars = header["bin_vars"]
+    formula = header["formula"]
+    param_offset = 0
+    if cfg.get("onlyL3Residual"):
+        formula, param_offset = _extract_l3residual_formula(formula)
+    eta_var = next((v for v in bin_vars if "eta" in v.lower()), bin_vars[0])
+    rho_var = next((v for v in bin_vars if "rho" in v.lower()), None)
+
+    year = _extract_year(txt_path, year_map=_YEAR_MAP)
+    jet_algo = _extract_jet_algo(txt_path)
+    is_ul = "UL" in (year or "")
+    e_cm = 13000.0 if is_ul else 13600.0
+    lumi_text = f"{year} ({'13' if is_ul else '13.6'} TeV)" if year else "(13.6 TeV)"
+
+    eta_rows = [
+        r for r in rows
+        if eta_lo <= abs(0.5 * sum(r["bin_edges"][eta_var])) < eta_hi
+    ]
+    if not eta_rows:
+        log.warning(
+            "No eta bins with centre in [%.2f, %.2f) for %s — skipping vs-pt.",
+            eta_lo, eta_hi, txt_path,
+        )
+        return None
+
+    rho_bins_list = sorted({r["bin_edges"][rho_var] for r in eta_rows}) if rho_var else [None]
+    rho_alphas = np.linspace(0.25, 1.0, len(rho_bins_list))
+    pt_grid = np.logspace(1, np.log10(5000), n_pts)
+
+    points = []
+    for i_rho, rho_bin in enumerate(rho_bins_list):
+        rho_rows = [
+            r for r in eta_rows
+            if rho_var is None or r["bin_edges"].get(rho_var) == rho_bin
+        ]
+        for pt_val in pt_grid:
+            y_vals = []
+            for row in rho_rows:
+                eta_lo_r, eta_hi_r = row["bin_edges"][eta_var]
+                eta_c = 0.5 * (eta_lo_r + eta_hi_r)
+                if pt_val * np.cosh(abs(eta_c)) >= e_cm / 2.0:
+                    continue
+                if not (row["x_min"] <= pt_val <= row["x_max"]):
+                    continue
+                try:
+                    y = _eval_formula(formula, pt_val, row["params"][param_offset:])
+                except Exception:
+                    continue
+                if not np.isfinite(y) or y <= 0:
+                    continue
+                if cfg.get("plot_inverse"):
+                    y = 1.0 / y
+                y_vals.append(y)
+            if y_vals:
+                points.append({
+                    "x": float(pt_val),
+                    "y": float(np.mean(y_vals)),
+                    "i_rho": i_rho,
+                    "rho_bin": rho_bin,
+                    "i_pt": 0,
+                    "pt_val": 0.0,
+                    "eta_c": 0.0,
+                    "eta_bin": (eta_lo, eta_hi),
+                })
+
+    return {
+        "points": points,
+        "rho_bins": rho_bins_list,
+        "rho_alphas": rho_alphas,
+        "pt_values_used": [],
+        "eta_var": eta_var,
+        "x_var": "JetPt",
+        "year": year,
+        "jet_algo": jet_algo,
+        "lumi_text": lumi_text,
+        "label": stem,
+        "stem": stem,
+        "content_type": header.get("content_type", "Resolution"),
+        "eta_range": eta_range,
+        "x_mode": "pt",
+    }
+
+
+def combine_jerc_vs_pt_curves(data_list):
+    """
+    Merge multiple vs-pt curve dicts for overlaid plotting on one canvas.
+
+    Each file becomes one curve (i_rho = file index), analogous to
+    combine_jerc_data for the vs-eta view.
+    """
+    n_files = len(data_list)
+    file_labels = [_combine_file_label(d) for d in data_list]
+    # Full opacity: each curve gets its own distinct colour
+    file_alphas = np.ones(n_files)
+
+    all_points = []
+    for i_file, data in enumerate(data_list):
+        for p in data["points"]:
+            all_points.append({**p, "i_rho": i_file, "rho_bin": file_labels[i_file]})
+
+    lumi_text = _combined_lumi_text(data_list)
+
+    algos = list(dict.fromkeys(d["jet_algo"] for d in data_list if d["jet_algo"]))
+    jet_algo = algos[0] if len(algos) == 1 else None
+
+    base = data_list[0]
+    return {
+        "points": all_points,
+        "rho_bins": file_labels,
+        "rho_alphas": file_alphas,
+        "pt_values_used": [],
+        "eta_var": base["eta_var"],
+        "x_var": "JetPt",
+        "year": base["year"],
+        "jet_algo": jet_algo,
+        "lumi_text": lumi_text,
+        "label": " vs ".join(file_labels),
+        "stem": "combined",
+        "config_stem": base["stem"],  # inherit config (ylim, ylabel…) from first file
+        "content_type": base.get("content_type", "Resolution"),
+        "eta_range": base.get("eta_range"),
+        "x_mode": "pt",
     }
 
 
@@ -779,10 +1016,14 @@ def plot_jerc_series(
     draw_detector_regions=False,
     lumitext=None,
     cmstext="Simulation Preliminary",
+    x_mode="eta",
 ):
     """
-    Turn a JERCData dict (from extract_jerc_points or compute_ratio_points)
-    into a publication-quality plot and save it.
+    Turn a JERCData dict into a publication-quality plot and save it.
+
+    Works for both vs-eta (x_mode="eta", default) and vs-pt (x_mode="pt").
+    For x_mode="pt" the dict must contain points with an "x" key (pt value);
+    use extract_jerc_vs_pt_curves / combine_jerc_vs_pt_curves to build it.
 
     Parameters
     ----------
@@ -792,10 +1033,11 @@ def plot_jerc_series(
     annotation_text       : text drawn in the upper-left corner
     ylim                  : (bottom, top) y-axis limits
     data_formats          : iterable of file extensions to save
-    eta_max               : if set, draw vertical dashed lines at ±eta_max
+    eta_max               : if set, draw vertical dashed lines at ±eta_max (eta mode only)
     hline                 : if set, draw a horizontal dashed line at this y value
-    fold_eta              : if True, use |eta_c| on the x-axis
-    draw_detector_regions : if True, overlay CMS detector-region lines and labels
+    fold_eta              : if True, use |eta_c| on the x-axis (eta mode only)
+    draw_detector_regions : if True, overlay CMS detector-region lines (eta mode only)
+    x_mode                : "eta" (scatter vs eta) or "pt" (smooth curve vs pt)
     """
     points = data["points"]
     rho_bins = data["rho_bins"]
@@ -814,10 +1056,14 @@ def plot_jerc_series(
     # Map i_pt → pt_val for label look-ups
     pt_val_of = dict(pt_values_used)
 
-    # Group points by (i_pt, i_rho), sort each group by eta_c (or |eta_c|).
-    # When folding, average y values of symmetric ±eta bins at the same |eta_c|.
+    # Group points and build (x, y, x_err) triples per series key.
+    # vs-pt: one smooth curve per rho bin, x = pt value.
+    # vs-eta: one scatter series per (i_pt, i_rho), x = eta_c (optionally folded).
     groups = defaultdict(list)
-    if fold_eta:
+    if x_mode == "pt":
+        for p in points:
+            groups[(0, p["i_rho"])].append((p["x"], p["y"], 0.0))
+    elif fold_eta:
         fold_y = defaultdict(lambda: defaultdict(list))  # (i_pt,i_rho) → |eta_c| → [y]
         fold_xerr = {}  # |eta_c| → x_err
         for p in points:
@@ -841,41 +1087,63 @@ def plot_jerc_series(
     # Build HEPPlotter series_dict
     series_dict = {}
     for (i_pt, i_rho), xy_list in groups.items():
-        pt_val = pt_val_of[i_pt]
-        base_color = _BASE_COLORS[i_pt % len(_BASE_COLORS)]
-        alpha = (
-            float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
-        )
-        color = _rgba(base_color, alpha)
-        # When there is no rho binning use a unique marker per pT; otherwise per rho bin
-        marker = (
-            _MARKERS[i_pt % len(_MARKERS)]
-            if no_rho
-            else _MARKERS[i_rho % len(_MARKERS)]
-        )
-
-        xy_list.sort(key=lambda t: t[0])
-        xs = [t[0] for t in xy_list]
-        ys = [t[1] for t in xy_list]
-        xerrs = [t[2] for t in xy_list]
-
-        series_dict[f"pt{pt_val:.0f}_rho{i_rho}"] = {
-            "data": {"x": [xs, xerrs], "y": ys},
-            "style": {
+        if x_mode == "pt":
+            # vs-pt: colour by rho/file index, draw as a smooth line
+            base_color = _BASE_COLORS[i_rho % len(_BASE_COLORS)]
+            alpha = float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
+            color = _rgba(base_color, alpha)
+            ser_key = f"rho{i_rho}"
+            ser_style = {
+                "color": color,
+                "fmt": "",
+                "markersize": 0,
+                "linestyle": "-",
+                "linewidth": 1.5,
+                "legend_name": "",
+                "appear_in_legend": False,
+            }
+        else:
+            # vs-eta: colour by pT, alpha by rho bin
+            pt_val = pt_val_of[i_pt]
+            base_color = _BASE_COLORS[i_pt % len(_BASE_COLORS)]
+            alpha = (
+                float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
+            )
+            color = _rgba(base_color, alpha)
+            # When there is no rho binning use a unique marker per pT; otherwise per rho bin
+            marker = (
+                _MARKERS[i_pt % len(_MARKERS)]
+                if no_rho
+                else _MARKERS[i_rho % len(_MARKERS)]
+            )
+            ser_key = f"pt{pt_val:.0f}_rho{i_rho}"
+            ser_style = {
                 "color": color,
                 "fmt": marker,
                 "markersize": 5,
                 "linestyle": "none",
                 "legend_name": f"{x_var} = {pt_val:.0f} GeV",
                 "appear_in_legend": False,
-            },
+            }
+
+        xy_list.sort(key=lambda t: t[0])
+        xs = [t[0] for t in xy_list]
+        ys = [t[1] for t in xy_list]
+        xerrs = [t[2] for t in xy_list]
+
+        series_dict[ser_key] = {
+            "data": {"x": [xs, xerrs], "y": ys},
+            "style": ser_style,
         }
 
     if not series_dict:
         log.warning("Empty series for %s — skipping.", output_base)
         return
 
-    xlabel = r"$|\eta^{\mathrm{jet}}|$" if fold_eta else _latex_label(eta_var)
+    if x_mode == "pt":
+        xlabel = r"Jet $p_\mathrm{T}$ [GeV]"
+    else:
+        xlabel = r"$|\eta^{\mathrm{jet}}|$" if fold_eta else _latex_label(eta_var)
 
     plotter = (
         HEPPlotter("CMS")
@@ -914,20 +1182,47 @@ def plot_jerc_series(
     fig = plotter.get_figure()
     ax = fig.axes[0]
 
+    if x_mode == "pt":
+        ax.set_xscale("log")
+
     if hline is not None:
         ax.axhline(
             hline, color="black", linestyle="--", linewidth=1.0, alpha=0.6, zorder=0
         )
 
-    # if eta_max is not None:
-    #     for sign in (-1, 1):
-    #         ax.axvline(sign * eta_max, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
-
-    if draw_detector_regions:
+    if x_mode == "eta" and draw_detector_regions:
         _add_detector_region_lines(ax, symmetric=fold_eta)
 
-    if no_rho:
-        # Single legend: colour+marker per pT value, placed inside the plot
+    if x_mode == "pt":
+        # vs-pt legend: one line per rho bin or file; no pt legend (pt is the x-axis)
+        if not no_rho:
+            is_combine = any(isinstance(rb, str) for rb in rho_bins)
+            rho_handles = [
+                mlines.Line2D(
+                    [], [],
+                    color=_rgba(_BASE_COLORS[i_rho % len(_BASE_COLORS)], float(rho_alphas[i_rho])),
+                    linestyle="-",
+                    linewidth=2,
+                    label=(
+                        rho_bin if is_combine
+                        else rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$"
+                    ),
+                )
+                for i_rho, rho_bin in enumerate(rho_bins)
+                if rho_bin is not None and i_rho in present_i_rho
+            ]
+            fig.subplots_adjust(right=0.75)
+            ax.legend(
+                handles=rho_handles,
+                bbox_to_anchor=(1.0, 1.0),
+                loc="upper left",
+                title="File" if is_combine else r"$\rho$ [GeV/Area]",
+                fontsize="x-small",
+                title_fontsize="small",
+                framealpha=0.85,
+            )
+    elif no_rho:
+        # vs-eta, no rho: single legend with colour+marker per pT value
         pt_handles = [
             mlines.Line2D(
                 [],
@@ -949,7 +1244,7 @@ def plot_jerc_series(
             framealpha=0.85,
         )
     else:
-        # shrink axes to leave room for the two external legends on the right
+        # vs-eta with rho: shrink axes and show two external legends
         fig.subplots_adjust(right=0.62)
 
         # Legend part 1: one colour patch per JetPt value
@@ -1036,7 +1331,7 @@ def plot_jerc_vs_eta(
         if jet_algo
         else PUPPI_JET_STRING
     )
-    cfg = _get_jerc_config(data["stem"])
+    cfg = _get_jerc_config(data.get("config_stem", data["stem"]))
     if cfg["plot_inverse"]:
         inv_points = [{**p, "y": 1.0 / p["y"]} for p in data["points"]]
         data = {**data, "points": inv_points}
@@ -1095,6 +1390,65 @@ def plot_jerc_ratio_vs_eta(
     )
 
 
+def plot_jerc_vs_pt_data(
+    data,
+    output_base,
+    data_formats=("png", "pdf"),
+):
+    """Plot a pre-extracted vs-pt JERCData dict (from extract_jerc_vs_pt_curves)."""
+    if not data or not data["points"]:
+        log.warning("No data points for vs-pt plot %s — skipping.", output_base)
+        return
+    jet_algo = data["jet_algo"]
+    annotation = (
+        f"{PUPPI_JET_STRING}\n{_format_jet_algo(jet_algo)}"
+        if jet_algo
+        else PUPPI_JET_STRING
+    )
+    eta_range = data.get("eta_range")
+    if eta_range is not None:
+        eta_lo, eta_hi = eta_range
+        eta_label = rf"$|\eta^{{\mathrm{{jet}}}}| \in [{eta_lo:.2g},\,{eta_hi:.2g})$"
+        annotation = annotation + "\n" + eta_label
+    cfg = _get_jerc_config(data.get("config_stem", data["stem"]))
+    lumi_text = cfg["lumitext"] if cfg.get("lumitext") is not None else data["lumi_text"]
+    plot_jerc_series(
+        data,
+        output_base,
+        ylabel=cfg["ylabel"],
+        annotation_text=annotation,
+        ylim=cfg["ylim"],
+        data_formats=data_formats,
+        hline=cfg["hline"],
+        lumitext=lumi_text,
+        cmstext=cfg["cmstext"],
+        x_mode="pt",
+    )
+
+
+# ---------------------------------------------------------------------------
+# vs-pt smooth-curve plot
+# ---------------------------------------------------------------------------
+
+
+def plot_jerc_vs_pt(
+    txt_path,
+    output_base,
+    eta_range,
+    data_formats=("png", "pdf"),
+    n_pts=300,
+):
+    """
+    Plot JERC quantity vs JetPt as a smooth curve for a selected |eta| range.
+
+    Thin wrapper around extract_jerc_vs_pt_curves + plot_jerc_vs_pt_data.
+    """
+    data = extract_jerc_vs_pt_curves(txt_path, eta_range, n_pts=n_pts)
+    if data is None:
+        return
+    plot_jerc_vs_pt_data(data, output_base, data_formats=data_formats)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -1151,12 +1505,43 @@ def main():
             "Colours still encode JetPt.  Individual per-file plots are still produced."
         ),
     )
+    parser.add_argument(
+        "--plot-mode",
+        choices=["eta", "pt", "both", "auto"],
+        default="auto",
+        metavar="MODE",
+        help=(
+            "Which plot type to produce.  "
+            "'eta': quantity vs η for different pT values (existing behaviour).  "
+            "'pt': smooth curve of quantity vs pT for a selected |η| range (see --pt-eta-range).  "
+            "'both': produce both plot types.  "
+            "'auto' (default): use the per-correction-type default set in _JERC_CONFIG "
+            "(MC_JER produces vs-pT; others produce vs-η)."
+        ),
+    )
+    parser.add_argument(
+        "--pt-eta-range",
+        nargs=2,
+        type=float,
+        metavar=("ETA_LO", "ETA_HI"),
+        default=[0.0, 1.305],
+        help=(
+            "Absolute |η| range [lo, hi) used for the vs-pT smooth-curve plot "
+            "(default: 0.0 1.305 — central barrel).  "
+            "Printed on the plot.  Only relevant when --plot-mode is 'pt', 'both', or 'auto'."
+        ),
+    )
 
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
 
     eta_max_suffix = f"_abseta_lt_{args.eta_max:.2g}".replace(".", "p")
+    pt_eta_range = tuple(args.pt_eta_range)
+    eta_range_suffix = (
+        f"_vspt_eta{args.pt_eta_range[0]:.2g}to{args.pt_eta_range[1]:.2g}"
+        .replace(".", "p")
+    )
 
     # Parse and evaluate each file exactly once
     extracted = {
@@ -1164,15 +1549,37 @@ def main():
         for txt_path in args.input
     }
 
-    for data in extracted.values():
+    for txt_path, data in extracted.items():
         output_base = os.path.join(args.output, data["stem"])
-        plot_jerc_vs_eta(data, output_base, data_formats=args.formats)
-        plot_jerc_vs_eta(
-            data,
-            output_base + eta_max_suffix,
-            data_formats=args.formats,
-            eta_max=args.eta_max,
-        )
+        cfg = _get_jerc_config(data["stem"])
+
+        # Determine which plot types to produce for this file
+        if args.plot_mode == "eta":
+            do_vs_eta, do_vs_pt = True, False
+        elif args.plot_mode == "pt":
+            do_vs_eta, do_vs_pt = False, True
+        elif args.plot_mode == "both":
+            do_vs_eta, do_vs_pt = True, True
+        else:  # auto: use per-type default from _JERC_CONFIG
+            do_vs_pt = cfg.get("plot_vs_pt", False)
+            do_vs_eta = not do_vs_pt
+
+        if do_vs_eta:
+            plot_jerc_vs_eta(data, output_base, data_formats=args.formats)
+            plot_jerc_vs_eta(
+                data,
+                output_base + eta_max_suffix,
+                data_formats=args.formats,
+                eta_max=args.eta_max,
+            )
+
+        if do_vs_pt:
+            plot_jerc_vs_pt(
+                txt_path,
+                output_base + eta_range_suffix,
+                eta_range=pt_eta_range,
+                data_formats=args.formats,
+            )
 
     if args.combine:
         if len(args.input) < 2:
@@ -1180,9 +1587,9 @@ def main():
                 "--combine requires at least 2 input files; skipping combined plot."
             )
         else:
-            combined = combine_jerc_data([extracted[p] for p in args.input])
-            stems = [extracted[p]["stem"] for p in args.input]
-            combined_name = "combined_" + "__vs__".join(stems)
+            data_list = [extracted[p] for p in args.input]
+            combined = combine_jerc_data(data_list)
+            combined_name = _make_combined_name(data_list)
             output_base = os.path.join(args.output, combined_name)
             plot_jerc_vs_eta(combined, output_base, data_formats=args.formats)
             plot_jerc_vs_eta(
@@ -1191,6 +1598,25 @@ def main():
                 data_formats=args.formats,
                 eta_max=args.eta_max,
             )
+
+            # Combined vs-pt plot (respects --plot-mode)
+            cfg0 = _get_jerc_config(data_list[0]["stem"])
+            do_vs_pt_combined = (
+                args.plot_mode in ("pt", "both")
+                or (args.plot_mode == "auto" and cfg0.get("plot_vs_pt", False))
+            )
+            if do_vs_pt_combined:
+                vs_pt_curves = [
+                    extract_jerc_vs_pt_curves(p, pt_eta_range) for p in args.input
+                ]
+                vs_pt_curves = [d for d in vs_pt_curves if d is not None]
+                if len(vs_pt_curves) >= 2:
+                    combined_pt = combine_jerc_vs_pt_curves(vs_pt_curves)
+                    plot_jerc_vs_pt_data(
+                        combined_pt,
+                        output_base + eta_range_suffix,
+                        data_formats=args.formats,
+                    )
 
     if not args.no_ratio:
         for path_a, path_b in combinations(args.input, 2):
