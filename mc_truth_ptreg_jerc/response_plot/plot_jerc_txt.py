@@ -96,10 +96,85 @@ _YEAR_MAP = {
 PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
 
 
-
-_JERC_CONFIG={
-    
+# Keys are substrings matched against the txt filename stem.
+# L2L3Residual must come before L2Residual so the longer key wins.
+_JERC_CONFIG = {
+    "L2L3Residual": {
+        "ylabel": "Jet response MC / data",
+        "ylim": (0.8, 1.4),
+        "ylim_eta_restricted": (0.8, 1.4),
+        "lumitext": None,       # None → use data["lumi_text"]
+        "cmstext": "Preliminary",
+        "fold_eta": True,
+        "draw_detector_regions": True,
+        "plot_inverse": False,
+        "hline": 1.0,
+    },
+    "L2Residual": {
+        "ylabel": r"$R^\mathrm{sim}/R^\mathrm{data}$",
+        "ylim": (0.7, 1.6),
+        "ylim_eta_restricted": (0.7, 1.6),
+        "lumitext": None,
+        "cmstext": "Preliminary",
+        "fold_eta": True,
+        "draw_detector_regions": True,
+        "plot_inverse": False,
+        "hline": 1.0,
+    },
+    "L2Relative": {
+        "ylabel": "Simulated jet response",
+        "ylim": (0.8, 1.4),
+        "ylim_eta_restricted": (0.8, 1.4),
+        "lumitext": None,
+        "cmstext": "Simulation Preliminary",
+        "fold_eta": True,
+        "draw_detector_regions": True,
+        "plot_inverse": True,
+        "hline": 1.0,
+    },
+    "MC_JER": {
+        "ylabel": "Jet Energy Resolution",
+        "ylim": (0.0, 0.3),
+        "ylim_eta_restricted": (0.0, 0.2),
+        "lumitext": None,
+        "cmstext": "Simulation Preliminary",
+        "fold_eta": True,
+        "draw_detector_regions": True,
+        "plot_inverse": False,
+        "hline": None,
+    },
+    "JERSF": {
+        "ylabel": "Jet Energy Resolution Scale Factor",
+        "ylim": (0.8, 1.5),
+        "ylim_eta_restricted": (0.8, 1.5),
+        "lumitext": None,
+        "cmstext": "Preliminary",
+        "fold_eta": True,
+        "draw_detector_regions": True,
+        "plot_inverse": False,
+        "hline": 1.0,
+    },
 }
+
+_DEFAULT_JERC_CONFIG = {
+    "ylabel": "Jet Energy Resolution",
+    "ylim": (0.0, 0.3),
+    "ylim_eta_restricted": (0.0, 0.2),
+    "lumitext": None,
+    "cmstext": "Simulation Preliminary",
+    "fold_eta": True,
+    "draw_detector_regions": True,
+    "plot_inverse": False,
+    "hline": None,
+}
+
+
+def _get_jerc_config(stem):
+    """Return the _JERC_CONFIG entry whose key appears as a substring in stem."""
+    for key, cfg in _JERC_CONFIG.items():
+        if key in stem:
+            return cfg
+    return _DEFAULT_JERC_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -238,24 +313,36 @@ def _extract_year(path, year_map=None):
     e.g. {"2022_preEE": "Summer22"}), the filename is searched for each
     season-token and the matching display-label is returned.
     Falls back to a plain 4-digit year regex when no map is given or matches.
+
+    For DATA files (filename contains "_DATA_"), the CMS run era is also
+    extracted from a "Run<YYYY><Era>" token and appended to the label,
+    e.g. "Run2023Cv4" → ", Era Cv4".
     """
     basename = os.path.basename(path)
+    label = None
     if year_map:
         # Sort by token length descending so "Summer22EE" is tried before "Summer22"
-        for label, token in sorted(
+        for lbl, token in sorted(
             year_map.items(), key=lambda kv: len(str(kv[1])), reverse=True
         ):
             if str(token) in basename:
-                return label
-    m = re.search(r"(20\d{2})", basename)
-    if m:
-        return m.group(1)
-    m = re.search(
-        r"(?:Summer|Winter|Fall|Autumn|Spring)(\d{2})", basename, re.IGNORECASE
-    )
-    if m:
-        return f"20{m.group(1)}"
-    return None
+                label = lbl
+                break
+    if label is None:
+        m = re.search(r"(20\d{2})", basename)
+        if m:
+            label = m.group(1)
+    if label is None:
+        m = re.search(
+            r"(?:Summer|Winter|Fall|Autumn|Spring)(\d{2})", basename, re.IGNORECASE
+        )
+        if m:
+            label = f"20{m.group(1)}"
+    if label is not None and "_DATA_" in basename:
+        m = re.search(r"Run\d{4}([A-Za-z][A-Za-z0-9]*)", basename)
+        if m:
+            label = f"{label}, Era {m.group(1)}"
+    return label
 
 
 def _extract_jet_algo(path):
@@ -690,6 +777,8 @@ def plot_jerc_series(
     hline=None,
     fold_eta=False,
     draw_detector_regions=False,
+    lumitext=None,
+    cmstext="Simulation Preliminary",
 ):
     """
     Turn a JERCData dict (from extract_jerc_points or compute_ratio_points)
@@ -714,7 +803,7 @@ def plot_jerc_series(
     pt_values_used = data["pt_values_used"]
     eta_var = data["eta_var"]
     x_var = data["x_var"]
-    lumi_text = data["lumi_text"]
+    lumi_text = lumitext if lumitext is not None else data["lumi_text"]
 
     if not points:
         log.warning("No data points to plot for %s — skipping.", output_base)
@@ -792,7 +881,7 @@ def plot_jerc_series(
         HEPPlotter("CMS")
         .set_plot_config(
             figsize=None if no_rho else (20, 13),
-            cmstext="Simulation Preliminary",
+            cmstext=cmstext,
             cmstext_font_size=20,
             lumitext=lumi_text,
             lumitext_font_size=20,
@@ -947,34 +1036,26 @@ def plot_jerc_vs_eta(
         if jet_algo
         else PUPPI_JET_STRING
     )
-    is_l2 = data.get("content_type", "Resolution") == "Correction L2Relative"
-    if is_l2:
+    cfg = _get_jerc_config(data["stem"])
+    if cfg["plot_inverse"]:
         inv_points = [{**p, "y": 1.0 / p["y"]} for p in data["points"]]
         data = {**data, "points": inv_points}
-        plot_jerc_series(
-            data,
-            output_base,
-            ylabel="Simulated jet response",
-            annotation_text=annotation,
-            ylim=(0.8, 1.4),
-            data_formats=data_formats,
-            eta_max=eta_max,
-            hline=1.0,
-            fold_eta=True,
-            draw_detector_regions=True,
-        )
-    else:
-        plot_jerc_series(
-            data,
-            output_base,
-            ylabel="Jet Energy Resolution",
-            annotation_text=annotation,
-            ylim=(0.0, 0.3 if eta_max is None else 0.2),
-            data_formats=data_formats,
-            eta_max=eta_max,
-            fold_eta=True,
-            draw_detector_regions=True,
-        )
+    ylim = cfg["ylim_eta_restricted"] if eta_max is not None else cfg["ylim"]
+    lumi_text = cfg["lumitext"] if cfg["lumitext"] is not None else data["lumi_text"]
+    plot_jerc_series(
+        data,
+        output_base,
+        ylabel=cfg["ylabel"],
+        annotation_text=annotation,
+        ylim=ylim,
+        data_formats=data_formats,
+        eta_max=eta_max,
+        hline=cfg["hline"],
+        fold_eta=cfg["fold_eta"],
+        draw_detector_regions=cfg["draw_detector_regions"],
+        lumitext=lumi_text,
+        cmstext=cfg["cmstext"],
+    )
 
 
 def plot_jerc_ratio_vs_eta(
