@@ -16,7 +16,6 @@ from mc_truth_ptreg_jerc.custom_cut_functions import *
 from mc_truth_ptreg_jerc.params.binning import *
 from mc_truth_ptreg_jerc.variables_def import get_variables_dict
 
-
 localdir = os.path.dirname(os.path.abspath(__file__))
 
 # Loading default parameters
@@ -38,7 +37,6 @@ if int(os.environ.get("UPART", 0)) == 0:
     eta_bins = eta_bins
 else:
     eta_bins = eta_bins_upart
-
 
 
 # Loading the L2 Relative (MC truth) corrections
@@ -202,6 +200,10 @@ cfg = Configurator(
         ),
         "pnet": False,
         "upart": False,
+        "remove_jets_outside_binning": True,
+        "invalid_pnet_pt15": True,
+        "invalid_pnet_eta4p7": True,
+        "regression_value_when_invalid": "original",
     },
     calibrators=[],
     skim=[],

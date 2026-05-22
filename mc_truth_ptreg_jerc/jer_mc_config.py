@@ -18,7 +18,6 @@ from mc_truth_ptreg_jerc.custom_cut_functions import *
 from mc_truth_ptreg_jerc.params.binning import *
 from mc_truth_ptreg_jerc.variables_def import get_variables_dict
 
-
 localdir = os.path.dirname(os.path.abspath(__file__))
 
 # Loading default parameters
@@ -29,7 +28,7 @@ defaults.register_configuration_dir("config_dir", localdir + "/params")
 DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK = True
 year = os.environ.get("YEAR", "2022_preEE")
 print("YEAR", year)
-add_str = ""
+add_str = "_RecoEta"
 
 output_chunks_name = f"root://t3dcachedb03.psi.ch:1094//pnfs/psi.ch/cms/trivcat/store/user/mmalucch/out_jer_mc_ptreg/out_jer_closure_pnet_upart_{year}{add_str}/parquet_files"
 if DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK:
@@ -93,12 +92,6 @@ samples_dict = {
     "2024": "QCD_PT-15to7000_JMENano_Summer24",
     "2025": "QCD_PT-15to7000_JMENano_Winter25",
 }
-samples_PNetReg15_dict = {
-    "2022_preEE": "QCD_PT-15to7000_PNetReg15_JMENano_Summer22",
-    "2022_postEE": "QCD_PT-15to7000_PNetReg15_JMENano_Summer22EE",
-    "2023_preBPix": "QCD_PT-15to7000_PNetReg15_JMENano_Summer23",
-    "2023_postBPix": "QCD_PT-15to7000_PNetReg15_JMENano_Summer23BPix",
-}
 
 
 cfg = Configurator(
@@ -107,19 +100,9 @@ cfg = Configurator(
         "jsons": [
             f"{localdir}/datasets/QCD.json",
             # f"{localdir}/datasets/QCD_redirector.json",
-            f"{localdir}/datasets/QCD_PNetReg15.json",
         ],
         "filter": {
-            "samples": [
-                (
-                    samples_PNetReg15_dict[year]
-                    if (
-                        int(os.environ.get("PNETREG15", 0)) == 1
-                        or int(os.environ.get("SPLITPNETREG15", 0)) == 1
-                    )
-                    else samples_dict[year]
-                )
-            ],
+            "samples": [samples_dict[year]],
             "samples_exclude": [],
             "year": [year],
         },
@@ -135,19 +118,16 @@ cfg = Configurator(
         "mc_truth_corr": mc_truth_corr,
         "DeltaR_matching": 0.2,
         "SetRegResponseToZero": True,
-        "GenJetPtCut": (
-            15
-            if (
-                int(os.environ.get("PNETREG15", 0)) == 1
-                or int(os.environ.get("SPLITPNETREG15", 0)) == 1
-            )
-            else (0 if (int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1) else 50)
-        ),
+        "GenJetPtCut": 0,
         "pnet": True,
         "upart": True,
         "dump_columns_as_arrays_per_chunk": (
             output_chunks_name if DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK else None
         ),
+        "remove_jets_outside_binning": False,
+        "invalid_pnet_pt15": False,
+        "invalid_pnet_eta4p7": True,
+        "regression_value_when_invalid": "raw",
     },
     calibrators=[],
     skim=[],
@@ -183,7 +163,8 @@ cfg = Configurator(
                             "MatchedJets",
                             [
                                 "pt",
-                                "eta",
+                                "RecoEta",
+                                "RecoPhi",
                                 "ResponseJEC",
                                 "JetPtJEC",
                                 "ResponseRaw",
@@ -199,7 +180,8 @@ cfg = Configurator(
                             "MatchedJetsNeutrino",
                             [
                                 "pt",
-                                "eta",
+                                "RecoEta",
+                                "RecoPhi",
                                 "ResponseJEC",
                                 "JetPtJEC",
                                 "ResponseRaw",

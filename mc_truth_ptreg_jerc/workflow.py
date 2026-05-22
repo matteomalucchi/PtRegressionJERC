@@ -57,6 +57,14 @@ class QCDBaseProcessor(BaseProcessorABC):
         self.GenJetPtCut = self.workflow_options["GenJetPtCut"]
         self.pnet = self.workflow_options["pnet"]
         self.upart = self.workflow_options["upart"]
+        self.remove_jets_outside_binning = self.workflow_options["remove_jets_outside_binning"]
+        self.invalid_pnet_pt15 = self.workflow_options["invalid_pnet_pt15"]
+        self.invalid_pnet_eta4p7 = self.workflow_options["invalid_pnet_eta4p7"]
+        # value to set when the regression is invalid (regression factor <=0)
+        # "original" : the value of the regression will be set to the value given by the regression factr
+        # "raw": the value of the regression will be set to the raw jet pt
+        # float: the value of the regression will be set to this float value
+        self.regression_value_when_invalid = self.workflow_options["regression_value_when_invalid"]
 
     def add_neutrinos_to_genjets(self, genjets, neutrinos):
         neutrinos_matched = deltaR_matching_nonunique(genjets, neutrinos, 0.4)
@@ -127,6 +135,30 @@ class QCDBaseProcessor(BaseProcessorABC):
 
         return genjets_with_neutrinos
 
+    def _apply_regression_invalid_mask(
+        self, collection_name, pt_field, response_field, invalid_mask
+    ):
+        if self.regression_value_when_invalid == "original":
+            return
+        collection = self.events[collection_name]
+        if self.regression_value_when_invalid == "raw":
+            pt_repl = collection["JetPtRaw"]
+            response_repl = collection["ResponseRaw"]
+        else:
+            _f = float(self.regression_value_when_invalid)
+            pt_repl = ak.full_like(collection[pt_field], _f)
+            response_repl = ak.full_like(collection[response_field], _f)
+        self.events[collection_name] = ak.with_field(
+            self.events[collection_name],
+            ak.where(invalid_mask, response_repl, self.events[collection_name][response_field]),
+            response_field,
+        )
+        self.events[collection_name] = ak.with_field(
+            self.events[collection_name],
+            ak.where(invalid_mask, pt_repl, self.events[collection_name][pt_field]),
+            pt_field,
+        )
+
     def apply_object_preselection(self, variation):
 
         if self._isMC:
@@ -157,25 +189,29 @@ class QCDBaseProcessor(BaseProcessorABC):
                 eta_bins_used = eta_bins
             else:
                 eta_bins_used = eta_bins_upart
-            if int(os.environ.get("ABS_ETA_INCLUSIVE", 0)) == 1:
-                # array of True
-                eta_mask = np.ones_like(self.events.JetGood.eta, dtype=bool)
-            else:
-                eta_mask = (self.events.JetGood.eta > eta_bins_used[0]) & (
+                
+            if self.remove_jets_outside_binning:
+                if int(os.environ.get("ABS_ETA_INCLUSIVE", 0)) == 1:
+                    # array of True
+                    eta_mask = np.ones_like(self.events.JetGood.eta, dtype=bool)
+                else:
+                    eta_mask = (self.events.JetGood.eta > eta_bins_used[0]) & (
                     self.events.JetGood.eta < eta_bins_used[-1]
                 )
-
-            pt_mask = self.events.JetGood.ptRaw > (
-                0 if int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1 else 8
-            )
+                pt_mask = self.events.JetGood.ptRaw > (
+                    0 if int(os.environ.get("EXTENDED_PT_BINS", 0)) == 1 else 8
+                )
+                self.events["GenJetGood"] = self.events.GenJet[
+                    (self.events.GenJet.pt > pt_bins[0])
+                    & (self.events.GenJet.pt < pt_bins[-1])
+                ]
+            else:
+                eta_mask = np.ones_like(self.events.JetGood.eta, dtype=bool)
+                pt_mask = np.ones_like(self.events.JetGood.ptRaw, dtype=bool)
+                self.events["GenJetGood"] = self.events.GenJet
 
             self.events["JetGood"] = self.events.JetGood[
                 physisical_jet_mask & eta_mask & pt_mask
-            ]
-
-            self.events["GenJetGood"] = self.events.GenJet[
-                (self.events.GenJet.pt > pt_bins[0])
-                & (self.events.GenJet.pt < pt_bins[-1])
             ]
 
             neutrinos = self.events["GenPart"][
@@ -372,6 +408,14 @@ class QCDBaseProcessor(BaseProcessorABC):
                     * self.events.JetMatched.PNetRegPtRawCorr,
                     "JetPtPNetReg",
                 )
+
+                self._apply_regression_invalid_mask(
+                    "MatchedJets",
+                    "JetPtPNetReg",
+                    "ResponsePNetReg",
+                    self.events.JetMatched.PNetRegPtRawCorr <= 0,
+                )
+
                 if int(os.environ.get("SPLITPNETREG15", 0)) == 1:
                     self.events[f"MatchedJetsSplit15"] = ak.with_field(
                         self.events.MatchedJets,
@@ -412,6 +456,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                 elif (
                     int(os.environ.get("PNETREG15", 0)) == 0
                     and int(os.environ.get("EXTENDED_PT_BINS", 0)) == 0
+                    and self.invalid_pnet_pt15
                 ):  # Issues with PNET under 15 GeV
                     self.events[f"MatchedJets"] = ak.with_field(
                         self.events.MatchedJets,
@@ -435,25 +480,26 @@ class QCDBaseProcessor(BaseProcessorABC):
                         ),
                         "JetPtPNetReg",
                     )
-
-                self.events[f"MatchedJets"] = ak.with_field(
-                    self.events.MatchedJets,
-                    ak.where(
-                        abs(self.events.MatchedJets.RecoEta) > 4.7,
-                        self.events.MatchedJets.ResponseRaw,
-                        self.events.MatchedJets.ResponsePNetReg,
-                    ),
-                    "ResponsePNetReg",
-                )
-                self.events[f"MatchedJets"] = ak.with_field(
-                    self.events.MatchedJets,
-                    ak.where(
-                        abs(self.events.MatchedJets.RecoEta) > 4.7,
-                        self.events.MatchedJets.JetPtRaw,
-                        self.events.MatchedJets.JetPtPNetReg,
-                    ),
-                    "JetPtPNetReg",
-                )
+                
+                if self.invalid_pnet_eta4p7:
+                    self.events[f"MatchedJets"] = ak.with_field(
+                        self.events.MatchedJets,
+                        ak.where(
+                            abs(self.events.MatchedJets.RecoEta) > 4.7,
+                            self.events.MatchedJets.ResponseRaw,
+                            self.events.MatchedJets.ResponsePNetReg,
+                        ),
+                        "ResponsePNetReg",
+                    )
+                    self.events[f"MatchedJets"] = ak.with_field(
+                        self.events.MatchedJets,
+                        ak.where(
+                            abs(self.events.MatchedJets.RecoEta) > 4.7,
+                            self.events.MatchedJets.JetPtRaw,
+                            self.events.MatchedJets.JetPtPNetReg,
+                        ),
+                        "JetPtPNetReg",
+                    )
 
                 # PNetRegNeutrino
                 if int(os.environ.get("NEUTRINO", 1)) == 1 or self.pnet:
@@ -522,6 +568,14 @@ class QCDBaseProcessor(BaseProcessorABC):
                         "ResponsePNetRegNeutrino",
                     )
 
+                    self._apply_regression_invalid_mask(
+                        "MatchedJetsNeutrino",
+                        "JetPtPNetRegNeutrino",
+                        "ResponsePNetRegNeutrino",
+                        (self.events.JetNeutrinoMatched.PNetRegPtRawCorr <= 0)
+                        | (self.events.JetNeutrinoMatched.PNetRegPtRawCorrNeutrino <= 0),
+                    )
+
                     if int(os.environ.get("SPLITPNETREG15", 0)) == 1:
                         self.events[f"MatchedJetsNeutrinoSplit15"] = ak.with_field(
                             self.events.MatchedJetsNeutrino,
@@ -563,6 +617,7 @@ class QCDBaseProcessor(BaseProcessorABC):
                     elif (
                         int(os.environ.get("PNETREG15", 0)) == 0
                         and int(os.environ.get("EXTENDED_PT_BINS", 0)) == 0
+                        and self.invalid_pnet_pt15
                     ):
                         self.events[f"MatchedJetsNeutrino"] = ak.with_field(
                             self.events.MatchedJetsNeutrino,
@@ -592,26 +647,26 @@ class QCDBaseProcessor(BaseProcessorABC):
                             ),
                             "JetPtPNetRegNeutrino",
                         )
-
-                    self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                        self.events.MatchedJetsNeutrino,
-                        ak.where(
-                            abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
-                            self.events.MatchedJetsNeutrino.JetPtRaw
-                            / self.events.GenJetNeutrinoMatched.pt,
-                            self.events.MatchedJetsNeutrino.ResponsePNetRegNeutrino,
-                        ),
-                        "ResponsePNetRegNeutrino",
-                    )
-                    self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                        self.events.MatchedJetsNeutrino,
-                        ak.where(
-                            abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
-                            self.events.MatchedJetsNeutrino.JetPtRaw,
-                            self.events.MatchedJetsNeutrino.JetPtPNetRegNeutrino,
-                        ),
-                        "JetPtPNetRegNeutrino",
-                    )
+                    if self.invalid_pnet_eta4p7:
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            ak.where(
+                                abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
+                                self.events.MatchedJetsNeutrino.JetPtRaw
+                                / self.events.GenJetNeutrinoMatched.pt,
+                                self.events.MatchedJetsNeutrino.ResponsePNetRegNeutrino,
+                            ),
+                            "ResponsePNetRegNeutrino",
+                        )
+                        self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                            self.events.MatchedJetsNeutrino,
+                            ak.where(
+                                abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
+                                self.events.MatchedJetsNeutrino.JetPtRaw,
+                                self.events.MatchedJetsNeutrino.JetPtPNetRegNeutrino,
+                            ),
+                            "JetPtPNetRegNeutrino",
+                        )
 
                 if self.mc_truth_corr_pnetreg:
                     mc_truth_corr_factor_pnetreg = get_mc_truth_corr(
@@ -680,25 +735,30 @@ class QCDBaseProcessor(BaseProcessorABC):
                     * self.events.JetMatched.UParTAK4RegPtRawCorr,
                     "JetPtUparTReg",
                 )
-
-                self.events[f"MatchedJets"] = ak.with_field(
-                    self.events.MatchedJets,
-                    ak.where(
-                        abs(self.events.MatchedJets.RecoEta) > 4.7,
-                        self.events.MatchedJets.ResponseRaw,
-                        self.events.MatchedJets.ResponseUparTReg,
-                    ),
-                    "ResponseUparTReg",
-                )
-                self.events[f"MatchedJets"] = ak.with_field(
-                    self.events.MatchedJets,
-                    ak.where(
-                        abs(self.events.MatchedJets.RecoEta) > 4.7,
-                        self.events.MatchedJets.JetPtRaw,
-                        self.events.MatchedJets.JetPtUparTReg,
-                    ),
+                self._apply_regression_invalid_mask(
+                    "MatchedJets",
                     "JetPtUparTReg",
+                    "ResponseUparTReg",
+                    self.events.JetMatched.UParTAK4RegPtRawCorr <= 0,
                 )
+                # self.events[f"MatchedJets"] = ak.with_field(
+                #     self.events.MatchedJets,
+                #     ak.where(
+                #         abs(self.events.MatchedJets.RecoEta) > 4.7,
+                #         self.events.MatchedJets.ResponseRaw,
+                #         self.events.MatchedJets.ResponseUparTReg,
+                #     ),
+                #     "ResponseUparTReg",
+                # )
+                # self.events[f"MatchedJets"] = ak.with_field(
+                #     self.events.MatchedJets,
+                #     ak.where(
+                #         abs(self.events.MatchedJets.RecoEta) > 4.7,
+                #         self.events.MatchedJets.JetPtRaw,
+                #         self.events.MatchedJets.JetPtUparTReg,
+                #     ),
+                #     "JetPtUparTReg",
+                # )
 
                 # UparTRegNeutrino
                 if int(os.environ.get("NEUTRINO", 1)) == 1 or self.upart:
@@ -761,26 +821,32 @@ class QCDBaseProcessor(BaseProcessorABC):
                         / self.events.GenJetNeutrinoMatched.pt,
                         "ResponseUparTRegNeutrino",
                     )
-
-                    self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                        self.events.MatchedJetsNeutrino,
-                        ak.where(
-                            abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
-                            self.events.MatchedJetsNeutrino.JetPtRaw
-                            / self.events.GenJetNeutrinoMatched.pt,
-                            self.events.MatchedJetsNeutrino.ResponseUparTRegNeutrino,
-                        ),
-                        "ResponseUparTRegNeutrino",
-                    )
-                    self.events[f"MatchedJetsNeutrino"] = ak.with_field(
-                        self.events.MatchedJetsNeutrino,
-                        ak.where(
-                            abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
-                            self.events.MatchedJetsNeutrino.JetPtRaw,
-                            self.events.MatchedJetsNeutrino.JetPtUparTRegNeutrino,
-                        ),
+                    self._apply_regression_invalid_mask(
+                        "MatchedJetsNeutrino",
                         "JetPtUparTRegNeutrino",
+                        "ResponseUparTRegNeutrino",
+                        (self.events.JetNeutrinoMatched.UParTAK4RegPtRawCorr <= 0)
+                        | (self.events.JetNeutrinoMatched.UParTAK4RegPtRawCorrNeutrino <= 0),
                     )
+                    # self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                    #     self.events.MatchedJetsNeutrino,
+                    #     ak.where(
+                    #         abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
+                    #         self.events.MatchedJetsNeutrino.JetPtRaw
+                    #         / self.events.GenJetNeutrinoMatched.pt,
+                    #         self.events.MatchedJetsNeutrino.ResponseUparTRegNeutrino,
+                    #     ),
+                    #     "ResponseUparTRegNeutrino",
+                    # )
+                    # self.events[f"MatchedJetsNeutrino"] = ak.with_field(
+                    #     self.events.MatchedJetsNeutrino,
+                    #     ak.where(
+                    #         abs(self.events.MatchedJetsNeutrino.RecoEta) > 4.7,
+                    #         self.events.MatchedJetsNeutrino.JetPtRaw,
+                    #         self.events.MatchedJetsNeutrino.JetPtUparTRegNeutrino,
+                    #     ),
+                    #     "JetPtUparTRegNeutrino",
+                    # )
 
                 if self.mc_truth_corr_upartreg:
                     mc_truth_corr_factor_upartreg = get_mc_truth_corr(
