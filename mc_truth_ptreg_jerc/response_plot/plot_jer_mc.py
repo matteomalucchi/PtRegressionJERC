@@ -73,14 +73,14 @@ def _load_config(config_path, test_override=False):
             if bv_dict_key not in cfg:
                 continue
             bv = cfg[bv_dict_key]
-            if test_pu is not None and "Pileup_nPU" in bv:
-                bv["Pileup_nPU"]["bin_edges"] = test_pu
-            for eta_key in ("MatchedJets_eta", "MatchedJetsNeutrino_eta"):
-                if eta_key in bv and test_eta is not None:
-                    bv[eta_key]["bin_edges"] = test_eta
-            for pt_key in ("MatchedJets_pt", "MatchedJetsNeutrino_pt"):
-                if pt_key in bv and test_pt is not None:
-                    bv[pt_key]["bin_edges"] = test_pt
+            for key in bv:
+                key_lower = key.lower()
+                if "npu" in key_lower and test_pu is not None:
+                    bv[key]["bin_edges"] = test_pu
+                elif "eta" in key_lower and test_eta is not None:
+                    bv[key]["bin_edges"] = test_eta
+                elif "pt" in key_lower and test_pt is not None:
+                    bv[key]["bin_edges"] = test_pt
 
     # Build bin_variables_mixed as the union of bin_variables and bin_variables_neutrino
     # if it is not explicitly defined in the YAML
@@ -185,6 +185,10 @@ cfg = _load_config(args.config, test_override=args.test)
 
 
 PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
+
+# When True: removes grid, puts CMS text inside plots (cmstext_loc=2),
+# removes log scale from histograms, and removes resolution annotations from histograms.
+DP_NOTE_PLOTS = True
 
 
 def run_plot(plotter):
@@ -572,6 +576,19 @@ def plot_resolution_vs_x_variable(
                 x_var_local = axes["x_var"]
                 y_vars_local = axes["y_vars"]
 
+                eta_max = response_vars[response_var].get("eta_max")
+                if eta_max is not None:
+                    bin_edges_local = resolution_result["bin_edges"]
+                    if any(
+                        "eta" in vn.lower()
+                        and min(
+                            abs(bin_edges_local[vn][y_bin_idx[i]]),
+                            abs(bin_edges_local[vn][y_bin_idx[i] + 1]),
+                        ) >= eta_max
+                        for i, vn in enumerate(y_vars_local)
+                    ):
+                        continue
+
                 x_var_idx_local = bin_var_names_local.index(x_var_local)
                 y_var_idx_local = [bin_var_names_local.index(v) for v in y_vars_local]
 
@@ -757,6 +774,7 @@ def plot_resolution_vs_x_variable(
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
+                    cmstext="Simulation\nPreliminary",
                     cmstext_loc=2,
                     lumitext=f"{year} (13.6 TeV)",
                     cmstext_font_size=35,
@@ -768,7 +786,7 @@ def plot_resolution_vs_x_variable(
                 )
                 .set_data(graph_data, plot_type="graph")
                 .set_options(
-                    grid=True,
+                    grid=not DP_NOTE_PLOTS,
                     legend=True,
                     legend_loc="upper right",
                     x_log=True,
@@ -1234,6 +1252,20 @@ def merge_nd_histogram_bins(h, bin_var_configs_new):
     return h_new, True
 
 
+def _bin_excluded_by_eta_max(bin_idx, bin_var_names, bin_edges_dict, eta_max):
+    """Return True if this bin lies entirely outside |eta| < eta_max for any eta axis."""
+    if eta_max is None:
+        return False
+    for i, vn in enumerate(bin_var_names):
+        if "eta" in vn.lower():
+            edges = bin_edges_dict[vn]
+            low_abs = abs(edges[bin_idx[i]])
+            high_abs = abs(edges[bin_idx[i] + 1])
+            if min(low_abs, high_abs) >= eta_max:
+                return True
+    return False
+
+
 def build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict):
     """Build a dict mapping bin_idx tuples to a dict with a human-readable label
     string and per-variable (low, high) edge pairs.
@@ -1326,12 +1358,24 @@ def _compute_resolution_from_histogram(
 
     log.info("Processing resolution for '%s'...", response_var_name)
 
+    eta_max = response_vars[response_var_name].get("eta_max")
+
     # Get the underlying numpy array from the histogram
     h_view = h_response.view()
     h_variance = h_response.variances()
 
     # Iterate over all bin combinations of bin variables
     for bin_idx in np.ndindex(bin_shape):
+        if _bin_excluded_by_eta_max(bin_idx, bin_var_names, bin_edges_dict, eta_max):
+            log.debug(
+                "Skipping bin %s for '%s': outside eta_max=%.2f",
+                bin_label_dict[bin_idx]["label"], response_var_name, eta_max,
+            )
+            resolutions[bin_idx] = np.nan
+            resolution_grid[bin_idx] = np.nan
+            resolutions_uncertainty[bin_idx] = 0
+            continue
+
         # Create indexing tuple to extract the 1D histogram along the response axis
         # for this specific bin combination
         slice_tuple = bin_idx + (slice(None),)
@@ -1789,14 +1833,19 @@ def plot_variable_slices(
             # Plot using HEPPlotter
             plotter = (
                 HEPPlotter()
-                .set_plot_config(lumitext=f"{year} (13.6 TeV)" if year else "")
+                .set_plot_config(
+                    cmstext="Simulation Preliminary" if not DP_NOTE_PLOTS else "Simulation\nPreliminary",
+                    cmstext_font_size=35,
+                    lumitext=f"{year} (13.6 TeV)" if year else "",
+                    **({"cmstext_loc": 2} if DP_NOTE_PLOTS else {}),
+                )
                 .set_data(series_dict, plot_type="1d")
                 .set_labels(
                     xlabel=f"{list(group_dict.values())[0].axes[-1].label}",
                     ylabel="Events",
                 )
                 .set_output(output_name)
-                .set_options(grid=True, legend=True)
+                .set_options(grid=not DP_NOTE_PLOTS, legend=True)
             )
             plotters.append(plotter)
             continue
@@ -1822,6 +1871,11 @@ def plot_variable_slices(
             series_dict = {}
             for var_name, h_var in group_dict.items():
                 var_cfg = variables_dict[var_name]
+
+                if _bin_excluded_by_eta_max(
+                    bin_idx, bin_var_names, bin_edges_dict_plot, var_cfg.get("eta_max")
+                ):
+                    continue
 
                 # Extract 1D histogram for this bin combination
                 slice_tuple = bin_idx + (slice(None),)
@@ -1894,34 +1948,40 @@ def plot_variable_slices(
                 list(group_dict.keys()),
             )
             # Plot using HEPPlotter
+            _ann_y_hist = 0.75 if DP_NOTE_PLOTS else 0.95
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
-                    lumitext=f"{year} (13.6 TeV)" if year else "", figsize=(13, 13)
+                    cmstext="Simulation Preliminary" if not DP_NOTE_PLOTS else "Simulation\nPreliminary",
+                    cmstext_font_size=30,
+                    lumitext=f"{year} (13.6 TeV)" if year else "",
+                    figsize=(13, 13) if not DP_NOTE_PLOTS else None,
+                    **({"cmstext_loc": 2} if DP_NOTE_PLOTS else {}),
                 )
                 .set_data(series_dict, plot_type="1d")
                 .set_labels(xlabel=axis_label, ylabel="Events")
                 .set_output(output_name)
                 .set_options(
-                    grid=True,
+                    grid=not DP_NOTE_PLOTS,
                     legend=True,
                     legend_loc="upper right",
-                    y_log=True,
+                    y_log=not DP_NOTE_PLOTS,
                     split_legend=False,
                     ylim_bottom_value=1,
+                    ylim_top_factor=1.8,
                 )
                 .add_annotation(
                     0.05,
-                    0.95,
+                    _ann_y_hist,
                     annotation_text,
                     coord_type="axes",
                     verticalalignment="top",
-                    fontsize=20,
+                    fontsize=25,
                 )
             )
 
             # Annotate sigma and overlay Gaussian fit curves when available
-            if resolution_results is not None:
+            if resolution_results is not None and not DP_NOTE_PLOTS:
                 for i, var_name in enumerate(group_dict):
                     res_entry = (resolution_results.get(var_name) or {}).get(bin_idx)
                     if res_entry is None or np.isnan(res_entry[0]):
@@ -2161,7 +2221,7 @@ def plot_mapping_variable_linear_fit(
     else:
         (
             HEPPlotter()
-            .set_plot_config(lumitext=f"{year} (13.6 TeV)")
+            .set_plot_config(cmstext="Simulation Preliminary",lumitext=f"{year} (13.6 TeV)")
             .set_options(legend=False, cbar_log=False)
             .set_output(f"{output_dir}/{y_name}_vs_{x_name}_2d_{category}")
             .set_data({"data": {"data": var_2d, "style": {}}}, plot_type="2d")
@@ -2222,7 +2282,7 @@ def plot_mapping_variable_linear_fit(
     else:
         (
             HEPPlotter()
-            .set_plot_config(lumitext=f"{year} (13.6 TeV)")
+            .set_plot_config(cmstext="Simulation Preliminary",lumitext=f"{year} (13.6 TeV)")
             .set_options(set_ylim=False)
             .set_output(f"{output_dir}/{y_name}_vs_{x_name}_fit_{category}")
             .set_data(mean_dict, plot_type="graph")
@@ -2460,23 +2520,30 @@ def plot_1d_inclusive_distributions(
     annotation_base = PUPPI_JET_STRING + "\nInclusive"
 
     def _make_plotter(series_dict, xlabel, output_name):
+        _ann_y_incl = 0.75 if DP_NOTE_PLOTS else 0.95
         return (
             HEPPlotter()
-            .set_plot_config(lumitext=f"{year} (13.6 TeV)" if year else "", figsize=(13, 13))
+            .set_plot_config(
+                cmstext="Simulation Preliminary" if not DP_NOTE_PLOTS else "Simulation\nPreliminary",
+                cmstext_font_size=30,
+                lumitext=f"{year} (13.6 TeV)" if year else "",
+                figsize=(13, 13),
+                **({"cmstext_loc": 2} if DP_NOTE_PLOTS else {}),
+            )
             .set_data(series_dict, plot_type="1d")
             .set_labels(xlabel=xlabel, ylabel="Events")
             .set_output(output_name)
             .set_options(
-                grid=True,
+                grid=not DP_NOTE_PLOTS,
                 legend=True,
                 legend_loc="upper right",
-                y_log=True,
+                y_log=not DP_NOTE_PLOTS,
                 split_legend=False,
                 ylim_bottom_value=1,
             )
             .add_annotation(
                 0.05,
-                0.95,
+                _ann_y_incl,
                 annotation_base,
                 coord_type="axes",
                 verticalalignment="top",

@@ -216,6 +216,7 @@ response_variables:
     map_x_variable: MatchedJets_JetPtUparTReg
     is_reference: false
     txt_jet_name: AK4PFUParT
+    eta_max: 2.5
     rebin_for_plotting: true
 
 response_variables_neutrino:
@@ -262,6 +263,7 @@ response_variables_neutrino:
     map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
+    eta_max: 2.5
     rebin_for_plotting: true
 
 # Mixed mode: regular JEC/PNetReg/UparTReg + neutrino PNetReg/UparTReg (no Raw)
@@ -298,6 +300,7 @@ response_variables_mixed:
     map_x_variable: MatchedJets_JetPtUparTReg
     is_reference: false
     txt_jet_name: AK4PFUParT
+    eta_max: 2.5
     rebin_for_plotting: true
   MatchedJetsNeutrino_ResponsePNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
@@ -320,6 +323,7 @@ response_variables_mixed:
     map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
+    eta_max: 2.5
     rebin_for_plotting: true
 
 # ---------------------------------------------------------------------------
