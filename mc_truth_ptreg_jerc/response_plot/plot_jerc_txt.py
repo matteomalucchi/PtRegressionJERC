@@ -30,6 +30,7 @@ from collections import defaultdict
 from itertools import combinations
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -39,7 +40,6 @@ import numpy as np
 
 import mplhep as hep
 from utils_configs.plot.HEPPlotter import HEPPlotter
-
 
 log = logging.getLogger(__name__)
 
@@ -63,42 +63,49 @@ _MARKERS = ["o", "s", "^", "D", "v", "P", "*", "X", "<", ">"]
 
 # CMS detector region boundaries for eta plots
 _DETECTOR_REGION_BOUNDARIES = [
-    (1.305,  "solid"),   # Barrel | Endcap EC1
-    (2.5,  "solid"),   # EC1 | EC2
-    (2.964,  "solid"),  # EC2 | Forward HF
-    (3.139,  "dashed"),  # EC2 | Forward HF
-    (5.2,  "solid"),   # outer limit
+    (1.305, "solid"),  # Barrel | Endcap EC1
+    (2.5, "solid"),  # EC1 | EC2
+    (2.964, "solid"),  # EC2 | Forward HF
+    (3.139, "dashed"),  # EC2 | Forward HF
+    (5.2, "solid"),  # outer limit
 ]
 # (abs-eta centre, top-line, bottom-line) for region labels
 _DETECTOR_REGION_LABELS = [
-    (0.65, "Barrel",  "BB"),
-    (1.9,  " ",  "EC1"),
-    (2.3,  "Endcap",  ""),
-    (2.75, " ",      "EC2"),
-    (3., None,      None),
-    (4.1,  "Forward", "HF"),
+    (0.65, "Barrel", "BB"),
+    (1.9, " ", "EC1"),
+    (2.3, "Endcap", ""),
+    (2.75, " ", "EC2"),
+    (3.0, None, None),
+    (4.1, "Forward", "HF"),
 ]
 
 _YEAR_MAP = {
-    "2022_preEE":    "Summer22",
-    "2022_postEE":   "Summer22EE",
-    "2023_preBPix":  "Summer23",
+    "2022_preEE": "Summer22",
+    "2022_postEE": "Summer22EE",
+    "2023_preBPix": "Summer23",
     "2023_postBPix": "Summer23BPix",
-    "2024":          "Winter24",
+    "2024": "Winter24",
     # Ultra-Legacy — APV variant must come before plain UL16 (longer token wins)
-    "UL16_APV":       "Summer20UL16APV",
-    "UL16":          "Summer20UL16",
-    "UL17":          "Summer20UL17",
-    "UL18":          "Summer20UL18",
+    "UL16_APV": "Summer20UL16APV",
+    "UL16": "Summer20UL16",
+    "UL17": "Summer20UL17",
+    "UL18": "Summer20UL18",
 }
 
 
 PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
 
 
+
+_JERC_CONFIG={
+    
+}
+
+
 # ---------------------------------------------------------------------------
 # Parsing
 # ---------------------------------------------------------------------------
+
 
 def _parse_jerc_txt(path):
     """
@@ -138,10 +145,13 @@ def _parse_jerc_txt(path):
         for var in bin_vars:
             bin_edges[var] = (float(toks[idx]), float(toks[idx + 1]))
             idx += 2
-        n_vals = int(toks[idx]); idx += 1
-        x_min = float(toks[idx]); idx += 1
-        x_max = float(toks[idx]); idx += 1
-        params = [float(v) for v in toks[idx: idx + n_vals - 2]]
+        n_vals = int(toks[idx])
+        idx += 1
+        x_min = float(toks[idx])
+        idx += 1
+        x_max = float(toks[idx])
+        idx += 1
+        params = [float(v) for v in toks[idx : idx + n_vals - 2]]
         nan_param_indices = [i for i, p in enumerate(params) if not np.isfinite(p)]
         if nan_param_indices:
             log.error(
@@ -158,12 +168,18 @@ def _parse_jerc_txt(path):
             continue
         rows.append(dict(bin_edges=bin_edges, x_min=x_min, x_max=x_max, params=params))
 
-    return dict(bin_vars=bin_vars, x_var=x_var, formula=formula, content_type=content_type), rows
+    return (
+        dict(
+            bin_vars=bin_vars, x_var=x_var, formula=formula, content_type=content_type
+        ),
+        rows,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Formula evaluation
 # ---------------------------------------------------------------------------
+
 
 def _eval_formula(formula_str, x, params):
     """
@@ -176,18 +192,21 @@ def _eval_formula(formula_str, x, params):
         expr = re.sub(rf"\[[a-zA-Z]*{i}\]", repr(float(p)), expr)
     expr = (
         expr.replace("pow(", "np.power(")
-           .replace("sqrt(", "np.sqrt(")
-           .replace("abs(", "np.abs(")
-           .replace("exp(", "np.exp(")
-           .replace("log10(", "np.log10(")
-           .replace("log(", "np.log(")
+        .replace("sqrt(", "np.sqrt(")
+        .replace("abs(", "np.abs(")
+        .replace("exp(", "np.exp(")
+        .replace("log10(", "np.log10(")
+        .replace("log(", "np.log(")
     )
-    return float(eval(expr, {"np": np, "x": float(x), "max": max, "min": min}))  # noqa: S307
+    return float(
+        eval(expr, {"np": np, "x": float(x), "max": max, "min": min})
+    )  # noqa: S307
 
 
 # ---------------------------------------------------------------------------
 # Colour helper
 # ---------------------------------------------------------------------------
+
 
 def _rgba(base, alpha):
     """Return (r, g, b, alpha) from a colour spec and an alpha in [0, 1]."""
@@ -199,14 +218,15 @@ def _rgba(base, alpha):
 # Label helpers
 # ---------------------------------------------------------------------------
 
+
 def _latex_label(var_name):
     """Map a JERC variable name to a LaTeX-formatted axis/legend label."""
     _map = {
         "jeteta": r"Jet $\eta$",
-        "eta":    r"$\eta$",
-        "rho":    r"$\rho$",
-        "jetpt":  r"Jet $p_\mathrm{T}$",
-        "pt":     r"$p_\mathrm{T}$",
+        "eta": r"$\eta$",
+        "rho": r"$\rho$",
+        "jetpt": r"Jet $p_\mathrm{T}$",
+        "pt": r"$p_\mathrm{T}$",
     }
     return _map.get(var_name.lower(), var_name)
 
@@ -222,13 +242,17 @@ def _extract_year(path, year_map=None):
     basename = os.path.basename(path)
     if year_map:
         # Sort by token length descending so "Summer22EE" is tried before "Summer22"
-        for label, token in sorted(year_map.items(), key=lambda kv: len(str(kv[1])), reverse=True):
+        for label, token in sorted(
+            year_map.items(), key=lambda kv: len(str(kv[1])), reverse=True
+        ):
             if str(token) in basename:
                 return label
     m = re.search(r"(20\d{2})", basename)
     if m:
         return m.group(1)
-    m = re.search(r"(?:Summer|Winter|Fall|Autumn|Spring)(\d{2})", basename, re.IGNORECASE)
+    m = re.search(
+        r"(?:Summer|Winter|Fall|Autumn|Spring)(\d{2})", basename, re.IGNORECASE
+    )
     if m:
         return f"20{m.group(1)}"
     return None
@@ -272,16 +296,17 @@ def _combine_file_label(data):
     Combines the year and formatted jet-algo; falls back to the stem when
     neither can be extracted (e.g. custom txt files with non-standard names).
     """
-    year     = data.get("year") or ""
+    year = data.get("year") or ""
     jet_algo = data.get("jet_algo")
     algo_fmt = _format_jet_algo(jet_algo) if jet_algo else ""
-    parts    = [p for p in [year, algo_fmt] if p]
+    parts = [p for p in [year, algo_fmt] if p]
     return " ".join(parts) if parts else data.get("stem", "")
 
 
 # ---------------------------------------------------------------------------
 # Layer 1 – extract evaluated JERC points from a single txt file
 # ---------------------------------------------------------------------------
+
 
 def extract_jerc_points(txt_path, pt_values):
     """
@@ -311,9 +336,9 @@ def extract_jerc_points(txt_path, pt_values):
       "stem"           – filesystem-safe label for output filenames
     """
     header, rows = _parse_jerc_txt(txt_path)
-    bin_vars     = header["bin_vars"]
-    x_var        = header["x_var"]
-    formula      = header["formula"]
+    bin_vars = header["bin_vars"]
+    x_var = header["x_var"]
+    formula = header["formula"]
     content_type = header.get("content_type", "Resolution")
 
     eta_var = next((v for v in bin_vars if "eta" in v.lower()), bin_vars[0])
@@ -321,11 +346,11 @@ def extract_jerc_points(txt_path, pt_values):
     # a "JetPhi" second variable must NOT fall into this slot.
     rho_var = next((v for v in bin_vars if "rho" in v.lower()), None)
 
-    year      = _extract_year(txt_path, year_map=_YEAR_MAP)
-    jet_algo  = _extract_jet_algo(txt_path)
+    year = _extract_year(txt_path, year_map=_YEAR_MAP)
+    jet_algo = _extract_jet_algo(txt_path)
     # UL campaigns ran at 13 TeV; Run 3 at 13.6 TeV
-    is_ul     = "UL" in (year or "")
-    e_cm      = 13000.0 if is_ul else 13600.0
+    is_ul = "UL" in (year or "")
+    e_cm = 13000.0 if is_ul else 13600.0
     lumi_text = f"{year} ({'13' if is_ul else '13.6'} TeV)" if year else "(13.6 TeV)"
 
     if rho_var:
@@ -336,10 +361,10 @@ def extract_jerc_points(txt_path, pt_values):
 
     # Accumulate y values keyed by (i_pt, eta_bin, rho_bin) so that any extra
     # bin dimensions (e.g. JetPhi) are averaged out rather than duplicated.
-    accum    = defaultdict(list)   # key → [y, ...]
-    eta_c_of = {}                  # eta_bin → eta_c
-    i_rho_of = {}                  # rho_bin → i_rho
-    pt_seen  = {}                  # i_pt → pt_val
+    accum = defaultdict(list)  # key → [y, ...]
+    eta_c_of = {}  # eta_bin → eta_c
+    i_rho_of = {}  # rho_bin → i_rho
+    pt_seen = {}  # i_pt → pt_val
 
     for i_pt, pt_val in enumerate(pt_values):
         for i_rho, rho_bin in enumerate(rho_bins):
@@ -349,7 +374,7 @@ def extract_jerc_points(txt_path, pt_values):
 
                 eta_lo, eta_hi = row["bin_edges"][eta_var]
                 eta_bin = row["bin_edges"][eta_var]
-                eta_c   = 0.5 * (eta_lo + eta_hi)
+                eta_c = 0.5 * (eta_lo + eta_hi)
                 eta_c_of[eta_bin] = eta_c
                 i_rho_of[rho_bin] = i_rho
 
@@ -387,37 +412,40 @@ def extract_jerc_points(txt_path, pt_values):
         y_mean = float(np.mean(y_list))
         if not np.isfinite(y_mean) or y_mean <= 0:
             continue
-        points.append({
-            "eta_c":   eta_c_of[eta_bin],
-            "eta_bin": eta_bin,
-            "rho_bin": rho_bin,
-            "pt_val":  pt_seen[i_pt],
-            "i_pt":    i_pt,
-            "i_rho":   i_rho_of[rho_bin],
-            "y":       y_mean,
-        })
+        points.append(
+            {
+                "eta_c": eta_c_of[eta_bin],
+                "eta_bin": eta_bin,
+                "rho_bin": rho_bin,
+                "pt_val": pt_seen[i_pt],
+                "i_pt": i_pt,
+                "i_rho": i_rho_of[rho_bin],
+                "y": y_mean,
+            }
+        )
 
     pt_values_used = sorted(pt_seen.items())  # [(i_pt, pt_val), ...]
 
     return {
-        "points":          points,
-        "rho_bins":        rho_bins,
-        "rho_alphas":      rho_alphas,
-        "pt_values_used":  pt_values_used,
-        "eta_var":         eta_var,
-        "x_var":           x_var,
-        "year":            year,
-        "jet_algo":        jet_algo,
-        "lumi_text":       lumi_text,
-        "label":           _file_label(txt_path),
-        "stem":            _short_stem(txt_path),
-        "content_type":    content_type,
+        "points": points,
+        "rho_bins": rho_bins,
+        "rho_alphas": rho_alphas,
+        "pt_values_used": pt_values_used,
+        "eta_var": eta_var,
+        "x_var": x_var,
+        "year": year,
+        "jet_algo": jet_algo,
+        "lumi_text": lumi_text,
+        "label": _file_label(txt_path),
+        "stem": _short_stem(txt_path),
+        "content_type": content_type,
     }
 
 
 # ---------------------------------------------------------------------------
 # Layer 2 – compute point-wise ratio between two JERCData dicts
 # ---------------------------------------------------------------------------
+
 
 def compute_ratio_points(data_num, data_den):
     """
@@ -455,15 +483,17 @@ def compute_ratio_points(data_num, data_den):
         ratio = pn["y"] / pd["y"]
         if not np.isfinite(ratio):
             continue
-        points.append({
-            "eta_c":   pn["eta_c"],
-            "eta_bin": pn["eta_bin"],
-            "rho_bin": pn["rho_bin"],
-            "pt_val":  pn["pt_val"],
-            "i_pt":    pn["i_pt"],
-            "i_rho":   pn["i_rho"],
-            "y":       ratio,
-        })
+        points.append(
+            {
+                "eta_c": pn["eta_c"],
+                "eta_bin": pn["eta_bin"],
+                "rho_bin": pn["rho_bin"],
+                "pt_val": pn["pt_val"],
+                "i_pt": pn["i_pt"],
+                "i_rho": pn["i_rho"],
+                "y": ratio,
+            }
+        )
         pt_seen[pn["i_pt"]] = pn["pt_val"]
 
     if not points:
@@ -478,22 +508,23 @@ def compute_ratio_points(data_num, data_den):
         lumi_text = f"{year_num or ''}/{year_den or ''} (13.6 TeV)".lstrip("/")
 
     return {
-        "points":          points,
-        "rho_bins":        data_num["rho_bins"],   # keep numerator's rho structure
-        "rho_alphas":      data_num["rho_alphas"],
-        "pt_values_used":  sorted(pt_seen.items()),
-        "eta_var":         data_num["eta_var"],
-        "x_var":           data_num["x_var"],
-        "year":            year_num,
-        "jet_algo":        data_num["jet_algo"],
-        "lumi_text":       lumi_text,
-        "content_type":    data_num.get("content_type", "Resolution"),
+        "points": points,
+        "rho_bins": data_num["rho_bins"],  # keep numerator's rho structure
+        "rho_alphas": data_num["rho_alphas"],
+        "pt_values_used": sorted(pt_seen.items()),
+        "eta_var": data_num["eta_var"],
+        "x_var": data_num["x_var"],
+        "year": year_num,
+        "jet_algo": data_num["jet_algo"],
+        "lumi_text": lumi_text,
+        "content_type": data_num.get("content_type", "Resolution"),
     }
 
 
 # ---------------------------------------------------------------------------
 # Layer 2b – combine multiple JERCData dicts into one overlaid dataset
 # ---------------------------------------------------------------------------
+
 
 def combine_jerc_data(data_list):
     """
@@ -514,7 +545,7 @@ def combine_jerc_data(data_list):
     file_labels = [_combine_file_label(d) for d in data_list]
 
     all_points = []
-    pt_seen    = {}
+    pt_seen = {}
     for i_file, data in enumerate(data_list):
         rho_bins = data["rho_bins"]
         if rho_bins == [None]:
@@ -529,31 +560,32 @@ def combine_jerc_data(data_list):
             pt_seen[p["i_pt"]] = p["pt_val"]
 
     lumi_texts = list(dict.fromkeys(d["lumi_text"] for d in data_list))
-    lumi_text  = " / ".join(lumi_texts) if len(lumi_texts) > 1 else lumi_texts[0]
+    lumi_text = " / ".join(lumi_texts) if len(lumi_texts) > 1 else lumi_texts[0]
 
-    algos    = list(dict.fromkeys(d["jet_algo"] for d in data_list if d["jet_algo"]))
+    algos = list(dict.fromkeys(d["jet_algo"] for d in data_list if d["jet_algo"]))
     jet_algo = algos[0] if len(algos) == 1 else None
 
     base = data_list[0]
     return {
-        "points":         all_points,
-        "rho_bins":       file_labels,      # strings → signals combine-mode
-        "rho_alphas":     file_alphas,
+        "points": all_points,
+        "rho_bins": file_labels,  # strings → signals combine-mode
+        "rho_alphas": file_alphas,
         "pt_values_used": sorted(pt_seen.items()),
-        "eta_var":        base["eta_var"],
-        "x_var":          base["x_var"],
-        "year":           base["year"],
-        "jet_algo":       jet_algo,
-        "lumi_text":      lumi_text,
-        "label":          " vs ".join(file_labels),
-        "stem":           "combined",
-        "content_type":   base.get("content_type", "Resolution"),
+        "eta_var": base["eta_var"],
+        "x_var": base["x_var"],
+        "year": base["year"],
+        "jet_algo": jet_algo,
+        "lumi_text": lumi_text,
+        "label": " vs ".join(file_labels),
+        "stem": "combined",
+        "content_type": base.get("content_type", "Resolution"),
     }
 
 
 # ---------------------------------------------------------------------------
 # Layer 2c – eta-range filter (applied after extraction, before plotting)
 # ---------------------------------------------------------------------------
+
 
 def _filter_eta(data, eta_max):
     """Return a shallow copy of *data* with points restricted to |eta_c| < eta_max."""
@@ -570,6 +602,7 @@ def _filter_eta(data, eta_max):
 # Detector region helpers
 # ---------------------------------------------------------------------------
 
+
 def _add_detector_region_lines(ax, symmetric=False):
     """Draw CMS detector-region vertical lines and text labels on *ax*.
 
@@ -582,12 +615,21 @@ def _add_detector_region_lines(ax, symmetric=False):
 
     boundaries = list(_DETECTOR_REGION_BOUNDARIES)
     if symmetric:
-        boundaries = [(-eta, ls) for eta, ls in _DETECTOR_REGION_BOUNDARIES] + boundaries
+        boundaries = [
+            (-eta, ls) for eta, ls in _DETECTOR_REGION_BOUNDARIES
+        ] + boundaries
 
     for eta, ls in boundaries:
         if xmin < eta < xmax:
-            ax.axvline(eta, color="black", linestyle=ls, linewidth=0.8, zorder=1,
-                       ymin=0.03, ymax=0.78)
+            ax.axvline(
+                eta,
+                color="black",
+                linestyle=ls,
+                linewidth=0.8,
+                zorder=1,
+                ymin=0.03,
+                ymax=0.78,
+            )
 
     # Draw the first boundary at or just beyond the true data edge to mark where the
     # current detector region ends.  Use ax.dataLim (no matplotlib margin) so that a
@@ -600,8 +642,15 @@ def _add_detector_region_lines(ax, symmetric=False):
         None,
     )
     if first_outside is not None and not (xmin < first_outside[0] < xmax):
-        ax.axvline(first_outside[0], color="black", linestyle=first_outside[1],
-                   linewidth=0.8, zorder=1, ymin=0.03, ymax=0.78)
+        ax.axvline(
+            first_outside[0],
+            color="black",
+            linestyle=first_outside[1],
+            linewidth=0.8,
+            zorder=1,
+            ymin=0.03,
+            ymax=0.78,
+        )
 
     label_entries = list(_DETECTOR_REGION_LABELS)
     if symmetric:
@@ -615,9 +664,12 @@ def _add_detector_region_lines(ax, symmetric=False):
         if xmin < eta_c < xmax and (label_top is not None or label_bot is not None):
             text = f"{label_top}\n{label_bot}" if label_top else label_bot
             ax.text(
-                eta_c, 0.85, text,
+                eta_c,
+                0.85,
+                text,
                 transform=trans,
-                ha="center", va="top",
+                ha="center",
+                va="top",
                 fontsize=17,
             )
 
@@ -625,6 +677,7 @@ def _add_detector_region_lines(ax, symmetric=False):
 # ---------------------------------------------------------------------------
 # Layer 3 – unified plotting function (works for JERC or ratio)
 # ---------------------------------------------------------------------------
+
 
 def plot_jerc_series(
     data,
@@ -655,13 +708,13 @@ def plot_jerc_series(
     fold_eta              : if True, use |eta_c| on the x-axis
     draw_detector_regions : if True, overlay CMS detector-region lines and labels
     """
-    points          = data["points"]
-    rho_bins        = data["rho_bins"]
-    rho_alphas      = data["rho_alphas"]
-    pt_values_used  = data["pt_values_used"]
-    eta_var         = data["eta_var"]
-    x_var           = data["x_var"]
-    lumi_text       = data["lumi_text"]
+    points = data["points"]
+    rho_bins = data["rho_bins"]
+    rho_alphas = data["rho_alphas"]
+    pt_values_used = data["pt_values_used"]
+    eta_var = data["eta_var"]
+    x_var = data["x_var"]
+    lumi_text = data["lumi_text"]
 
     if not points:
         log.warning("No data points to plot for %s — skipping.", output_base)
@@ -676,8 +729,8 @@ def plot_jerc_series(
     # When folding, average y values of symmetric ±eta bins at the same |eta_c|.
     groups = defaultdict(list)
     if fold_eta:
-        fold_y    = defaultdict(lambda: defaultdict(list))  # (i_pt,i_rho) → |eta_c| → [y]
-        fold_xerr = {}                                       # |eta_c| → x_err
+        fold_y = defaultdict(lambda: defaultdict(list))  # (i_pt,i_rho) → |eta_c| → [y]
+        fold_xerr = {}  # |eta_c| → x_err
         for p in points:
             x_val = abs(p["eta_c"])
             eta_lo, eta_hi = p["eta_bin"]
@@ -701,14 +754,20 @@ def plot_jerc_series(
     for (i_pt, i_rho), xy_list in groups.items():
         pt_val = pt_val_of[i_pt]
         base_color = _BASE_COLORS[i_pt % len(_BASE_COLORS)]
-        alpha      = float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
-        color      = _rgba(base_color, alpha)
+        alpha = (
+            float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
+        )
+        color = _rgba(base_color, alpha)
         # When there is no rho binning use a unique marker per pT; otherwise per rho bin
-        marker     = _MARKERS[i_pt % len(_MARKERS)] if no_rho else _MARKERS[i_rho % len(_MARKERS)]
+        marker = (
+            _MARKERS[i_pt % len(_MARKERS)]
+            if no_rho
+            else _MARKERS[i_rho % len(_MARKERS)]
+        )
 
         xy_list.sort(key=lambda t: t[0])
-        xs    = [t[0] for t in xy_list]
-        ys    = [t[1] for t in xy_list]
+        xs = [t[0] for t in xy_list]
+        ys = [t[1] for t in xy_list]
         xerrs = [t[2] for t in xy_list]
 
         series_dict[f"pt{pt_val:.0f}_rho{i_rho}"] = {
@@ -727,10 +786,7 @@ def plot_jerc_series(
         log.warning("Empty series for %s — skipping.", output_base)
         return
 
-    xlabel = (
-        r"$|\eta^{\mathrm{jet}}|$" if fold_eta
-        else _latex_label(eta_var)
-    )
+    xlabel = r"$|\eta^{\mathrm{jet}}|$" if fold_eta else _latex_label(eta_var)
 
     plotter = (
         HEPPlotter("CMS")
@@ -758,8 +814,11 @@ def plot_jerc_series(
     )
 
     plotter.add_annotation(
-        0.05, 0.98, annotation_text,
-        ha="left", va="top",
+        0.05,
+        0.98,
+        annotation_text,
+        ha="left",
+        va="top",
         fontsize="medium",
     )
 
@@ -767,7 +826,9 @@ def plot_jerc_series(
     ax = fig.axes[0]
 
     if hline is not None:
-        ax.axhline(hline, color="black", linestyle="--", linewidth=1.0, alpha=0.6, zorder=0)
+        ax.axhline(
+            hline, color="black", linestyle="--", linewidth=1.0, alpha=0.6, zorder=0
+        )
 
     # if eta_max is not None:
     #     for sign in (-1, 1):
@@ -780,7 +841,8 @@ def plot_jerc_series(
         # Single legend: colour+marker per pT value, placed inside the plot
         pt_handles = [
             mlines.Line2D(
-                [], [],
+                [],
+                [],
                 color=_rgba(_BASE_COLORS[i_pt % len(_BASE_COLORS)], 1.0),
                 marker=_MARKERS[i_pt % len(_MARKERS)],
                 linestyle="none",
@@ -792,6 +854,7 @@ def plot_jerc_series(
         ax.legend(
             handles=pt_handles,
             loc="lower right",
+            bbox_to_anchor=(0.95, 0.0),
             title=None,
             fontsize="x-small",
             framealpha=0.85,
@@ -816,13 +879,15 @@ def plot_jerc_series(
         # Legend part 2: one line/marker per rho bin (or per file in combine-mode)
         rho_handles = [
             mlines.Line2D(
-                [], [],
+                [],
+                [],
                 color=(0.3, 0.3, 0.3, float(rho_alphas[i_rho])),
                 marker=_MARKERS[i_rho % len(_MARKERS)],
                 linestyle="none",
                 markersize=8,
                 label=(
-                    rho_bin if is_combine
+                    rho_bin
+                    if is_combine
                     else rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$"
                 ),
             )
@@ -864,6 +929,7 @@ def plot_jerc_series(
 # High-level wrappers (accept pre-extracted JERCData dicts)
 # ---------------------------------------------------------------------------
 
+
 def plot_jerc_vs_eta(
     data,
     output_base,
@@ -877,7 +943,8 @@ def plot_jerc_vs_eta(
         return
     jet_algo = data["jet_algo"]
     annotation = (
-        f"{PUPPI_JET_STRING}\n{_format_jet_algo(jet_algo)}" if jet_algo
+        f"{PUPPI_JET_STRING}\n{_format_jet_algo(jet_algo)}"
+        if jet_algo
         else PUPPI_JET_STRING
     )
     is_l2 = data.get("content_type", "Resolution") == "Correction L2Relative"
@@ -885,10 +952,11 @@ def plot_jerc_vs_eta(
         inv_points = [{**p, "y": 1.0 / p["y"]} for p in data["points"]]
         data = {**data, "points": inv_points}
         plot_jerc_series(
-            data, output_base,
+            data,
+            output_base,
             ylabel="Simulated jet response",
             annotation_text=annotation,
-            ylim=(0.75, 1.25),
+            ylim=(0.8, 1.4),
             data_formats=data_formats,
             eta_max=eta_max,
             hline=1.0,
@@ -897,7 +965,8 @@ def plot_jerc_vs_eta(
         )
     else:
         plot_jerc_series(
-            data, output_base,
+            data,
+            output_base,
             ylabel="Jet Energy Resolution",
             annotation_text=annotation,
             ylim=(0.0, 0.3 if eta_max is None else 0.2),
@@ -916,11 +985,14 @@ def plot_jerc_ratio_vs_eta(
     eta_max=None,
 ):
     """Plot the ratio (num / den) for two pre-extracted JERCData dicts."""
-    data = compute_ratio_points(_filter_eta(data_num, eta_max), _filter_eta(data_den, eta_max))
+    data = compute_ratio_points(
+        _filter_eta(data_num, eta_max), _filter_eta(data_den, eta_max)
+    )
     if data is None:
         log.warning(
             "No common bins between %s and %s — skipping ratio plot",
-            data_num["label"], data_den["label"],
+            data_num["label"],
+            data_den["label"],
         )
         return
     annotation = (
@@ -929,7 +1001,8 @@ def plot_jerc_ratio_vs_eta(
         f"{PUPPI_JET_STRING}"
     )
     plot_jerc_series(
-        data, output_base,
+        data,
+        output_base,
         ylabel=f"JER Ratio ({data_num['label']} / {data_den['label']})",
         annotation_text=annotation,
         ylim=(0.5, 1.5),
@@ -945,6 +1018,7 @@ def plot_jerc_ratio_vs_eta(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -957,19 +1031,22 @@ def main():
     )
     parser.add_argument(
         "--pt-values",
-        nargs="+", type=float,
-        default=[50, 100, 300, 600, 1000, 3000,],
+        nargs="+",
+        type=float,
+        default=[15, 30, 90, 300, 1000, 3000],
         metavar="PT",
-        help="JetPt [GeV] values at which to evaluate the resolution (default: 50 100 300 600 1000 3000)",
+        help="JetPt [GeV] values at which to evaluate the resolution (default: 15 30 90 300 1000 3000)",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         default=".",
         help="Output directory (default: current directory)",
     )
     parser.add_argument(
         "--formats",
-        nargs="+", default=["png", "pdf", "svg"],
+        nargs="+",
+        default=["png", "pdf", "svg"],
         help="Output file formats (default: png pdf svg)",
     )
     parser.add_argument(
@@ -1009,25 +1086,47 @@ def main():
     for data in extracted.values():
         output_base = os.path.join(args.output, data["stem"])
         plot_jerc_vs_eta(data, output_base, data_formats=args.formats)
-        plot_jerc_vs_eta(data, output_base + eta_max_suffix, data_formats=args.formats, eta_max=args.eta_max)
+        plot_jerc_vs_eta(
+            data,
+            output_base + eta_max_suffix,
+            data_formats=args.formats,
+            eta_max=args.eta_max,
+        )
 
     if args.combine:
         if len(args.input) < 2:
-            log.warning("--combine requires at least 2 input files; skipping combined plot.")
+            log.warning(
+                "--combine requires at least 2 input files; skipping combined plot."
+            )
         else:
             combined = combine_jerc_data([extracted[p] for p in args.input])
             stems = [extracted[p]["stem"] for p in args.input]
             combined_name = "combined_" + "__vs__".join(stems)
             output_base = os.path.join(args.output, combined_name)
             plot_jerc_vs_eta(combined, output_base, data_formats=args.formats)
-            plot_jerc_vs_eta(combined, output_base + eta_max_suffix, data_formats=args.formats, eta_max=args.eta_max)
+            plot_jerc_vs_eta(
+                combined,
+                output_base + eta_max_suffix,
+                data_formats=args.formats,
+                eta_max=args.eta_max,
+            )
 
     if not args.no_ratio:
         for path_a, path_b in combinations(args.input, 2):
             data_a, data_b = extracted[path_a], extracted[path_b]
-            ratio_base = os.path.join(args.output, f"ratio_{data_a['stem']}__over__{data_b['stem']}")
-            plot_jerc_ratio_vs_eta(data_a, data_b, ratio_base, data_formats=args.formats)
-            plot_jerc_ratio_vs_eta(data_a, data_b, ratio_base + eta_max_suffix, data_formats=args.formats, eta_max=args.eta_max)
+            ratio_base = os.path.join(
+                args.output, f"ratio_{data_a['stem']}__over__{data_b['stem']}"
+            )
+            plot_jerc_ratio_vs_eta(
+                data_a, data_b, ratio_base, data_formats=args.formats
+            )
+            plot_jerc_ratio_vs_eta(
+                data_a,
+                data_b,
+                ratio_base + eta_max_suffix,
+                data_formats=args.formats,
+                eta_max=args.eta_max,
+            )
 
 
 if __name__ == "__main__":
