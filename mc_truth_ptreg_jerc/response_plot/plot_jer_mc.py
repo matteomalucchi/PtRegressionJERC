@@ -1337,6 +1337,107 @@ def _format_bin_annotation_line(low_edge, high_edge, label):
     return f"{low_edge:.2f} < {label} < {high_edge:.2f}"
 
 
+def _parse_additional_uncertainty(value, response_var_name=""):
+    """Parse the per-response-variable ``additional_uncertainty`` config option.
+
+    The option may be provided as a number or as a string (per request). Empty,
+    None, or unparseable values default to 0.
+    """
+    if value is None or value == "":
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        log.warning(
+            "Could not parse additional_uncertainty=%r for '%s' as float; using 0",
+            value,
+            response_var_name,
+        )
+        return 0.0
+
+
+def _apply_response_normalization_and_extra_uncertainty(
+    response_var_name,
+    resolutions,
+    resolutions_uncertainty,
+    resolution_grid,
+    response_means,
+    response_means_uncertainty,
+    response_vars,
+):
+    """Apply optional per-bin transformations to the computed resolution values.
+
+    Two transformations are supported, both configured per response variable
+    in the YAML config (inspired by ``jet_response_and_resolution_x.cc``):
+
+    - ``normalize_by_response_mean`` (bool, default False): when True, divide
+      each resolution by the corresponding mean of the response distribution.
+      The propagated uncertainty follows
+          eerel = erel * sqrt((sigma_err/sigma)^2 + (mean_err/mean)^2)
+      (analogous to the ``RelRsp`` block in the C++ reference, lines 491-498).
+    - ``additional_uncertainty`` (float or string parseable to float, default
+      0.0): a relative uncertainty added in quadrature to the resolution
+      uncertainty as new_err = sqrt(err^2 + (addUnc * resolution)^2)
+      (analogous to the ``addUnc`` block in the C++ reference, lines 515-525).
+    """
+    var_cfg = response_vars.get(response_var_name, {})
+    normalize = bool(var_cfg.get("normalize_by_response_mean", False))
+    add_unc = _parse_additional_uncertainty(
+        var_cfg.get("additional_uncertainty", 0.0), response_var_name
+    )
+
+    if not normalize and add_unc <= 0:
+        return
+
+    if normalize:
+        log.info(
+            "Normalizing resolution by mean of response for '%s'",
+            response_var_name,
+        )
+    if add_unc > 0:
+        log.info(
+            "Adding extra relative uncertainty %.4f in quadrature for '%s'",
+            add_unc,
+            response_var_name,
+        )
+
+    for bin_idx in list(resolutions.keys()):
+        sigma = resolutions[bin_idx]
+        sigma_err = resolutions_uncertainty.get(bin_idx, 0.0)
+        if sigma is None or np.isnan(sigma):
+            continue
+
+        if normalize:
+            mean = response_means.get(bin_idx, np.nan)
+            mean_err = response_means_uncertainty.get(bin_idx, 0.0)
+            if (
+                mean is None
+                or np.isnan(mean)
+                or mean == 0
+                or sigma / mean < 0
+            ):
+                resolutions[bin_idx] = np.nan
+                resolution_grid[bin_idx] = np.nan
+                resolutions_uncertainty[bin_idx] = 0.0
+                continue
+            sigma_rel = sigma / mean
+            if sigma > 0:
+                sigma_rel_err = abs(sigma_rel) * np.sqrt(
+                    (sigma_err / sigma) ** 2 + (mean_err / mean) ** 2
+                )
+            else:
+                sigma_rel_err = abs(sigma_rel * mean_err / mean) if mean != 0 else 0.0
+            sigma = sigma_rel
+            sigma_err = sigma_rel_err
+
+        if add_unc > 0:
+            sigma_err = float(np.sqrt(sigma_err**2 + (add_unc * sigma) ** 2))
+
+        resolutions[bin_idx] = sigma
+        resolution_grid[bin_idx] = sigma
+        resolutions_uncertainty[bin_idx] = sigma_err
+
+
 def _compute_resolution_from_histogram(
     response_var_name, h_response, bin_var_names, response_vars
 ):
@@ -1353,7 +1454,15 @@ def _compute_resolution_from_histogram(
     bin_var_names : list of str
         Names of the bin variables (in order)
     response_vars : dict
-        Configuration dict for response variables
+        Configuration dict for response variables. Each entry may include:
+        - "normalize_by_response_mean" (bool, default False): when True, divide
+          the per-bin resolution by the mean of the response (sigma / <R>) and
+          propagate the uncertainty accordingly. Inspired by the RelRsp block
+          of ``jet_response_and_resolution_x.cc``.
+        - "additional_uncertainty" (float or string, default 0.0): a relative
+          uncertainty added in quadrature to the resolution uncertainty as
+          new_err = sqrt(err^2 + (addUnc * resolution)^2). Inspired by the
+          ``addUnc`` block of ``jet_response_and_resolution_x.cc``.
 
     Returns
     -------
@@ -1362,8 +1471,14 @@ def _compute_resolution_from_histogram(
         - "response_var": response variable name
         - "bin_edges": dict mapping bin_var_name to bin edges
         - "bin_var_names": list of bin variable names
-        - "resolutions": dict of bin indices -> resolution values
+        - "resolutions": dict of bin indices -> resolution values (possibly
+          normalized by the response mean)
         - "resolution_grid": ndarray with resolution values
+        - "resolutions_uncertainty": dict of bin indices -> uncertainty on
+          resolution (possibly normalized and with extra uncertainty added)
+        - "response_means": dict of bin indices -> mean of response per bin
+        - "response_means_uncertainty": dict of bin indices -> uncertainty on
+          the mean of response per bin
     """
     # NOTE: Do not trust the externally provided `bin_var_names` here.
     # Each response variable can have its own per-variable binning axes, and
@@ -1395,6 +1510,8 @@ def _compute_resolution_from_histogram(
     gaussian_fits = {}
     rebin_infos = {}
     ci_intervals = {}
+    response_means = {}
+    response_means_uncertainty = {}
 
     log.info("Processing resolution for '%s'...", response_var_name)
 
@@ -1414,6 +1531,8 @@ def _compute_resolution_from_histogram(
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
             resolutions_uncertainty[bin_idx] = 0
+            response_means[bin_idx] = np.nan
+            response_means_uncertainty[bin_idx] = 0
             continue
 
         # Create indexing tuple to extract the 1D histogram along the response axis
@@ -1566,6 +1685,8 @@ def _compute_resolution_from_histogram(
                             resolutions[bin_idx] = fit_res["params"][2]
                             resolution_grid[bin_idx] = fit_res["params"][2]
                             resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
+                            response_means[bin_idx] = fit_res["params"][1]
+                            response_means_uncertainty[bin_idx] = fit_res["params_err"][1]
                         else:
                             log.warning(
                                 "Fit quality too poor for bin %s for '%s' (best sigma rel. err. >= %.2f): setting resolution to NaN",
@@ -1616,8 +1737,15 @@ def _compute_resolution_from_histogram(
                         resolutions_uncertainty[bin_idx] = (
                             np.sqrt((mu4 - mu2**2) / (4 * ntot * mu2)) if mu2 > 0 else 0
                         )
+                        response_means[bin_idx] = mean
+                        # standard error of the mean = sigma / sqrt(N) = sqrt(mu2 / N)
+                        response_means_uncertainty[bin_idx] = (
+                            np.sqrt(mu2 / ntot) if mu2 > 0 else 0
+                        )
                     else:
                         resolutions_uncertainty[bin_idx] = 0
+                        response_means[bin_idx] = np.nan
+                        response_means_uncertainty[bin_idx] = 0
                 except Exception as e:
                     log.error("Failed to compute resolution for bin %s for '%s': %s", bin_label_dict[bin_idx]["label"], response_var_name, e)
                     failed = True
@@ -1634,6 +1762,21 @@ def _compute_resolution_from_histogram(
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
             resolutions_uncertainty[bin_idx] = 0
+            response_means.setdefault(bin_idx, np.nan)
+            response_means_uncertainty.setdefault(bin_idx, 0)
+
+    # Optionally normalize the resolution by the mean of the response and/or
+    # add an extra relative uncertainty in quadrature. Both are configurable
+    # per response variable (see _apply_response_normalization_and_extra_uncertainty).
+    _apply_response_normalization_and_extra_uncertainty(
+        response_var_name=response_var_name,
+        resolutions=resolutions,
+        resolutions_uncertainty=resolutions_uncertainty,
+        resolution_grid=resolution_grid,
+        response_means=response_means,
+        response_means_uncertainty=response_means_uncertainty,
+        response_vars=response_vars,
+    )
 
     return (
         response_var_name,
@@ -1647,6 +1790,8 @@ def _compute_resolution_from_histogram(
             "rebin_infos": rebin_infos,
             "ci_intervals": ci_intervals,
             "resolutions_uncertainty": resolutions_uncertainty,
+            "response_means": response_means,
+            "response_means_uncertainty": response_means_uncertainty,
         },
     )
 
