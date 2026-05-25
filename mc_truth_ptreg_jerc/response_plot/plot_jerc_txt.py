@@ -498,9 +498,9 @@ def extract_jerc_points(txt_path, pt_values):
     -------
     JERCData dict:
       "points"         – list of point dicts, each with keys:
-                           eta_c, eta_bin, rho_bin, pt_val, i_pt, i_rho, y
-      "rho_bins"       – sorted list of unique rho-bin tuples (or [None])
-      "rho_alphas"     – np.array of alpha values, one per rho bin
+                           eta_c, eta_bin, extra_bin, pt_val, i_pt, i_extra, y
+      "extra_bins"       – sorted list of unique rho-bin tuples (or [None])
+      "extra_alphas"     – np.array of alpha values, one per rho bin
       "pt_values_used" – [(i_pt, pt_val), ...] sorted by i_pt
       "eta_var"        – name of the eta bin variable
       "x_var"          – name of the x (JetPt) variable
@@ -534,29 +534,29 @@ def extract_jerc_points(txt_path, pt_values):
     lumi_text = f"{year} ({'13' if is_ul else '13.6'} TeV)" if year else "(13.6 TeV)"
 
     if rho_var:
-        rho_bins = sorted({row["bin_edges"][rho_var] for row in rows})
+        extra_bins = sorted({row["bin_edges"][rho_var] for row in rows})
     else:
-        rho_bins = [None]
-    rho_alphas = np.linspace(0.25, 1.0, len(rho_bins))
+        extra_bins = [None]
+    extra_alphas = np.linspace(0.25, 1.0, len(extra_bins))
 
-    # Accumulate y values keyed by (i_pt, eta_bin, rho_bin) so that any extra
+    # Accumulate y values keyed by (i_pt, eta_bin, extra_bin) so that any extra
     # bin dimensions (e.g. JetPhi) are averaged out rather than duplicated.
     accum = defaultdict(list)  # key → [y, ...]
     eta_c_of = {}  # eta_bin → eta_c
-    i_rho_of = {}  # rho_bin → i_rho
+    i_extra_of = {}  # extra_bin → i_extra
     pt_seen = {}  # i_pt → pt_val
 
     for i_pt, pt_val in enumerate(pt_values):
-        for i_rho, rho_bin in enumerate(rho_bins):
+        for i_extra, extra_bin in enumerate(extra_bins):
             for row in rows:
-                if rho_var and row["bin_edges"].get(rho_var) != rho_bin:
+                if rho_var and row["bin_edges"].get(rho_var) != extra_bin:
                     continue
 
                 eta_lo, eta_hi = row["bin_edges"][eta_var]
                 eta_bin = row["bin_edges"][eta_var]
                 eta_c = 0.5 * (eta_lo + eta_hi)
                 eta_c_of[eta_bin] = eta_c
-                i_rho_of[rho_bin] = i_rho
+                i_extra_of[extra_bin] = i_extra
 
                 # Drop unphysical (pt, eta) combinations: E_jet = pT·cosh(η) < E_beam
                 if pt_val * np.cosh(abs(eta_c)) >= e_cm / 2.0:
@@ -568,11 +568,11 @@ def extract_jerc_points(txt_path, pt_values):
                     y = _eval_formula(formula, pt_eval, row_params)
                 except Exception:
                     log.error(
-                        "Error evaluating formula for pt=%s, eta_bin=%s, rho_bin=%s in file '%s' in line: %r "
+                        "Error evaluating formula for pt=%s, eta_bin=%s, extra_bin=%s in file '%s' in line: %r "
                         "(bin_edges=%s, x_min=%s, x_max=%s, params=%s) — skipping point",
                         pt_eval,
                         eta_bin,
-                        rho_bin,
+                        extra_bin,
                         txt_path,
                         row,
                         row["bin_edges"],
@@ -585,11 +585,11 @@ def extract_jerc_points(txt_path, pt_values):
                 if not np.isfinite(y) or y <= 0:
                     continue
 
-                accum[(i_pt, eta_bin, rho_bin)].append(y)
+                accum[(i_pt, eta_bin, extra_bin)].append(y)
                 pt_seen[i_pt] = pt_val
 
     points = []
-    for (i_pt, eta_bin, rho_bin), y_list in accum.items():
+    for (i_pt, eta_bin, extra_bin), y_list in accum.items():
         y_mean = float(np.mean(y_list))
         if not np.isfinite(y_mean) or y_mean <= 0:
             continue
@@ -597,10 +597,10 @@ def extract_jerc_points(txt_path, pt_values):
             {
                 "eta_c": eta_c_of[eta_bin],
                 "eta_bin": eta_bin,
-                "rho_bin": rho_bin,
+                "extra_bin": extra_bin,
                 "pt_val": pt_seen[i_pt],
                 "i_pt": i_pt,
-                "i_rho": i_rho_of[rho_bin],
+                "i_extra": i_extra_of[extra_bin],
                 "y": y_mean,
             }
         )
@@ -609,8 +609,8 @@ def extract_jerc_points(txt_path, pt_values):
 
     return {
         "points": points,
-        "rho_bins": rho_bins,
-        "rho_alphas": rho_alphas,
+        "extra_bins": extra_bins,
+        "extra_alphas": extra_alphas,
         "pt_values_used": pt_values_used,
         "eta_var": eta_var,
         "x_var": x_var,
@@ -631,7 +631,7 @@ def extract_jerc_points(txt_path, pt_values):
 def compute_ratio_points(data_num, data_den):
     """
     Compute the point-wise JERC ratio (numerator / denominator) for every
-    matching (eta_bin, rho_bin, pt_val) triple that exists in both datasets.
+    matching (eta_bin, extra_bin, pt_val) triple that exists in both datasets.
 
     Parameters
     ----------
@@ -642,15 +642,15 @@ def compute_ratio_points(data_num, data_den):
     -------
     JERCData dict in the same format as extract_jerc_points, or None if no
     common bins are found.  The y values are ratios instead of raw resolutions.
-    The colour/marker indices (i_pt, i_rho) are inherited from the numerator
+    The colour/marker indices (i_pt, i_extra) are inherited from the numerator
     so that ratio plots use the same visual encoding as the individual plots.
     """
-    lut_num = {(p["eta_bin"], p["rho_bin"], p["pt_val"]): p for p in data_num["points"]}
-    lut_den = {(p["eta_bin"], p["rho_bin"], p["pt_val"]): p for p in data_den["points"]}
+    lut_num = {(p["eta_bin"], p["extra_bin"], p["pt_val"]): p for p in data_num["points"]}
+    lut_den = {(p["eta_bin"], p["extra_bin"], p["pt_val"]): p for p in data_den["points"]}
 
     common_keys = set(lut_num) & set(lut_den)
     if not common_keys:
-        log.warning("No common (eta_bin, rho_bin, pt_val) between the two datasets.")
+        log.warning("No common (eta_bin, extra_bin, pt_val) between the two datasets.")
         return None
 
     points = []
@@ -668,10 +668,10 @@ def compute_ratio_points(data_num, data_den):
             {
                 "eta_c": pn["eta_c"],
                 "eta_bin": pn["eta_bin"],
-                "rho_bin": pn["rho_bin"],
+                "extra_bin": pn["extra_bin"],
                 "pt_val": pn["pt_val"],
                 "i_pt": pn["i_pt"],
-                "i_rho": pn["i_rho"],
+                "i_extra": pn["i_extra"],
                 "y": ratio,
             }
         )
@@ -690,8 +690,8 @@ def compute_ratio_points(data_num, data_den):
 
     return {
         "points": points,
-        "rho_bins": data_num["rho_bins"],  # keep numerator's rho structure
-        "rho_alphas": data_num["rho_alphas"],
+        "extra_bins": data_num["extra_bins"],  # keep numerator's rho structure
+        "extra_alphas": data_num["extra_alphas"],
         "pt_values_used": sorted(pt_seen.items()),
         "eta_var": data_num["eta_var"],
         "x_var": data_num["x_var"],
@@ -718,7 +718,7 @@ def combine_jerc_data(data_list):
       - marker  → file index
       - alpha   → file index (lighter = first file, darker = last file)
 
-    To signal combine-mode to plot_jerc_series, rho_bins is set to a list of
+    To signal combine-mode to plot_jerc_series, extra_bins is set to a list of
     per-file label strings instead of the usual (lo, hi) tuples.
     """
     n_files = len(data_list)
@@ -728,16 +728,16 @@ def combine_jerc_data(data_list):
     all_points = []
     pt_seen = {}
     for i_file, data in enumerate(data_list):
-        rho_bins = data["rho_bins"]
-        if rho_bins == [None]:
-            central_rho_bin = None
+        extra_bins = data["extra_bins"]
+        if extra_bins == [None]:
+            central_extra_bin = None
         else:
-            central_rho_bin = rho_bins[len(rho_bins) // 2]
+            central_extra_bin = extra_bins[len(extra_bins) // 2]
 
         for p in data["points"]:
-            if rho_bins != [None] and p["rho_bin"] != central_rho_bin:
+            if extra_bins != [None] and p["extra_bin"] != central_extra_bin:
                 continue
-            all_points.append({**p, "i_rho": i_file, "rho_bin": file_labels[i_file]})
+            all_points.append({**p, "i_extra": i_file, "extra_bin": file_labels[i_file]})
             pt_seen[p["i_pt"]] = p["pt_val"]
 
     lumi_text = _combined_lumi_text(data_list)
@@ -748,8 +748,8 @@ def combine_jerc_data(data_list):
     base = data_list[0]
     return {
         "points": all_points,
-        "rho_bins": file_labels,  # strings → signals combine-mode
-        "rho_alphas": file_alphas,
+        "extra_bins": file_labels,  # strings → signals combine-mode
+        "extra_alphas": file_alphas,
         "pt_values_used": sorted(pt_seen.items()),
         "eta_var": base["eta_var"],
         "x_var": base["x_var"],
@@ -806,19 +806,19 @@ def extract_jerc_vs_pt_curves(txt_path, eta_range, n_pts=300):
         )
         return None
 
-    rho_bins_list = sorted({r["bin_edges"][rho_var] for r in eta_rows}) if rho_var else [None]
-    rho_alphas = np.linspace(0.25, 1.0, len(rho_bins_list))
+    extra_bins_list = sorted({r["bin_edges"][rho_var] for r in eta_rows}) if rho_var else [None]
+    extra_alphas = np.linspace(0.25, 1.0, len(extra_bins_list))
     pt_grid = np.logspace(1, np.log10(5000), n_pts)
 
     points = []
-    for i_rho, rho_bin in enumerate(rho_bins_list):
-        rho_rows = [
+    for i_extra, extra_bin in enumerate(extra_bins_list):
+        extra_rows = [
             r for r in eta_rows
-            if rho_var is None or r["bin_edges"].get(rho_var) == rho_bin
+            if rho_var is None or r["bin_edges"].get(rho_var) == extra_bin
         ]
         for pt_val in pt_grid:
             y_vals = []
-            for row in rho_rows:
+            for row in extra_rows:
                 eta_lo_r, eta_hi_r = row["bin_edges"][eta_var]
                 eta_c = 0.5 * (eta_lo_r + eta_hi_r)
                 if pt_val * np.cosh(abs(eta_c)) >= e_cm / 2.0:
@@ -838,8 +838,8 @@ def extract_jerc_vs_pt_curves(txt_path, eta_range, n_pts=300):
                 points.append({
                     "x": float(pt_val),
                     "y": float(np.mean(y_vals)),
-                    "i_rho": i_rho,
-                    "rho_bin": rho_bin,
+                    "i_extra": i_extra,
+                    "extra_bin": extra_bin,
                     "i_pt": 0,
                     "pt_val": 0.0,
                     "eta_c": 0.0,
@@ -848,8 +848,8 @@ def extract_jerc_vs_pt_curves(txt_path, eta_range, n_pts=300):
 
     return {
         "points": points,
-        "rho_bins": rho_bins_list,
-        "rho_alphas": rho_alphas,
+        "extra_bins": extra_bins_list,
+        "extra_alphas": extra_alphas,
         "pt_values_used": [],
         "eta_var": eta_var,
         "x_var": "JetPt",
@@ -868,7 +868,7 @@ def combine_jerc_vs_pt_curves(data_list):
     """
     Merge multiple vs-pt curve dicts for overlaid plotting on one canvas.
 
-    Each file becomes one curve (i_rho = file index), analogous to
+    Each file becomes one curve (i_extra = file index), analogous to
     combine_jerc_data for the vs-eta view.
     """
     n_files = len(data_list)
@@ -879,7 +879,7 @@ def combine_jerc_vs_pt_curves(data_list):
     all_points = []
     for i_file, data in enumerate(data_list):
         for p in data["points"]:
-            all_points.append({**p, "i_rho": i_file, "rho_bin": file_labels[i_file]})
+            all_points.append({**p, "i_extra": i_file, "extra_bin": file_labels[i_file]})
 
     lumi_text = _combined_lumi_text(data_list)
 
@@ -889,8 +889,8 @@ def combine_jerc_vs_pt_curves(data_list):
     base = data_list[0]
     return {
         "points": all_points,
-        "rho_bins": file_labels,
-        "rho_alphas": file_alphas,
+        "extra_bins": file_labels,
+        "extra_alphas": file_alphas,
         "pt_values_used": [],
         "eta_var": base["eta_var"],
         "x_var": "JetPt",
@@ -1040,8 +1040,8 @@ def plot_jerc_series(
     x_mode                : "eta" (scatter vs eta) or "pt" (smooth curve vs pt)
     """
     points = data["points"]
-    rho_bins = data["rho_bins"]
-    rho_alphas = data["rho_alphas"]
+    extra_bins = data["extra_bins"]
+    extra_alphas = data["extra_alphas"]
     pt_values_used = data["pt_values_used"]
     eta_var = data["eta_var"]
     x_var = data["x_var"]
@@ -1051,25 +1051,25 @@ def plot_jerc_series(
         log.warning("No data points to plot for %s — skipping.", output_base)
         return
 
-    no_rho = rho_bins == [None]
+    no_extra = extra_bins == [None]
 
     # Map i_pt → pt_val for label look-ups
     pt_val_of = dict(pt_values_used)
 
     # Group points and build (x, y, x_err) triples per series key.
     # vs-pt: one smooth curve per rho bin, x = pt value.
-    # vs-eta: one scatter series per (i_pt, i_rho), x = eta_c (optionally folded).
+    # vs-eta: one scatter series per (i_pt, i_extra), x = eta_c (optionally folded).
     groups = defaultdict(list)
     if x_mode == "pt":
         for p in points:
-            groups[(0, p["i_rho"])].append((p["x"], p["y"], 0.0))
+            groups[(0, p["i_extra"])].append((p["x"], p["y"], 0.0))
     elif fold_eta:
-        fold_y = defaultdict(lambda: defaultdict(list))  # (i_pt,i_rho) → |eta_c| → [y]
+        fold_y = defaultdict(lambda: defaultdict(list))  # (i_pt,i_extra) → |eta_c| → [y]
         fold_xerr = {}  # |eta_c| → x_err
         for p in points:
             x_val = abs(p["eta_c"])
             eta_lo, eta_hi = p["eta_bin"]
-            fold_y[(p["i_pt"], p["i_rho"])][x_val].append(p["y"])
+            fold_y[(p["i_pt"], p["i_extra"])][x_val].append(p["y"])
             fold_xerr[x_val] = 0.5 * (eta_hi - eta_lo)
         for key, x_map in fold_y.items():
             for x_val, ys in x_map.items():
@@ -1077,22 +1077,22 @@ def plot_jerc_series(
     else:
         for p in points:
             eta_lo, eta_hi = p["eta_bin"]
-            groups[(p["i_pt"], p["i_rho"])].append(
+            groups[(p["i_pt"], p["i_extra"])].append(
                 (p["eta_c"], p["y"], 0.5 * (eta_hi - eta_lo))
             )
 
     # Only show rho-bin indices that actually appear in the data
-    present_i_rho = {p["i_rho"] for p in points}
+    present_i_extra = {p["i_extra"] for p in points}
 
     # Build HEPPlotter series_dict
     series_dict = {}
-    for (i_pt, i_rho), xy_list in groups.items():
+    for (i_pt, i_extra), xy_list in groups.items():
         if x_mode == "pt":
             # vs-pt: colour by rho/file index, draw as a smooth line
-            base_color = _BASE_COLORS[i_rho % len(_BASE_COLORS)]
-            alpha = float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
+            base_color = _BASE_COLORS[i_extra % len(_BASE_COLORS)]
+            alpha = float(extra_alphas[i_extra]) if i_extra < len(extra_alphas) and not no_extra else 1.0
             color = _rgba(base_color, alpha)
-            ser_key = f"rho{i_rho}"
+            ser_key = f"extra{i_extra}"
             ser_style = {
                 "color": color,
                 "fmt": "",
@@ -1107,16 +1107,16 @@ def plot_jerc_series(
             pt_val = pt_val_of[i_pt]
             base_color = _BASE_COLORS[i_pt % len(_BASE_COLORS)]
             alpha = (
-                float(rho_alphas[i_rho]) if i_rho < len(rho_alphas) and not no_rho else 1.0
+                float(extra_alphas[i_extra]) if i_extra < len(extra_alphas) and not no_extra else 1.0
             )
             color = _rgba(base_color, alpha)
             # When there is no rho binning use a unique marker per pT; otherwise per rho bin
             marker = (
                 _MARKERS[i_pt % len(_MARKERS)]
-                if no_rho
-                else _MARKERS[i_rho % len(_MARKERS)]
+                if no_extra
+                else _MARKERS[i_extra % len(_MARKERS)]
             )
-            ser_key = f"pt{pt_val:.0f}_rho{i_rho}"
+            ser_key = f"pt{pt_val:.0f}_extra{i_extra}"
             ser_style = {
                 "color": color,
                 "fmt": marker,
@@ -1148,7 +1148,11 @@ def plot_jerc_series(
     plotter = (
         HEPPlotter("CMS")
         .set_plot_config(
-            figsize=None if no_rho else (20, 13),
+            figsize=(
+                (20, 13) if (x_mode == "eta" and not no_extra)
+                else None if (x_mode == "pt" and not no_extra) or (x_mode == "eta" and no_extra)
+                else None
+            ),
             cmstext=cmstext,
             cmstext_font_size=20,
             lumitext=lumi_text,
@@ -1194,34 +1198,31 @@ def plot_jerc_series(
         _add_detector_region_lines(ax, symmetric=fold_eta)
 
     if x_mode == "pt":
-        # vs-pt legend: one line per rho bin or file; no pt legend (pt is the x-axis)
-        if not no_rho:
-            is_combine = any(isinstance(rb, str) for rb in rho_bins)
-            rho_handles = [
+        # vs-pt legend: one entry per rho bin or file; no pt legend (pt is the x-axis)
+        if not no_extra:
+            is_combine = any(isinstance(rb, str) for rb in extra_bins)
+            extra_handles = [
                 mlines.Line2D(
                     [], [],
-                    color=_rgba(_BASE_COLORS[i_rho % len(_BASE_COLORS)], float(rho_alphas[i_rho])),
+                    color=_rgba(_BASE_COLORS[i_extra % len(_BASE_COLORS)], float(extra_alphas[i_extra])),
                     linestyle="-",
                     linewidth=2,
                     label=(
-                        rho_bin if is_combine
-                        else rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$"
+                        extra_bin if is_combine
+                        else rf"$[{extra_bin[0]:.1f},\ {extra_bin[1]:.1f}]$"
                     ),
                 )
-                for i_rho, rho_bin in enumerate(rho_bins)
-                if rho_bin is not None and i_rho in present_i_rho
+                for i_extra, extra_bin in enumerate(extra_bins)
+                if extra_bin is not None and i_extra in present_i_extra
             ]
-            fig.subplots_adjust(right=0.75)
             ax.legend(
-                handles=rho_handles,
-                bbox_to_anchor=(1.0, 1.0),
-                loc="upper left",
-                title="File" if is_combine else r"$\rho$ [GeV/Area]",
+                handles=extra_handles,
+                loc="upper right",
+                title=None,
                 fontsize="x-small",
-                title_fontsize="small",
                 framealpha=0.85,
             )
-    elif no_rho:
+    elif no_extra:
         # vs-eta, no rho: single legend with colour+marker per pT value
         pt_handles = [
             mlines.Line2D(
@@ -1244,8 +1245,7 @@ def plot_jerc_series(
             framealpha=0.85,
         )
     else:
-        # vs-eta with rho: shrink axes and show two external legends
-        fig.subplots_adjust(right=0.62)
+        # vs-eta with rho: two internal legends at the same height, left and right
 
         # Legend part 1: one colour patch per JetPt value
         pt_handles = [
@@ -1257,31 +1257,30 @@ def plot_jerc_series(
             for i_pt, pt_val in pt_values_used
         ]
 
-        # Detect combine-mode: rho_bins contains label strings instead of (lo,hi) tuples
-        is_combine = any(isinstance(rb, str) for rb in rho_bins)
+        # Detect combine-mode: extra_bins contains label strings instead of (lo,hi) tuples
+        is_combine = any(isinstance(rb, str) for rb in extra_bins)
 
         # Legend part 2: one line/marker per rho bin (or per file in combine-mode)
-        rho_handles = [
+        extra_handles = [
             mlines.Line2D(
                 [],
                 [],
-                color=(0.3, 0.3, 0.3, float(rho_alphas[i_rho])),
-                marker=_MARKERS[i_rho % len(_MARKERS)],
+                color=(0.3, 0.3, 0.3, float(extra_alphas[i_extra])),
+                marker=_MARKERS[i_extra % len(_MARKERS)],
                 linestyle="none",
                 markersize=8,
                 label=(
-                    rho_bin
+                    extra_bin
                     if is_combine
-                    else rf"$[{rho_bin[0]:.1f},\ {rho_bin[1]:.1f}]$"
+                    else rf"$[{extra_bin[0]:.1f},\ {extra_bin[1]:.1f}]$"
                 ),
             )
-            for i_rho, rho_bin in enumerate(rho_bins)
-            if rho_bin is not None and i_rho in present_i_rho
+            for i_extra, extra_bin in enumerate(extra_bins)
+            if extra_bin is not None and i_extra in present_i_extra
         ]
 
         leg_pt = ax.legend(
             handles=pt_handles,
-            bbox_to_anchor=(1.0, 1.0),
             loc="upper left",
             title=f"{_latex_label(x_var)} [GeV]",
             fontsize="x-small",
@@ -1291,9 +1290,8 @@ def plot_jerc_series(
         ax.add_artist(leg_pt)
 
         ax.legend(
-            handles=rho_handles,
-            bbox_to_anchor=(1.0, 0.0),
-            loc="lower left",
+            handles=extra_handles,
+            loc="upper right",
             title="File" if is_combine else r"$\rho$ [GeV/Area]",
             fontsize="x-small",
             title_fontsize="small",
