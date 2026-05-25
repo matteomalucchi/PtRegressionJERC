@@ -758,6 +758,10 @@ def plot_resolution_vs_x_variable(
 
             ylim_bottom = cfg["y_lim_resolution"][0]
             ylim_top = cfg["y_lim_resolution"][1]
+            has_ratio = any(
+                gd.get("style", {}).get("is_reference", False)
+                for gd in graph_data.values()
+            )
             data_y_max = ylim_bottom
             for gd in graph_data.values():
                 y_vals = np.asarray(gd["data"]["y"][0], dtype=float)
@@ -768,8 +772,15 @@ def plot_resolution_vs_x_variable(
                 finite = y_vals[np.isfinite(y_vals)]
                 if len(finite):
                     data_y_max = max(data_y_max, float(finite.max()))
-            if data_y_max > ylim_top*0.6:
-                ylim_top = cfg["y_lim_resolution"][1] + 0.15
+            ylim_top_base = cfg["y_lim_resolution"][1]
+            if has_ratio:
+                # Extra headroom for the ratio panel; annotation moves to 0.65
+                ylim_top = max(ylim_top_base + 0.2, data_y_max + 0.10)
+                annotation_y = 0.67
+            else:
+                if data_y_max > ylim_top * 0.6:
+                    ylim_top = ylim_top_base + 0.2  
+                annotation_y = 0.75
 
             plotter = (
                 HEPPlotter()
@@ -777,7 +788,7 @@ def plot_resolution_vs_x_variable(
                     cmstext="Simulation\nPreliminary",
                     cmstext_loc=2,
                     lumitext=f"{year} (13.6 TeV)",
-                    cmstext_font_size=35,
+                    cmstext_font_size=30,
                 )
                 .set_labels(
                     xlabel=xlabel,
@@ -799,7 +810,7 @@ def plot_resolution_vs_x_variable(
                 .set_output(f"{output_dir}/{output_name}")
                 .add_annotation(
                     0.05,
-                    0.75,
+                    annotation_y,
                     annotation_text,
                     horizontalalignment="left",
                     verticalalignment="top",
@@ -1040,7 +1051,8 @@ def compute_means(h_dict, mapping_vars):
 def compute_projection(h_dict, mapping_vars, mapping_var_key):
     nd_hist = h_dict[mapping_var_key]
     map_cfg = mapping_vars[mapping_var_key]
-    active_bin_vars = map_cfg["bin_vars"] + [mapping_var_key]
+    existing_axes = {ax.name for ax in nd_hist.axes}
+    active_bin_vars = [v for v in map_cfg["bin_vars"] + [mapping_var_key] if v in existing_axes]
 
     # Project down to only the active bin axes + this mapping variable axis
     # All other axes are summed over (marginalized)
@@ -1250,6 +1262,34 @@ def merge_nd_histogram_bins(h, bin_var_configs_new):
     else:
         h_new.view()[:] = arr
     return h_new, True
+
+
+def squeeze_single_bin_axes(h, bin_var_configs):
+    """Remove histogram axes that are bin variables with exactly one bin.
+
+    Only axes whose names appear in *bin_var_configs* are candidates so that
+    the response/mapping variable axis is never touched.
+
+    Returns the squeezed histogram and a list of removed axis names.
+    """
+    slice_list = []
+    removed = []
+    for ax in h.axes:
+        if ax.name in bin_var_configs and len(ax) == 1:
+            slice_list.append(0)
+            removed.append(ax.name)
+        else:
+            slice_list.append(slice(None))
+    if not removed:
+        return h, []
+    if len(removed) == h.ndim:
+        log.warning(
+            "Skipping squeeze: all axes are single-bin (%s); would produce a scalar, not a histogram.",
+            removed,
+        )
+        return h, []
+    log.info("Squeezing single-bin axes %s from histogram", removed)
+    return h[tuple(slice_list)], removed
 
 
 def _bin_excluded_by_eta_max(bin_idx, bin_var_names, bin_edges_dict, eta_max):
@@ -2125,7 +2165,8 @@ def profile_means(h_mean_dict, mapping_vars):
             )
             continue
         map_cfg = mapping_vars[mv]
-        active_bin_vars = map_cfg["bin_vars"]
+        existing_axes = {ax.name for ax in h_mean.axes}
+        active_bin_vars = [v for v in map_cfg["bin_vars"] if v in existing_axes]
 
         # Project down to only the active bin axes
         # The Mean storage already contains the mean values and uncertainties
@@ -2216,7 +2257,9 @@ def plot_mapping_variable_linear_fit(
 
     # 2D histogram of mapping variable vs its bin variable
     var_2d = compute_projection(h_dict, mapping_vars, var_name)
-    if np.sum(var_2d.values()) == 0:
+    if var_2d.ndim < 2:
+        log.warning("2D histogram for %s has only %d axis after squeezing; skipping 2D plot.", var_name, var_2d.ndim)
+    elif np.sum(var_2d.values()) == 0:
         log.warning("2D histogram for %s is empty, skipping plot.", var_name)
     else:
         (
@@ -2838,15 +2881,17 @@ def main():
             bin_var_configs_all = cfg["bin_variables_mixed"]
 
             # Merge mapping-variable Count histograms so linear fits stay consistent.
+            # Single-bin axes (after merging) are squeezed out so they don't appear
+            # in plot filenames or annotations.
             h_dict = {
-                vn: merge_nd_histogram_bins(h, bin_var_configs_all)[0]
+                vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_var_configs_all)[0], bin_var_configs_all)[0]
                 for vn, h in h_dict.items()
             }
 
             # Recompute profile means from the merged Mean histograms (if saved).
             if "h_mean_dict" in cat_data:
                 h_mean_dict_merged = {
-                    vn: merge_nd_histogram_bins(h, bin_var_configs_all)[0]
+                    vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_var_configs_all)[0], bin_var_configs_all)[0]
                     for vn, h in cat_data["h_mean_dict"].items()
                 }
                 results = profile_means(h_mean_dict_merged, cfg["mapping_variables"])
@@ -2859,7 +2904,7 @@ def main():
             # Merge mean bin-var histograms if present.
             if h_mean_bin_var_dict:
                 h_mean_bin_var_dict = {
-                    vn: merge_nd_histogram_bins(h, bin_var_configs_all)[0]
+                    vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_var_configs_all)[0], bin_var_configs_all)[0]
                     for vn, h in h_mean_bin_var_dict.items()
                 }
 
@@ -2900,7 +2945,7 @@ def main():
             if args.refit:
                 log.info("--refit mode='%s': merging response histogram bins...", mode)
                 response_h_dict = {
-                    vn: merge_nd_histogram_bins(h, bin_vars)[0]
+                    vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_vars)[0], bin_vars)[0]
                     for vn, h in response_h_dict.items()
                 }
                 log.info("--refit mode='%s': recomputing Gaussian fit...", mode)
