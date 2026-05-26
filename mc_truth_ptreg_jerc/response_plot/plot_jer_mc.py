@@ -1438,8 +1438,160 @@ def _apply_response_normalization_and_extra_uncertainty(
         resolutions_uncertainty[bin_idx] = sigma_err
 
 
+def _apply_response_mean_method(
+    *,
+    response_var_name,
+    h_response,
+    h_mean,
+    response_means,
+    response_means_uncertainty,
+    gaussian_fits,
+    bin_shape,
+    response_axis,
+    response_vars,
+):
+    """Optionally override the per-bin response mean using a configurable method.
+
+    Controlled by the per-response-variable config key ``response_mean_method``,
+    which may be one of:
+
+    - ``"gaussian_fit"``: use the mean from the per-bin Gaussian fit
+      (``params[1]`` / ``params_err[1]``). Bins where the Gaussian fit is
+      unavailable or invalid get NaN.
+    - ``"histogram"``: compute the first moment from the binned 1D slice of
+      the ND response histogram (``sum(y*x) / sum(y)``), with the standard
+      error of the mean as the uncertainty.
+    - ``"mean_storage"``: read the mean and its uncertainty directly from a
+      ``hist.storage.Mean()`` histogram filled with the un-binned response
+      values (as produced by ``create_ND_histo``). The uncertainty is the
+      standard error of the mean ``sqrt(variance / count)``.
+
+    When the option is unset (or set to ``"auto"`` / None) the response means
+    that were stored inline during ``_compute_resolution_from_histogram`` are
+    left untouched (Gaussian fit mean when the resolution came from a
+    successful Gaussian fit, binned moments otherwise).
+    """
+    var_cfg = response_vars.get(response_var_name, {})
+    method = var_cfg.get("response_mean_method")
+    if method in (None, "", "auto"):
+        return
+
+    method_str = str(method).strip().lower()
+    valid_methods = ("gaussian_fit", "histogram", "mean_storage")
+    if method_str not in valid_methods:
+        log.warning(
+            "Unknown response_mean_method=%r for '%s'; valid: %s. "
+            "Keeping default response means.",
+            method,
+            response_var_name,
+            valid_methods,
+        )
+        return
+
+    log.info(
+        "Computing response mean for '%s' using method '%s'",
+        response_var_name,
+        method_str,
+    )
+
+    if method_str == "gaussian_fit":
+        for bin_idx in np.ndindex(bin_shape):
+            fit_res = gaussian_fits.get(bin_idx)
+            if fit_res is None or "params" not in fit_res:
+                response_means[bin_idx] = np.nan
+                response_means_uncertainty[bin_idx] = 0.0
+                continue
+            params = np.asarray(fit_res["params"], dtype=float)
+            params_err = np.asarray(fit_res.get("params_err", []), dtype=float)
+            if params.size < 2 or np.any(np.isnan(params[:2])):
+                response_means[bin_idx] = np.nan
+                response_means_uncertainty[bin_idx] = 0.0
+                continue
+            response_means[bin_idx] = float(params[1])
+            response_means_uncertainty[bin_idx] = (
+                float(params_err[1]) if params_err.size > 1 and np.isfinite(params_err[1]) else 0.0
+            )
+        return
+
+    if method_str == "mean_storage":
+        if h_mean is None:
+            log.warning(
+                "response_mean_method='mean_storage' requested for '%s' but no "
+                "Mean-storage histogram was provided; keeping default response means.",
+                response_var_name,
+            )
+            return
+        view = h_mean.view()
+        try:
+            value_arr = np.asarray(view.value)
+            count_arr = np.asarray(view.count)
+            variance_arr = np.asarray(view.variance)
+        except AttributeError:
+            log.warning(
+                "Provided Mean-storage histogram for '%s' does not expose "
+                "value/count/variance; keeping default response means.",
+                response_var_name,
+            )
+            return
+        if value_arr.shape != bin_shape:
+            log.warning(
+                "Mean-storage histogram shape %s does not match response bin "
+                "shape %s for '%s'; keeping default response means.",
+                value_arr.shape,
+                bin_shape,
+                response_var_name,
+            )
+            return
+        with np.errstate(invalid="ignore", divide="ignore"):
+            mean_err_arr = np.where(
+                (count_arr > 0) & (variance_arr > 0),
+                np.sqrt(variance_arr / np.where(count_arr > 0, count_arr, 1)),
+                0.0,
+            )
+        for bin_idx in np.ndindex(bin_shape):
+            if count_arr[bin_idx] > 0:
+                response_means[bin_idx] = float(value_arr[bin_idx])
+                response_means_uncertainty[bin_idx] = float(mean_err_arr[bin_idx])
+            else:
+                response_means[bin_idx] = np.nan
+                response_means_uncertainty[bin_idx] = 0.0
+        return
+
+    # method_str == "histogram": vectorised binned moments over the response axis
+    h_view = np.asarray(h_response.view())
+    edges = np.asarray(response_axis.edges)
+    centers = (edges[:-1] + edges[1:]) / 2
+    bc_shape = (1,) * (h_view.ndim - 1) + (-1,)
+    bc = centers.reshape(bc_shape)
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ntot = np.sum(h_view, axis=-1)
+        safe_ntot = np.where(ntot > 0, ntot, 1)
+        means = np.where(ntot > 0, np.sum(h_view * bc, axis=-1) / safe_ntot, np.nan)
+        diff_sq = (bc - means[..., None]) ** 2
+        mu2 = np.where(
+            ntot > 0,
+            np.sum(h_view * diff_sq, axis=-1) / safe_ntot,
+            np.nan,
+        )
+        mean_err = np.where(
+            (ntot > 0) & (mu2 > 0),
+            np.sqrt(np.where(mu2 > 0, mu2, 0) / safe_ntot),
+            0.0,
+        )
+
+    for bin_idx in np.ndindex(bin_shape):
+        m = means[bin_idx]
+        if np.isnan(m):
+            response_means[bin_idx] = np.nan
+            response_means_uncertainty[bin_idx] = 0.0
+        else:
+            response_means[bin_idx] = float(m)
+            response_means_uncertainty[bin_idx] = float(mean_err[bin_idx])
+
+
 def _compute_resolution_from_histogram(
-    response_var_name, h_response, bin_var_names, response_vars
+    response_var_name, h_response, bin_var_names, response_vars, h_mean=None
 ):
     """
     Compute resolution from an ND histogram for a single response variable.
@@ -1463,6 +1615,20 @@ def _compute_resolution_from_histogram(
           uncertainty added in quadrature to the resolution uncertainty as
           new_err = sqrt(err^2 + (addUnc * resolution)^2). Inspired by the
           ``addUnc`` block of ``jet_response_and_resolution_x.cc``.
+        - "response_mean_method" (str, default None / "auto"): how to compute
+          the per-bin mean of the response. One of:
+            * "gaussian_fit"  - mean from the per-bin Gaussian fit
+            * "histogram"     - first moment of the binned 1D response slice
+            * "mean_storage"  - mean from a hist.storage.Mean() histogram
+              filled with the un-binned response values (provided via
+              ``h_mean``).
+          When unset, the default behaviour stores the Gaussian fit mean when
+          the resolution itself comes from a successful Gaussian fit and the
+          binned histogram mean otherwise.
+    h_mean : hist.Hist or None, optional
+        Optional Mean-storage histogram (axes = bin variables only) holding
+        the mean of the response per bin. Used by
+        ``response_mean_method="mean_storage"`` and ignored otherwise.
 
     Returns
     -------
@@ -1765,6 +1931,21 @@ def _compute_resolution_from_histogram(
             response_means.setdefault(bin_idx, np.nan)
             response_means_uncertainty.setdefault(bin_idx, 0)
 
+    # Optionally override the per-bin response means with a configurable
+    # computation method (Gaussian fit / histogram moments / Mean storage).
+    # Must run before normalization so the normalization uses the chosen mean.
+    _apply_response_mean_method(
+        response_var_name=response_var_name,
+        h_response=h_response,
+        h_mean=h_mean,
+        response_means=response_means,
+        response_means_uncertainty=response_means_uncertainty,
+        gaussian_fits=gaussian_fits,
+        bin_shape=bin_shape,
+        response_axis=response_axis,
+        response_vars=response_vars,
+    )
+
     # Optionally normalize the resolution by the mean of the response and/or
     # add an extra relative uncertainty in quadrature. Both are configurable
     # per response variable (see _apply_response_normalization_and_extra_uncertainty).
@@ -1796,7 +1977,9 @@ def _compute_resolution_from_histogram(
     )
 
 
-def compute_binned_resolution_from_histograms(h_dict, bin_var_names, response_vars):
+def compute_binned_resolution_from_histograms(
+    h_dict, bin_var_names, response_vars, h_mean_dict=None
+):
     """
     Compute resolution for multiple response variables from pre-computed ND histograms.
 
@@ -1808,6 +1991,10 @@ def compute_binned_resolution_from_histograms(h_dict, bin_var_names, response_va
         Names of the bin variables (in order)
     response_vars : dict
         Configuration dict for response variables, each with a "bin_vars" key
+    h_mean_dict : dict, optional
+        Optional mapping of response_var_name -> hist.Hist with Mean storage
+        (axes = bin variables only). Used when a response variable's config
+        sets ``response_mean_method="mean_storage"``.
 
     Returns
     -------
@@ -1818,9 +2005,16 @@ def compute_binned_resolution_from_histograms(h_dict, bin_var_names, response_va
             - "resolutions": dict of bin indices -> resolution values
             - "resolution_grid": ndarray with resolution values
     """
+    h_mean_dict = h_mean_dict or {}
     # Prepare arguments for parallel processing
     args_list = [
-        (response_var_name, h_response, bin_var_names, response_vars)
+        (
+            response_var_name,
+            h_response,
+            bin_var_names,
+            response_vars,
+            h_mean_dict.get(response_var_name),
+        )
         for response_var_name, h_response in h_dict.items()
     ]
     response_tot_dict = {}
@@ -3083,6 +3277,7 @@ def main():
 
             resp_data = cat_data["response_data"][mode]
             response_h_dict = resp_data["response_h_dict"]
+            response_h_mean_dict = resp_data.get("response_h_mean_dict", {}) or {}
             available_response_vars = resp_data["available_response_vars"]
 
             bin_vars = get_bin_vars_for_mode(mode)
@@ -3093,11 +3288,17 @@ def main():
                     vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_vars)[0], bin_vars)[0]
                     for vn, h in response_h_dict.items()
                 }
+                if response_h_mean_dict:
+                    response_h_mean_dict = {
+                        vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_vars)[0], bin_vars)[0]
+                        for vn, h in response_h_mean_dict.items()
+                    }
                 log.info("--refit mode='%s': recomputing Gaussian fit...", mode)
                 response_tot_dict = compute_binned_resolution_from_histograms(
                     h_dict=response_h_dict,
                     bin_var_names=list(bin_vars.keys()),
                     response_vars=available_response_vars,
+                    h_mean_dict=response_h_mean_dict,
                 )
             else:
                 response_tot_dict = resp_data["response_tot_dict"]
@@ -3244,12 +3445,14 @@ def main():
                 h_dict=response_h_dict,
                 bin_var_names=bin_var_names,
                 response_vars=available_response_vars,
+                h_mean_dict=response_h_mean_dict,
             )
 
             # Store response data for this category
             response_type_key = mode
             category_data["response_data"][response_type_key] = {
                 "response_h_dict": response_h_dict,
+                "response_h_mean_dict": response_h_mean_dict,
                 "response_tot_dict": response_tot_dict,
                 "available_response_vars": available_response_vars,
                 "bin_vars": bin_vars,
