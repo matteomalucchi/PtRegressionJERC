@@ -279,7 +279,10 @@ The YAML configuration file controls every aspect of the binning, variables, res
 | `histograms_map` | `false` | Save/plot the mapping-variable histograms |
 | `histograms_response` | `false` | Save/plot the 1D response histograms per bin |
 | `gaussian_fit_resolution` | `true` | Derive resolution from a Gaussian fit to the response histogram |
-| `gaussian_fit_cut_tails` | `true` | Clip the response histogram to a symmetric window around the peak before fitting |
+| `gaussian_fit_cut_tails` | `[0.87]` | List of CI fractions to try when trimming the fit window around the peak; set to `false` to disable. The CI that yields the best p-value is kept per bin |
+| `gaussian_fit_max_sigma_rel_err` | `1.0` | Reject bins where the fitted `sigma_err / sigma` exceeds this value (resolution becomes NaN) |
+| `min_events_for_fit` | `50` | Minimum number of events in a 1D response slice before any fit or CI estimation is attempted |
+| `ci_conf_level` | `0.87` | Confidence level used by the CI estimator when `gaussian_fit_resolution: false` |
 
 #### Bin arrays
 
@@ -377,7 +380,38 @@ Add or remove entries to include additional correction types or auxiliary variab
 
 #### `response_variables`, `response_variables_neutrino`, `response_variables_mixed`
 
-Define which response columns to read and how to plot them. Each entry corresponds to one correction type:
+Define which response columns to read and how to plot them. Each entry corresponds to one correction type.
+
+The basic plotting / labelling keys are:
+
+| Key | Description |
+|---|---|
+| `label` | Axis label used on response histograms |
+| `name_plot` | Short name used in plot file names and for the `plot_settings` lookup |
+| `N_bins`, `bin_limits` | Number of bins and `[lo, hi]` range of the response axis |
+| `bin_vars` | Ordered list of binning variables (must be keys of `bin_variables` / `bin_variables_neutrino`) |
+| `legend_name` | Legend entry in overlay plots |
+| `map_x_variable` | Mapping variable whose per-bin mean is used as the x-axis of the resolution-vs-reco-$p_T$ plot |
+| `is_reference` | If `true` this curve becomes the denominator of the ratio panel |
+| `txt_jet_name` | Jet-algorithm tag inserted in the JME text-file name (e.g. `AK4PFPuppi`) |
+| `rebin_for_plotting` | If `true` the stored fine-binned response is rebinned to roughly `min_events_per_bin` entries per bin before fitting/plotting |
+| `eta_max` | Optional upper limit on $|\eta|$ for this entry; bins beyond it are skipped (used for AK8 / UParT in the high-$\eta$ region) |
+
+In addition, each response variable supports a set of uncertainty- and
+mean-computation controls that override the defaults computed inside
+`_compute_resolution_from_histogram`. They are applied per bin in the
+order listed below. All default to off so existing configs keep their
+previous behaviour.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `normalize_by_response_mean` | bool | `false` | Plot the relative resolution `sigma / <R>` instead of `sigma`. The uncertainty is propagated as `(sigma / <R>) * sqrt((sigma_err / sigma)^2 + (mean_err / <R>)^2)` |
+| `add_min_err` | float or string | `"0.0"` | Add a minimal uncertainty floor in quadrature: `new_err = sqrt(err^2 + add_min_err^2)`. For example `"0.0005"` enforces a 0.05% floor |
+| `add_chi2_ndof` | bool | `false` | Multiply the uncertainty by `sqrt(chi2 / ndf)` wherever the per-bin Gaussian fit's reduced chi-square exceeds 1. Requires `gaussian_fit_resolution: true` |
+| `additional_uncertainty` | float or string | `"0.0"` | Add a relative uncertainty in quadrature: `new_err = sqrt(err^2 + (v * sigma)^2)` |
+| `response_mean_method` | string | `"auto"` | Selects how the mean of the response is computed per bin. Affects the value used by `normalize_by_response_mean`. Allowed values: `"auto"` (Gaussian fit when the resolution itself comes from a successful fit, binned moments otherwise), `"gaussian_fit"` (force the Gaussian fit mean), `"histogram"` (first moment of the binned 1D response slice), `"mean_storage"` (mean read from a `hist.storage.Mean()` histogram filled with the un-binned response values; built automatically by `create_ND_histo`) |
+
+Example with all options shown:
 
 ```yaml
 response_variables:
@@ -387,11 +421,17 @@ response_variables:
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
     bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: JEC          # label in the legend
-    map_x_variable: MatchedJets_JetPtJEC  # mapping variable for the reco-pT x-axis
-    is_reference: true        # marks this as the reference curve in overlay plots
-    txt_jet_name: AK4PFPuppi  # jet algorithm string in the JME text-file name
-    rebin_for_plotting: true  # rebin the stored fine-binned histogram before plotting
+    legend_name: JEC                       # label in the legend
+    map_x_variable: MatchedJets_JetPtJEC   # mapping variable for the reco-pT x-axis
+    is_reference: true                     # reference curve in overlay/ratio plots
+    txt_jet_name: AK4PFPuppi               # jet-algorithm tag in the JME text-file name
+    rebin_for_plotting: true               # rebin the fine-binned response before plotting
+    eta_max: 5.0                           # optional |eta| cut for this entry
+    normalize_by_response_mean: true       # plot sigma / <R> instead of bare sigma
+    additional_uncertainty: "0.2"          # add (0.2 * sigma) in quadrature to the error
+    add_min_err: "0.0005"                  # minimal uncertainty floor of 0.05%
+    add_chi2_ndof: true                    # multiply error by sqrt(chi2/ndf) where >1
+    response_mean_method: "mean_storage"   # auto | gaussian_fit | histogram | mean_storage
 ```
 
 `response_variables_mixed` combines regular and neutrino-inclusive entries and is used when `mixed_mode: true`.
