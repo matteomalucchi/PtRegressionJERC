@@ -1364,34 +1364,58 @@ def _apply_response_normalization_and_extra_uncertainty(
     response_means,
     response_means_uncertainty,
     response_vars,
+    gaussian_fits=None,
 ):
     """Apply optional per-bin transformations to the computed resolution values.
 
-    Two transformations are supported, both configured per response variable
-    in the YAML config (inspired by ``jet_response_and_resolution_x.cc``):
+    All transformations are configured per response variable in the YAML
+    config. When applied, the order matches the conventional one used by
+    upstream JER tooling:
 
-    - ``normalize_by_response_mean`` (bool, default False): when True, divide
-      each resolution by the corresponding mean of the response distribution.
-      The propagated uncertainty follows
-          eerel = erel * sqrt((sigma_err/sigma)^2 + (mean_err/mean)^2)
-      (analogous to the ``RelRsp`` block in the C++ reference, lines 491-498).
-    - ``additional_uncertainty`` (float or string parseable to float, default
-      0.0): a relative uncertainty added in quadrature to the resolution
-      uncertainty as new_err = sqrt(err^2 + (addUnc * resolution)^2)
-      (analogous to the ``addUnc`` block in the C++ reference, lines 515-525).
+    1. ``normalize_by_response_mean`` (bool, default False): divide each
+       resolution by the mean of the response (sigma / <R>), with the
+       propagated uncertainty
+           eerel = erel * sqrt((sigma_err/sigma)^2 + (mean_err/mean)^2)
+    2. ``add_min_err`` (float or string, default 0.0): add a minimal
+       uncertainty floor in quadrature
+           new_err = sqrt(err^2 + add_min_err^2)
+       (e.g. 0.0005 for a 0.05% floor).
+    3. ``add_chi2_ndof`` (bool, default False): multiply the uncertainty by
+       ``sqrt(chi2 / ndf)`` whenever the per-bin Gaussian fit's reduced
+       chi-square exceeds 1, leaving it unchanged otherwise. Requires the
+       Gaussian fit to be enabled and successful for that bin.
+    4. ``additional_uncertainty`` (float or string, default 0.0): a relative
+       uncertainty added in quadrature
+           new_err = sqrt(err^2 + (additional_uncertainty * resolution)^2)
     """
     var_cfg = response_vars.get(response_var_name, {})
     normalize = bool(var_cfg.get("normalize_by_response_mean", False))
     add_unc = _parse_additional_uncertainty(
         var_cfg.get("additional_uncertainty", 0.0), response_var_name
     )
+    add_min_err = _parse_additional_uncertainty(
+        var_cfg.get("add_min_err", 0.0), response_var_name
+    )
+    add_chi2_ndof = bool(var_cfg.get("add_chi2_ndof", False))
+    gaussian_fits = gaussian_fits or {}
 
-    if not normalize and add_unc <= 0:
+    if not normalize and add_unc <= 0 and add_min_err <= 0 and not add_chi2_ndof:
         return
 
     if normalize:
         log.info(
             "Normalizing resolution by mean of response for '%s'",
+            response_var_name,
+        )
+    if add_min_err > 0:
+        log.info(
+            "Adding minimal uncertainty floor %.4f in quadrature for '%s'",
+            add_min_err,
+            response_var_name,
+        )
+    if add_chi2_ndof:
+        log.info(
+            "Scaling uncertainty by sqrt(chi2/ndf) where chi2/ndf > 1 for '%s'",
             response_var_name,
         )
     if add_unc > 0:
@@ -1429,6 +1453,19 @@ def _apply_response_normalization_and_extra_uncertainty(
                 sigma_rel_err = abs(sigma_rel * mean_err / mean) if mean != 0 else 0.0
             sigma = sigma_rel
             sigma_err = sigma_rel_err
+
+        if add_min_err > 0:
+            sigma_err = float(np.sqrt(sigma_err**2 + add_min_err**2))
+
+        if add_chi2_ndof:
+            fit_res = gaussian_fits.get(bin_idx)
+            if fit_res is not None:
+                chi2 = fit_res.get("chi2", np.nan)
+                dof = fit_res.get("dof", 0) or 0
+                if dof > 0 and np.isfinite(chi2):
+                    chi2_per_ndof = float(chi2) / float(dof)
+                    if chi2_per_ndof > 1:
+                        sigma_err = float(sigma_err * np.sqrt(chi2_per_ndof))
 
         if add_unc > 0:
             sigma_err = float(np.sqrt(sigma_err**2 + (add_unc * sigma) ** 2))
@@ -1609,12 +1646,15 @@ def _compute_resolution_from_histogram(
         Configuration dict for response variables. Each entry may include:
         - "normalize_by_response_mean" (bool, default False): when True, divide
           the per-bin resolution by the mean of the response (sigma / <R>) and
-          propagate the uncertainty accordingly. Inspired by the RelRsp block
-          of ``jet_response_and_resolution_x.cc``.
+          propagate the uncertainty accordingly.
         - "additional_uncertainty" (float or string, default 0.0): a relative
           uncertainty added in quadrature to the resolution uncertainty as
-          new_err = sqrt(err^2 + (addUnc * resolution)^2). Inspired by the
-          ``addUnc`` block of ``jet_response_and_resolution_x.cc``.
+          new_err = sqrt(err^2 + (additional_uncertainty * resolution)^2).
+        - "add_min_err" (float or string, default 0.0): a minimal uncertainty
+          floor added in quadrature as new_err = sqrt(err^2 + add_min_err^2).
+        - "add_chi2_ndof" (bool, default False): when True, multiply the
+          uncertainty by sqrt(chi2/ndf) wherever the per-bin Gaussian fit's
+          reduced chi-square is greater than 1.
         - "response_mean_method" (str, default None / "auto"): how to compute
           the per-bin mean of the response. One of:
             * "gaussian_fit"  - mean from the per-bin Gaussian fit
@@ -1946,9 +1986,9 @@ def _compute_resolution_from_histogram(
         response_vars=response_vars,
     )
 
-    # Optionally normalize the resolution by the mean of the response and/or
-    # add an extra relative uncertainty in quadrature. Both are configurable
-    # per response variable (see _apply_response_normalization_and_extra_uncertainty).
+    # Optionally normalize the resolution by the mean of the response and
+    # apply any of the supported per-bin uncertainty adjustments. See
+    # _apply_response_normalization_and_extra_uncertainty for the full list.
     _apply_response_normalization_and_extra_uncertainty(
         response_var_name=response_var_name,
         resolutions=resolutions,
@@ -1957,6 +1997,7 @@ def _compute_resolution_from_histogram(
         response_means=response_means,
         response_means_uncertainty=response_means_uncertainty,
         response_vars=response_vars,
+        gaussian_fits=gaussian_fits,
     )
 
     return (
