@@ -1458,14 +1458,23 @@ def _apply_response_normalization_and_extra_uncertainty(
             sigma_err = float(np.sqrt(sigma_err**2 + add_min_err**2))
 
         if add_chi2_ndof:
+            # Mirror the upstream reference:
+            #     chi2ndof = (frsp==0 ? 1 : chi2/ndf);
+            #     ee *= (chi2ndof < 1 ? 1 : sqrt(chi2ndof));
+            # i.e. default to 1 when no per-bin Gaussian fit is available, and
+            # multiply unconditionally by max(1, sqrt(chi2/ndf)).
             fit_res = gaussian_fits.get(bin_idx)
-            if fit_res is not None:
-                chi2 = fit_res.get("chi2", np.nan)
-                dof = fit_res.get("dof", 0) or 0
-                if dof > 0 and np.isfinite(chi2):
-                    chi2_per_ndof = float(chi2) / float(dof)
-                    if chi2_per_ndof > 1:
-                        sigma_err = float(sigma_err * np.sqrt(chi2_per_ndof))
+            if fit_res is None:
+                chi2ndof = 1.0
+            else:
+                chi2_val = fit_res.get("chi2", np.nan)
+                ndf_val = fit_res.get("dof", 0)
+                if ndf_val and np.isfinite(chi2_val):
+                    chi2ndof = float(chi2_val) / float(ndf_val)
+                else:
+                    chi2ndof = 1.0
+            multiplier = 1.0 if chi2ndof < 1 else float(np.sqrt(chi2ndof))
+            sigma_err = float(sigma_err * multiplier)
 
         if add_unc > 0:
             sigma_err = float(np.sqrt(sigma_err**2 + (add_unc * sigma) ** 2))
