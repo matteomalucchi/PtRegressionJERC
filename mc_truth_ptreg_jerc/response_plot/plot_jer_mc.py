@@ -57,7 +57,11 @@ def _load_config(config_path, test_override=False):
         cfg = yaml.safe_load(f)
 
     # Convert bin_edges lists to numpy arrays in bin_variable dicts
-    for bv_dict_key in ("bin_variables", "bin_variables_neutrino", "bin_variables_mixed"):
+    for bv_dict_key in (
+        "bin_variables",
+        "bin_variables_neutrino",
+        "bin_variables_mixed",
+    ):
         if bv_dict_key not in cfg:
             continue
         for var_cfg in cfg[bv_dict_key].values():
@@ -67,9 +71,17 @@ def _load_config(config_path, test_override=False):
     # Apply test mode overrides
     if test_override:
         test_pu = np.array(cfg["test_pu_bins"]) if "test_pu_bins" in cfg else None
-        test_eta = np.array(cfg["test_jet_eta_bins"]) if "test_jet_eta_bins" in cfg else None
-        test_pt = np.array(cfg["test_jet_pt_bins"]) if "test_jet_pt_bins" in cfg else None
-        for bv_dict_key in ("bin_variables", "bin_variables_neutrino", "bin_variables_mixed"):
+        test_eta = (
+            np.array(cfg["test_jet_eta_bins"]) if "test_jet_eta_bins" in cfg else None
+        )
+        test_pt = (
+            np.array(cfg["test_jet_pt_bins"]) if "test_jet_pt_bins" in cfg else None
+        )
+        for bv_dict_key in (
+            "bin_variables",
+            "bin_variables_neutrino",
+            "bin_variables_mixed",
+        ):
             if bv_dict_key not in cfg:
                 continue
             bv = cfg[bv_dict_key]
@@ -153,7 +165,9 @@ parser.add_argument(
     help="Path to precomputed histograms coffea file to load and plot",
     default=None,
 )
-parser.add_argument("-o", "--output", type=str, help="Output directory", default="./plot_jer_mc/")
+parser.add_argument(
+    "-o", "--output", type=str, help="Output directory", default="./plot_jer_mc/"
+)
 parser.add_argument(
     "-c",
     "--config",
@@ -584,7 +598,8 @@ def plot_resolution_vs_x_variable(
                         and min(
                             abs(bin_edges_local[vn][y_bin_idx[i]]),
                             abs(bin_edges_local[vn][y_bin_idx[i] + 1]),
-                        ) >= eta_max
+                        )
+                        >= eta_max
                         for i, vn in enumerate(y_vars_local)
                     ):
                         continue
@@ -689,15 +704,25 @@ def plot_resolution_vs_x_variable(
             fit_result_string = ""
             for y_var_name, _ in y_vars:
                 low_edge, high_edge = y_bin_label_dict[y_bin_idx]["edges"][y_var_name]
-                low_edge_str = (f"{low_edge}" if isinstance(low_edge, (int, np.integer)) else f"{low_edge}".replace(".", "p")).replace("-", "m")
-                high_edge_str = (f"{high_edge}" if isinstance(high_edge, (int, np.integer)) else f"{high_edge}".replace(".", "p")).replace("-", "m")
+                low_edge_str = (
+                    f"{low_edge}"
+                    if isinstance(low_edge, (int, np.integer))
+                    else f"{low_edge}".replace(".", "p")
+                ).replace("-", "m")
+                high_edge_str = (
+                    f"{high_edge}"
+                    if isinstance(high_edge, (int, np.integer))
+                    else f"{high_edge}".replace(".", "p")
+                ).replace("-", "m")
                 filename_parts.append(
                     f"{bin_var_configs[y_var_name]['name_plot']}_{low_edge_str}to{high_edge_str}"
                 )
                 label = bin_var_configs[y_var_name].get("label", y_var_name)
-                annotation_text += "\n" + _format_bin_annotation_line(low_edge, high_edge, label)
+                annotation_text += "\n" + _format_bin_annotation_line(
+                    low_edge, high_edge, label
+                )
                 fit_result_string += f"_{y_var_name}_{low_edge}to{high_edge}"
-                
+
             output_name = "_".join(filename_parts)
 
             if fit_resolution:
@@ -754,7 +779,10 @@ def plot_resolution_vs_x_variable(
                 graph_data.update(fit_data)
                 all_fit_results.update(fit_results)
 
-            log.debug("Creating plot for bin combination %s", y_bin_label_dict[y_bin_idx]["label"])
+            log.debug(
+                "Creating plot for bin combination %s",
+                y_bin_label_dict[y_bin_idx]["label"],
+            )
 
             ylim_bottom = cfg["y_lim_resolution"][0]
             ylim_top = cfg["y_lim_resolution"][1]
@@ -779,7 +807,7 @@ def plot_resolution_vs_x_variable(
                 annotation_y = 0.67
             else:
                 if data_y_max > ylim_top * 0.6:
-                    ylim_top = ylim_top_base + 0.2  
+                    ylim_top = ylim_top_base + 0.2
                 annotation_y = 0.75
 
             plotter = (
@@ -1052,7 +1080,9 @@ def compute_projection(h_dict, mapping_vars, mapping_var_key):
     nd_hist = h_dict[mapping_var_key]
     map_cfg = mapping_vars[mapping_var_key]
     existing_axes = {ax.name for ax in nd_hist.axes}
-    active_bin_vars = [v for v in map_cfg["bin_vars"] + [mapping_var_key] if v in existing_axes]
+    active_bin_vars = [
+        v for v in map_cfg["bin_vars"] + [mapping_var_key] if v in existing_axes
+    ]
 
     # Project down to only the active bin axes + this mapping variable axis
     # All other axes are summed over (marginalized)
@@ -1186,7 +1216,8 @@ def merge_nd_histogram_bins(h, bin_var_configs_new):
 
         # Verify every new edge is present in the original edges (within tolerance).
         all_match = all(
-            np.any(np.isclose(ne, orig_edges, rtol=1e-6, atol=1e-10)) for ne in new_edges
+            np.any(np.isclose(ne, orig_edges, rtol=1e-6, atol=1e-10))
+            for ne in new_edges
         )
         if not all_match:
             log.warning(
@@ -1320,8 +1351,12 @@ def build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict):
             edges = bin_edges_dict[var_name]
             low, high = edges[bin_idx[i]], edges[bin_idx[i] + 1]
             edges_per_var[var_name] = (low, high)
+
             def _is_int_like(v):
-                return isinstance(v, (int, np.integer)) or (isinstance(v, float) and v.is_integer())
+                return isinstance(v, (int, np.integer)) or (
+                    isinstance(v, float) and v.is_integer()
+                )
+
             if _is_int_like(low) and _is_int_like(high):
                 parts.append(f"{var_name}: [{int(low)}, {int(high)})")
             else:
@@ -1389,9 +1424,14 @@ def _apply_response_normalization_and_extra_uncertainty(
            new_err = sqrt(err^2 + (additional_uncertainty * resolution)^2)
     """
     var_cfg = response_vars.get(response_var_name, {})
-    normalize = bool(var_cfg.get("normalize_by_response_mean", cfg.get("normalize_by_response_mean", False)))
+    normalize = bool(
+        var_cfg.get(
+            "normalize_by_response_mean", cfg.get("normalize_by_response_mean", False)
+        )
+    )
     add_unc = _parse_additional_uncertainty(
-        var_cfg.get("additional_uncertainty", cfg.get("additional_uncertainty", 0.0)), response_var_name
+        var_cfg.get("additional_uncertainty", cfg.get("additional_uncertainty", 0.0)),
+        response_var_name,
     )
     add_min_err = _parse_additional_uncertainty(
         var_cfg.get("add_min_err", cfg.get("add_min_err", 0.0)), response_var_name
@@ -1434,12 +1474,7 @@ def _apply_response_normalization_and_extra_uncertainty(
         if normalize:
             mean = response_means.get(bin_idx, np.nan)
             mean_err = response_means_uncertainty.get(bin_idx, 0.0)
-            if (
-                mean is None
-                or np.isnan(mean)
-                or mean == 0
-                or sigma / mean < 0
-            ):
+            if mean is None or np.isnan(mean) or mean == 0 or sigma / mean < 0:
                 resolutions[bin_idx] = np.nan
                 resolution_grid[bin_idx] = np.nan
                 resolutions_uncertainty[bin_idx] = 0.0
@@ -1546,7 +1581,9 @@ def _apply_response_mean_method(
                 continue
             response_means[bin_idx] = float(params[1])
             response_means_uncertainty[bin_idx] = (
-                float(params_err[1]) if params_err.size > 1 and np.isfinite(params_err[1]) else 0.0
+                float(params_err[1])
+                if params_err.size > 1 and np.isfinite(params_err[1])
+                else 0.0
             )
         return
 
@@ -1734,7 +1771,9 @@ def _compute_resolution_from_histogram(
         if _bin_excluded_by_eta_max(bin_idx, bin_var_names, bin_edges_dict, eta_max):
             log.debug(
                 "Skipping bin %s for '%s': outside eta_max=%.2f",
-                bin_label_dict[bin_idx]["label"], response_var_name, eta_max,
+                bin_label_dict[bin_idx]["label"],
+                response_var_name,
+                eta_max,
             )
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
@@ -1784,7 +1823,10 @@ def _compute_resolution_from_histogram(
                 try:
                     _cut_cfg = cfg.get("gaussian_fit_cut_tails", False)
                     if isinstance(_cut_cfg, list):
-                        ci_values_to_try = [float(v) if v not in (None, False) else None for v in _cut_cfg]
+                        ci_values_to_try = [
+                            float(v) if v not in (None, False) else None
+                            for v in _cut_cfg
+                        ]
                     elif _cut_cfg is False or _cut_cfg is None:
                         ci_values_to_try = [None]
                     else:
@@ -1798,7 +1840,9 @@ def _compute_resolution_from_histogram(
                     fit_accepted = False
 
                     # Collect fit results for all CI values, then select the best by p-value.
-                    fit_candidates = []  # (ci, fit_res, x_fit_try, y_fit_try, y_fit_err_try, is_valid)
+                    fit_candidates = (
+                        []
+                    )  # (ci, fit_res, x_fit_try, y_fit_try, y_fit_err_try, is_valid)
                     for ci in ci_values_to_try:
                         x_fit_try = x_fit_base.copy()
                         y_fit_try = y_fit_base.copy()
@@ -1821,7 +1865,8 @@ def _compute_resolution_from_histogram(
                         if len(x_fit_try) < 3 or y_fit_try.sum() <= 0:
                             log.debug(
                                 "CI=%s: not enough points in bin %s, skipping",
-                                ci, bin_label_dict[bin_idx]["label"],
+                                ci,
+                                bin_label_dict[bin_idx]["label"],
                             )
                             continue
 
@@ -1842,25 +1887,39 @@ def _compute_resolution_from_histogram(
 
                         _params = fit_res_try["params"]
                         _params_err = fit_res_try["params_err"]
-                        _has_nan = np.any(np.isnan(_params)) or np.any(np.isnan(_params_err))
+                        _has_nan = np.any(np.isnan(_params)) or np.any(
+                            np.isnan(_params_err)
+                        )
                         if _has_nan:
                             _is_valid = False
                             log.debug(
                                 "CI=%s: fit returned NaN params in bin %s",
-                                ci, bin_label_dict[bin_idx]["label"],
+                                ci,
+                                bin_label_dict[bin_idx]["label"],
                             )
                         else:
                             _sigma = abs(_params[2])
-                            _sigma_rel_err_ok = _sigma <= 0 or _params_err[2] / _sigma < max_rel_err
+                            _sigma_rel_err_ok = (
+                                _sigma <= 0 or _params_err[2] / _sigma < max_rel_err
+                            )
                             _is_valid = _sigma_rel_err_ok
                             if not _sigma_rel_err_ok:
                                 log.debug(
                                     "CI=%s: sigma rel. err. %.2f >= %.2f in bin %s",
-                                    ci, _params_err[2] / _sigma, max_rel_err,
+                                    ci,
+                                    _params_err[2] / _sigma,
+                                    max_rel_err,
                                     bin_label_dict[bin_idx]["label"],
                                 )
                         fit_candidates.append(
-                            (ci, fit_res_try, x_fit_try, y_fit_try, y_fit_err_try, _is_valid)
+                            (
+                                ci,
+                                fit_res_try,
+                                x_fit_try,
+                                y_fit_try,
+                                y_fit_err_try,
+                                _is_valid,
+                            )
                         )
 
                     # Select the candidate with the highest p-value (lowest chi2/ndf).
@@ -1870,13 +1929,21 @@ def _compute_resolution_from_histogram(
                         pool = valid_candidates if valid_candidates else fit_candidates
                         best = max(
                             pool,
-                            key=lambda c: c[1]["p_value"] if not np.isnan(c[1]["p_value"]) else -np.inf,
+                            key=lambda c: (
+                                c[1]["p_value"]
+                                if not np.isnan(c[1]["p_value"])
+                                else -np.inf
+                            ),
                         )
                         ci_best, fit_res, x_fit, y_fit, y_fit_err, fit_accepted = best
                         log.debug(
                             "Selected CI=%s for bin %s (p_value=%.4f, chi2/ndf=%.2f/%d, accepted=%s)",
-                            ci_best, bin_label_dict[bin_idx]["label"],
-                            fit_res["p_value"], fit_res["chi2"], fit_res["dof"], fit_accepted,
+                            ci_best,
+                            bin_label_dict[bin_idx]["label"],
+                            fit_res["p_value"],
+                            fit_res["chi2"],
+                            fit_res["dof"],
+                            fit_accepted,
                         )
 
                     if fit_res is not None:
@@ -1888,17 +1955,23 @@ def _compute_resolution_from_histogram(
                         if fit_candidates:
                             gaussian_fits[bin_idx]["ci_best"] = ci_best
                         if rebin_info_for_idx is not None:
-                            gaussian_fits[bin_idx]["fit_rebin_info"] = rebin_info_for_idx
+                            gaussian_fits[bin_idx][
+                                "fit_rebin_info"
+                            ] = rebin_info_for_idx
                         if fit_accepted:
                             resolutions[bin_idx] = fit_res["params"][2]
                             resolution_grid[bin_idx] = fit_res["params"][2]
                             resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
                             response_means[bin_idx] = fit_res["params"][1]
-                            response_means_uncertainty[bin_idx] = fit_res["params_err"][1]
+                            response_means_uncertainty[bin_idx] = fit_res["params_err"][
+                                1
+                            ]
                         else:
                             log.warning(
                                 "Fit quality too poor for bin %s for '%s' (best sigma rel. err. >= %.2f): setting resolution to NaN",
-                                bin_label_dict[bin_idx]["label"], response_var_name, max_rel_err,
+                                bin_label_dict[bin_idx]["label"],
+                                response_var_name,
+                                max_rel_err,
                             )
                             resolutions[bin_idx] = np.nan
                             resolution_grid[bin_idx] = np.nan
@@ -1913,7 +1986,12 @@ def _compute_resolution_from_histogram(
                         )
                         failed = True
                 except Exception as e:
-                    log.error("Failed to fit Gaussian for bin %s for '%s': %s", bin_label_dict[bin_idx]["label"], response_var_name, e)
+                    log.error(
+                        "Failed to fit Gaussian for bin %s for '%s': %s",
+                        bin_label_dict[bin_idx]["label"],
+                        response_var_name,
+                        e,
+                    )
                     failed = True
             else:
                 try:
@@ -1955,7 +2033,12 @@ def _compute_resolution_from_histogram(
                         response_means[bin_idx] = np.nan
                         response_means_uncertainty[bin_idx] = 0
                 except Exception as e:
-                    log.error("Failed to compute resolution for bin %s for '%s': %s", bin_label_dict[bin_idx]["label"], response_var_name, e)
+                    log.error(
+                        "Failed to compute resolution for bin %s for '%s': %s",
+                        bin_label_dict[bin_idx]["label"],
+                        response_var_name,
+                        e,
+                    )
                     failed = True
         else:
             log.debug(
@@ -1966,7 +2049,11 @@ def _compute_resolution_from_histogram(
             failed = True
 
         if failed:
-            log.warning("Setting resolution to NaN for bin %s for '%s' due to failure", bin_label_dict[bin_idx]["label"], response_var_name)
+            log.warning(
+                "Setting resolution to NaN for bin %s for '%s' due to failure",
+                bin_label_dict[bin_idx]["label"],
+                response_var_name,
+            )
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
             resolutions_uncertainty[bin_idx] = 0
@@ -2215,8 +2302,7 @@ def plot_variable_slices(
         concrete_axes = tuple(h_var.axes[i].name for i in range(n_bin_axes))
         if cfg["mixed_mode"]:
             group_key = tuple(
-                bin_var_configs.get(ax, {}).get("name_plot", ax)
-                for ax in concrete_axes
+                bin_var_configs.get(ax, {}).get("name_plot", ax) for ax in concrete_axes
             )
         else:
             group_key = concrete_axes
@@ -2264,7 +2350,11 @@ def plot_variable_slices(
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
-                    cmstext="Simulation Preliminary" if not DP_NOTE_PLOTS else "Simulation\nPreliminary",
+                    cmstext=(
+                        "Simulation Preliminary"
+                        if not DP_NOTE_PLOTS
+                        else "Simulation\nPreliminary"
+                    ),
                     cmstext_font_size=35,
                     lumitext=f"{year} (13.6 TeV)" if year else "",
                     **({"cmstext_loc": 2} if DP_NOTE_PLOTS else {}),
@@ -2288,14 +2378,20 @@ def plot_variable_slices(
             first_h.axes[i].name: np.array(first_h.axes[i].edges)
             for i in range(n_bin_axes)
         }
-        bin_label_dict = build_bin_label_dict(bin_shape, bin_var_names, bin_edges_dict_plot)
+        bin_label_dict = build_bin_label_dict(
+            bin_shape, bin_var_names, bin_edges_dict_plot
+        )
         # Iterate over all bin combinations
         for bin_idx in np.ndindex(bin_shape):
             # Build annotation text from bin ranges
             annotation_text = f"{PUPPI_JET_STRING}\n"
-            for bin_var_name, (low_edge, high_edge) in bin_label_dict[bin_idx]["edges"].items():
+            for bin_var_name, (low_edge, high_edge) in bin_label_dict[bin_idx][
+                "edges"
+            ].items():
                 label = bin_var_configs[bin_var_name].get("label", bin_var_name)
-                annotation_text += _format_bin_annotation_line(low_edge, high_edge, label) + "\n"
+                annotation_text += (
+                    _format_bin_annotation_line(low_edge, high_edge, label) + "\n"
+                )
 
             # Collect histograms for this bin combination
             series_dict = {}
@@ -2344,15 +2440,22 @@ def plot_variable_slices(
                         if gaussian_fit_results is not None
                         else None
                     )
-                    rebin_info = var_fit.get("fit_rebin_info") if var_fit is not None else None
+                    rebin_info = (
+                        var_fit.get("fit_rebin_info") if var_fit is not None else None
+                    )
                     if rebin_info is None and rebin_infos_results is not None:
-                        rebin_info = (rebin_infos_results or {}).get(vn, {}).get(bin_idx)
+                        rebin_info = (
+                            (rebin_infos_results or {}).get(vn, {}).get(bin_idx)
+                        )
                     if rebin_info is not None:
                         lo_edge, hi_edge, rf = rebin_info
                         h_rb = var_data["data"][lo_edge * 1j : hi_edge * 1j : rf * 1j]
                     else:
                         h_rb, _ = rebin_histogram(var_data["data"])
-                    rebinned_series_dict[vn] = {"data": h_rb, "style": var_data["style"]}
+                    rebinned_series_dict[vn] = {
+                        "data": h_rb,
+                        "style": var_data["style"],
+                    }
                 series_dict = rebinned_series_dict
 
             # Create output filename with bin ranges
@@ -2360,7 +2463,9 @@ def plot_variable_slices(
                 f"histo_{variables_dict[var_name]['name_plot']}_slice",
                 category,
             ]
-            for bin_var_name, (low_edge, high_edge) in bin_label_dict[bin_idx]["edges"].items():
+            for bin_var_name, (low_edge, high_edge) in bin_label_dict[bin_idx][
+                "edges"
+            ].items():
                 low_edge_str = f"{low_edge}".replace(".", "p").replace("-", "m")
                 high_edge_str = f"{high_edge}".replace(".", "p").replace("-", "m")
                 filename_parts.append(
@@ -2382,7 +2487,11 @@ def plot_variable_slices(
             plotter = (
                 HEPPlotter()
                 .set_plot_config(
-                    cmstext="Simulation Preliminary" if not DP_NOTE_PLOTS else "Simulation\nPreliminary",
+                    cmstext=(
+                        "Simulation Preliminary"
+                        if not DP_NOTE_PLOTS
+                        else "Simulation\nPreliminary"
+                    ),
                     cmstext_font_size=30,
                     lumitext=f"{year} (13.6 TeV)" if year else "",
                     figsize=(13, 13) if not DP_NOTE_PLOTS else None,
@@ -2422,11 +2531,16 @@ def plot_variable_slices(
                     ann_x = 0.05 + col * 0.3
                     ann_y = 0.75 - row * 0.07
 
-                    use_gaussian = gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]
+                    use_gaussian = (
+                        gaussian_fit_results is not None
+                        and cfg["gaussian_fit_resolution"]
+                    )
                     if use_gaussian:
                         var_fits = gaussian_fit_results.get(var_name, {})
                         fit_res = var_fits.get(bin_idx)
-                        use_gaussian = fit_res is not None and not np.any(np.isnan(fit_res["params"]))
+                        use_gaussian = fit_res is not None and not np.any(
+                            np.isnan(fit_res["params"])
+                        )
 
                     if use_gaussian:
                         sigma_label = (
@@ -2452,16 +2566,25 @@ def plot_variable_slices(
                         )
                         if cfg.get("gaussian_fit_cut_tails", False):
                             plotter.add_line(
-                                "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
+                                "v",
+                                x=fit_res["x_min"],
+                                color=get_color(var_name),
+                                linestyle="dotted",
                             )
                             plotter.add_line(
-                                "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
+                                "v",
+                                x=fit_res["x_max"],
+                                color=get_color(var_name),
+                                linestyle="dotted",
                             )
                             _ci_label = fit_res.get("ci_best")
                             if _ci_label is not None:
                                 _ci_str = f"CI={_ci_label:.2f}"
                                 _amp = fit_res["params"][0]
-                                for _x_line, _ha in ((fit_res["x_min"], "right"), (fit_res["x_max"], "left")):
+                                for _x_line, _ha in (
+                                    (fit_res["x_min"], "right"),
+                                    (fit_res["x_max"], "left"),
+                                ):
                                     plotter.add_annotation(
                                         _x_line,
                                         _amp,
@@ -2474,14 +2597,20 @@ def plot_variable_slices(
                                         rotation=90,
                                     )
                     else:
-                        sigma_label = f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
+                        sigma_label = (
+                            f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
+                        )
                         if true_resolution_results is not None:
-                            true_entry = (true_resolution_results.get(var_name) or {}).get(bin_idx)
+                            true_entry = (
+                                true_resolution_results.get(var_name) or {}
+                            ).get(bin_idx)
                             if true_entry is not None:
                                 true_sigma, true_sigma_err = true_entry
                                 mean_str = ""
                                 if response_means_results is not None:
-                                    mean_entry = (response_means_results.get(var_name) or {}).get(bin_idx)
+                                    mean_entry = (
+                                        response_means_results.get(var_name) or {}
+                                    ).get(bin_idx)
                                     if mean_entry is not None:
                                         mean_val, mean_err = mean_entry
                                         if not np.isnan(mean_val):
@@ -2491,19 +2620,34 @@ def plot_variable_slices(
                                     + mean_str
                                 )
 
-                        if ci_bounds is not None and not (
-                            gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]
-                        ) and False:
+                        if (
+                            ci_bounds is not None
+                            and not (
+                                gaussian_fit_results is not None
+                                and cfg["gaussian_fit_resolution"]
+                            )
+                            and False
+                        ):
                             x_lo, x_hi = ci_bounds
                             _ci_str = f"CI={cfg.get('ci_conf_level', 0.87):.2f}"
                             plotter.add_line(
-                                "v", x=x_lo, color=get_color(var_name), linestyle="dotted"
+                                "v",
+                                x=x_lo,
+                                color=get_color(var_name),
+                                linestyle="dotted",
                             )
                             plotter.add_line(
-                                "v", x=x_hi, color=get_color(var_name), linestyle="dotted"
+                                "v",
+                                x=x_hi,
+                                color=get_color(var_name),
+                                linestyle="dotted",
                             )
                             h_1d = series_dict[var_name]["data"]
-                            _amp = float(h_1d.values().max()) if h_1d.values().max() > 0 else 1.0
+                            _amp = (
+                                float(h_1d.values().max())
+                                if h_1d.values().max() > 0
+                                else 1.0
+                            )
                             for _x_line, _ha in ((x_lo, "right"), (x_hi, "left")):
                                 plotter.add_annotation(
                                     _x_line,
@@ -2649,11 +2793,13 @@ def plot_mapping_variable_linear_fit(
     bin_var_configs,
     h_mean_bin_var_dict=None,
 ):
-    log.info("Plotting linear fit for mapping variable '%s' vs its bin variable...", var_name)
+    log.info(
+        "Plotting linear fit for mapping variable '%s' vs its bin variable...", var_name
+    )
     var_cfg = mapping_vars[var_name]
     x_var_name = var_cfg["bin_vars"][0]
     x_cfg = bin_var_configs[x_var_name]
-    
+
     # Optionally use mean bin-var value per bin instead of the bin center.
     use_mean_bin_var = var_cfg.get("fit_with_mean_bin_var", False)
 
@@ -2668,13 +2814,21 @@ def plot_mapping_variable_linear_fit(
     # 2D histogram of mapping variable vs its bin variable
     var_2d = compute_projection(h_dict, mapping_vars, var_name)
     if var_2d.ndim < 2:
-        log.warning("2D histogram for %s has only %d axis after squeezing; skipping 2D plot.", var_name, var_2d.ndim)
+        log.warning(
+            "2D histogram for %s has only %d axis after squeezing; skipping 2D plot.",
+            var_name,
+            var_2d.ndim,
+        )
     elif np.sum(var_2d.values()) == 0:
         log.warning("2D histogram for %s is empty, skipping plot.", var_name)
     else:
         (
             HEPPlotter()
-            .set_plot_config(cmstext="Simulation Preliminary",lumitext=f"{year} (13.6 TeV)")
+            .set_plot_config(
+                cmstext="Simulation Preliminary",
+                lumitext=f"{year} (13.6 TeV)",
+                cmstext_font_size=30,
+            )
             .set_options(legend=False, cbar_log=False)
             .set_output(f"{output_dir}/{y_name}_vs_{x_name}_2d_{category}")
             .set_data({"data": {"data": var_2d, "style": {}}}, plot_type="2d")
@@ -2697,8 +2851,14 @@ def plot_mapping_variable_linear_fit(
     log.debug("Linear fit results: %s", fit_results)
 
     x_axis = results[var_name]["mean"].axes[0]
-    x_lin = np.linspace(x_values[0]*0.9, x_values[-1]*1.1, 100) if x_values is not None else np.linspace(x_axis.edges[0], x_axis.edges[-1], 100)
-    x_centers = x_values if x_values is not None else (x_axis.edges[:-1] + x_axis.edges[1:]) / 2
+    x_lin = (
+        np.linspace(x_values[0] * 0.9, x_values[-1] * 1.1, 100)
+        if x_values is not None
+        else np.linspace(x_axis.edges[0], x_axis.edges[-1], 100)
+    )
+    x_centers = (
+        x_values if x_values is not None else (x_axis.edges[:-1] + x_axis.edges[1:]) / 2
+    )
     x_width = None if x_values is not None else (x_axis.widths / 2)
     mean_dict = {}
     mean_counts = results[var_name]["mean"].view().count
@@ -2735,7 +2895,11 @@ def plot_mapping_variable_linear_fit(
     else:
         (
             HEPPlotter()
-            .set_plot_config(cmstext="Simulation Preliminary",lumitext=f"{year} (13.6 TeV)")
+            .set_plot_config(
+                cmstext="Simulation Preliminary",
+                lumitext=f"{year} (13.6 TeV)",
+                cmstext_font_size=30,
+            )
             .set_options(set_ylim=False)
             .set_output(f"{output_dir}/{y_name}_vs_{x_name}_fit_{category}")
             .set_data(mean_dict, plot_type="graph")
@@ -2969,7 +3133,11 @@ def plot_1d_inclusive_distributions(
     on a single canvas. Each binning variable gets its own plot.
     """
     os.makedirs(output_dir, exist_ok=True)
-    log.info("Plotting inclusive 1D distributions for category '%s' in %s", category, output_dir)
+    log.info(
+        "Plotting inclusive 1D distributions for category '%s' in %s",
+        category,
+        output_dir,
+    )
     annotation_base = PUPPI_JET_STRING + "\nInclusive"
 
     def _make_plotter(series_dict, xlabel, output_name):
@@ -2977,7 +3145,11 @@ def plot_1d_inclusive_distributions(
         return (
             HEPPlotter()
             .set_plot_config(
-                cmstext="Simulation Preliminary" if not DP_NOTE_PLOTS else "Simulation\nPreliminary",
+                cmstext=(
+                    "Simulation Preliminary"
+                    if not DP_NOTE_PLOTS
+                    else "Simulation\nPreliminary"
+                ),
                 cmstext_font_size=30,
                 lumitext=f"{year} (13.6 TeV)" if year else "",
                 figsize=(13, 13),
@@ -3027,7 +3199,9 @@ def plot_1d_inclusive_distributions(
                 "data": h_1d,
                 "style": {
                     "color": get_color(var_name),
-                    "legend_name": available_response_vars[var_name].get("legend_name", var_name),
+                    "legend_name": available_response_vars[var_name].get(
+                        "legend_name", var_name
+                    ),
                     "linewidth": 2,
                 },
             }
@@ -3321,21 +3495,29 @@ def main():
         # NOTE: plot_mapping_variable_histograms is called *after* this block so that it
         # always receives an h_dict whose axes match cfg["bin_variables_mixed"].
         if args.refit:
-            log.info("--refit: merging histogram bins from YAML config and recomputing profile means...")
+            log.info(
+                "--refit: merging histogram bins from YAML config and recomputing profile means..."
+            )
             bin_var_configs_all = cfg["bin_variables_mixed"]
 
             # Merge mapping-variable Count histograms so linear fits stay consistent.
             # Single-bin axes (after merging) are squeezed out so they don't appear
             # in plot filenames or annotations.
             h_dict = {
-                vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_var_configs_all)[0], bin_var_configs_all)[0]
+                vn: squeeze_single_bin_axes(
+                    merge_nd_histogram_bins(h, bin_var_configs_all)[0],
+                    bin_var_configs_all,
+                )[0]
                 for vn, h in h_dict.items()
             }
 
             # Recompute profile means from the merged Mean histograms (if saved).
             if "h_mean_dict" in cat_data:
                 h_mean_dict_merged = {
-                    vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_var_configs_all)[0], bin_var_configs_all)[0]
+                    vn: squeeze_single_bin_axes(
+                        merge_nd_histogram_bins(h, bin_var_configs_all)[0],
+                        bin_var_configs_all,
+                    )[0]
                     for vn, h in cat_data["h_mean_dict"].items()
                 }
                 results = profile_means(h_mean_dict_merged, cfg["mapping_variables"])
@@ -3348,7 +3530,10 @@ def main():
             # Merge mean bin-var histograms if present.
             if h_mean_bin_var_dict:
                 h_mean_bin_var_dict = {
-                    vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_var_configs_all)[0], bin_var_configs_all)[0]
+                    vn: squeeze_single_bin_axes(
+                        merge_nd_histogram_bins(h, bin_var_configs_all)[0],
+                        bin_var_configs_all,
+                    )[0]
                     for vn, h in h_mean_bin_var_dict.items()
                 }
 
@@ -3369,9 +3554,9 @@ def main():
                     bin_var_configs=cfg["bin_variables_mixed"],
                     h_mean_bin_var_dict=h_mean_bin_var_dict,
                 )
-                mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name]["fit_func"](
-                    cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"]
-                )
+                mapped_bin_edges[lf_var_name] = linear_fit_maps[lf_var_name][
+                    "fit_func"
+                ](cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"])
 
         plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
 
@@ -3390,12 +3575,16 @@ def main():
             if args.refit:
                 log.info("--refit mode='%s': merging response histogram bins...", mode)
                 response_h_dict = {
-                    vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_vars)[0], bin_vars)[0]
+                    vn: squeeze_single_bin_axes(
+                        merge_nd_histogram_bins(h, bin_vars)[0], bin_vars
+                    )[0]
                     for vn, h in response_h_dict.items()
                 }
                 if response_h_mean_dict:
                     response_h_mean_dict = {
-                        vn: squeeze_single_bin_axes(merge_nd_histogram_bins(h, bin_vars)[0], bin_vars)[0]
+                        vn: squeeze_single_bin_axes(
+                            merge_nd_histogram_bins(h, bin_vars)[0], bin_vars
+                        )[0]
                         for vn, h in response_h_mean_dict.items()
                     }
                 log.info("--refit mode='%s': recomputing Gaussian fit...", mode)
