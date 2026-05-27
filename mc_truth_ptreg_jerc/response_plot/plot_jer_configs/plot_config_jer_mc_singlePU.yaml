@@ -10,6 +10,13 @@ gaussian_fit_max_sigma_rel_err: 1.0
 min_events_for_fit: 50
 ci_conf_level: 0.87
 
+# Response variable options (applied to all response variables)
+normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
+additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
+add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
+add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
+response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
+
 # Bin arrays (anchors allow reuse below without duplication)
 pu_bins: &pu_bins [0,100]
 jet_eta_bins: &jet_eta_bins
@@ -184,11 +191,6 @@ response_variables:
     is_reference: true
     txt_jet_name: AK4PFPuppi
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJets_ResponseRaw:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_raw
@@ -200,11 +202,6 @@ response_variables:
     is_reference: false
     txt_jet_name: AK4PFPuppiRaw
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJets_ResponsePNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_pnetreg
@@ -216,11 +213,6 @@ response_variables:
     is_reference: false
     txt_jet_name: AK4PFPNet
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJets_ResponseUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_upartreg
@@ -233,11 +225,6 @@ response_variables:
     txt_jet_name: AK4PFUParT
     eta_max: 2.5
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
 
 response_variables_neutrino:
   MatchedJetsNeutrino_ResponseJEC:
@@ -251,11 +238,6 @@ response_variables_neutrino:
     is_reference: true
     txt_jet_name: AK4PFPuppiNeutrino
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJetsNeutrino_ResponseRaw:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_raw
@@ -267,11 +249,6 @@ response_variables_neutrino:
     is_reference: false
     txt_jet_name: AK4PFPuppiNeutrinoRaw
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJetsNeutrino_ResponsePNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_pnetreg_neutrino
@@ -283,11 +260,6 @@ response_variables_neutrino:
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJetsNeutrino_ResponseUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_upartreg_neutrino
@@ -300,11 +272,6 @@ response_variables_neutrino:
     txt_jet_name: AK4PFUParTPlusNeutrino
     eta_max: 2.5
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
 
 # Mixed mode: regular JEC/PNetReg/UparTReg + neutrino PNetReg/UparTReg (no Raw)
 response_variables_mixed:
@@ -319,11 +286,6 @@ response_variables_mixed:
     is_reference: true
     txt_jet_name: AK4PFPuppi
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJets_ResponsePNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_pnetreg
@@ -335,11 +297,6 @@ response_variables_mixed:
     is_reference: false
     txt_jet_name: AK4PFPNet
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJets_ResponseUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_upartreg
@@ -352,11 +309,6 @@ response_variables_mixed:
     txt_jet_name: AK4PFUParT
     eta_max: 2.5
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJetsNeutrino_ResponsePNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_pnetreg_neutrino
@@ -368,11 +320,6 @@ response_variables_mixed:
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
   MatchedJetsNeutrino_ResponseUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response_upartreg_neutrino
@@ -385,11 +332,6 @@ response_variables_mixed:
     txt_jet_name: AK4PFUParTPlusNeutrino
     eta_max: 2.5
     rebin_for_plotting: false
-    normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
-    additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
-    add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
-    add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-    response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
 
 # ---------------------------------------------------------------------------
 # Plot style settings

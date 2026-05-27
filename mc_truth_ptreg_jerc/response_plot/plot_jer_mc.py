@@ -188,7 +188,7 @@ PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
 
 # When True: removes grid, puts CMS text inside plots (cmstext_loc=2),
 # removes log scale from histograms, and removes resolution annotations from histograms.
-DP_NOTE_PLOTS = True
+DP_NOTE_PLOTS = False
 
 
 def run_plot(plotter):
@@ -1368,9 +1368,9 @@ def _apply_response_normalization_and_extra_uncertainty(
 ):
     """Apply optional per-bin transformations to the computed resolution values.
 
-    All transformations are configured per response variable in the YAML
-    config. When applied, the order matches the conventional one used by
-    upstream JER tooling:
+    All transformations are configured as top-level options in the YAML config
+    (with optional per-response-variable overrides). When applied, the order
+    matches the conventional one used by upstream JER tooling:
 
     1. ``normalize_by_response_mean`` (bool, default False): divide each
        resolution by the mean of the response (sigma / <R>), with the
@@ -1389,14 +1389,14 @@ def _apply_response_normalization_and_extra_uncertainty(
            new_err = sqrt(err^2 + (additional_uncertainty * resolution)^2)
     """
     var_cfg = response_vars.get(response_var_name, {})
-    normalize = bool(var_cfg.get("normalize_by_response_mean", False))
+    normalize = bool(var_cfg.get("normalize_by_response_mean", cfg.get("normalize_by_response_mean", False)))
     add_unc = _parse_additional_uncertainty(
-        var_cfg.get("additional_uncertainty", 0.0), response_var_name
+        var_cfg.get("additional_uncertainty", cfg.get("additional_uncertainty", 0.0)), response_var_name
     )
     add_min_err = _parse_additional_uncertainty(
-        var_cfg.get("add_min_err", 0.0), response_var_name
+        var_cfg.get("add_min_err", cfg.get("add_min_err", 0.0)), response_var_name
     )
-    add_chi2_ndof = bool(var_cfg.get("add_chi2_ndof", False))
+    add_chi2_ndof = bool(var_cfg.get("add_chi2_ndof", cfg.get("add_chi2_ndof", False)))
     gaussian_fits = gaussian_fits or {}
 
     if not normalize and add_unc <= 0 and add_min_err <= 0 and not add_chi2_ndof:
@@ -1489,8 +1489,8 @@ def _apply_response_mean_method(
 ):
     """Optionally override the per-bin response mean using a configurable method.
 
-    Controlled by the per-response-variable config key ``response_mean_method``,
-    which may be one of:
+    Controlled by the top-level config key ``response_mean_method`` (with
+    optional per-response-variable override), which may be one of:
 
     - ``"gaussian_fit"``: use the mean from the per-bin Gaussian fit
       (``params[1]`` / ``params_err[1]``). Bins where the Gaussian fit is
@@ -1509,7 +1509,7 @@ def _apply_response_mean_method(
     successful Gaussian fit, binned moments otherwise).
     """
     var_cfg = response_vars.get(response_var_name, {})
-    method = var_cfg.get("response_mean_method")
+    method = var_cfg.get("response_mean_method", cfg.get("response_mean_method"))
     if method in (None, "", "auto"):
         return
 
@@ -1643,7 +1643,9 @@ def _compute_resolution_from_histogram(
     bin_var_names : list of str
         Names of the bin variables (in order)
     response_vars : dict
-        Configuration dict for response variables. Each entry may include:
+        Configuration dict for response variables. Each entry may include
+        per-variable overrides for top-level options (see below).
+        Top-level config keys (apply to all response variables unless overridden):
         - "normalize_by_response_mean" (bool, default False): when True, divide
           the per-bin resolution by the mean of the response (sigma / <R>) and
           propagate the uncertainty accordingly.
@@ -1986,6 +1988,10 @@ def _compute_resolution_from_histogram(
         response_vars=response_vars,
     )
 
+    # Snapshot raw (pre-normalization) resolutions for display on histogram slices.
+    resolutions_raw = dict(resolutions)
+    resolutions_uncertainty_raw = dict(resolutions_uncertainty)
+
     # Optionally normalize the resolution by the mean of the response and
     # apply any of the supported per-bin uncertainty adjustments. See
     # _apply_response_normalization_and_extra_uncertainty for the full list.
@@ -2007,6 +2013,8 @@ def _compute_resolution_from_histogram(
             "bin_edges": bin_edges_dict,
             "bin_var_names": bin_var_names,
             "resolutions": resolutions,
+            "resolutions_raw": resolutions_raw,
+            "resolutions_uncertainty_raw": resolutions_uncertainty_raw,
             "resolution_grid": resolution_grid,
             "gaussian_fits": gaussian_fits,
             "rebin_infos": rebin_infos,
@@ -2149,6 +2157,8 @@ def plot_variable_slices(
     gaussian_fit_results=None,
     rebin_infos_results=None,
     resolution_results=None,
+    response_means_results=None,
+    true_resolution_results=None,
 ):
     """
     Plot all 1D histogram slices from ND histograms.
@@ -2411,81 +2421,101 @@ def plot_variable_slices(
                     row = i % 3
                     ann_x = 0.05 + col * 0.3
                     ann_y = 0.75 - row * 0.07
-                    sigma_label = f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
 
-                    if gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]:
+                    use_gaussian = gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]
+                    if use_gaussian:
                         var_fits = gaussian_fit_results.get(var_name, {})
                         fit_res = var_fits.get(bin_idx)
-                        if fit_res is not None and not np.any(np.isnan(fit_res["params"])):
-                            sigma_label += (
-                                f"\n$\\chi^2/\\mathrm{{ndf}}={fit_res['chi2']:.0f}/{fit_res['dof']}$, "
-                                f"$p={fit_res['p_value']:.2f}$"
-                            )
-                            h_1d = series_dict[var_name]["data"]
-                            axis = h_1d.axes[0]
-                            x_fine = np.linspace(axis.edges[0], axis.edges[-1], 300)
-                            y_fine = gaussian_model(
-                                x_fine,
-                                fit_res["params"][0],
-                                fit_res["params"][1],
-                                fit_res["params"][2],
-                            )
-                            plotter.add_curve(
-                                x_fine,
-                                y_fine,
-                                color=get_color(var_name),
-                                linestyle="--",
-                                linewidth=2,
-                            )
-                            if cfg.get("gaussian_fit_cut_tails", False):
-                                plotter.add_line(
-                                    "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
-                                )
-                                plotter.add_line(
-                                    "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
-                                )
-                                _ci_label = fit_res.get("ci_best")
-                                if _ci_label is not None:
-                                    _ci_str = f"CI={_ci_label:.2f}"
-                                    _amp = fit_res["params"][0]
-                                    for _x_line, _ha in ((fit_res["x_min"], "right"), (fit_res["x_max"], "left")):
-                                        plotter.add_annotation(
-                                            _x_line,
-                                            _amp,
-                                            _ci_str,
-                                            coord_type="data",
-                                            fontsize=10,
-                                            color=get_color(var_name),
-                                            ha=_ha,
-                                            va="center",
-                                            rotation=90,
-                                        )
+                        use_gaussian = fit_res is not None and not np.any(np.isnan(fit_res["params"]))
 
-                    if ci_bounds is not None and not (
-                        gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]
-                    ) and False:
-                        x_lo, x_hi = ci_bounds
-                        _ci_str = f"CI={cfg.get('ci_conf_level', 0.87):.2f}"
-                        plotter.add_line(
-                            "v", x=x_lo, color=get_color(var_name), linestyle="dotted"
-                        )
-                        plotter.add_line(
-                            "v", x=x_hi, color=get_color(var_name), linestyle="dotted"
+                    if use_gaussian:
+                        sigma_label = (
+                            f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
+                            f"\n$\\chi^2/\\mathrm{{ndf}}={fit_res['chi2']:.0f}/{fit_res['dof']}$, "
+                            f"$p={fit_res['p_value']:.2f}$"
                         )
                         h_1d = series_dict[var_name]["data"]
-                        _amp = float(h_1d.values().max()) if h_1d.values().max() > 0 else 1.0
-                        for _x_line, _ha in ((x_lo, "right"), (x_hi, "left")):
-                            plotter.add_annotation(
-                                _x_line,
-                                _amp,
-                                _ci_str,
-                                coord_type="data",
-                                fontsize=10,
-                                color=get_color(var_name),
-                                ha=_ha,
-                                va="center",
-                                rotation=90,
+                        axis = h_1d.axes[0]
+                        x_fine = np.linspace(axis.edges[0], axis.edges[-1], 300)
+                        y_fine = gaussian_model(
+                            x_fine,
+                            fit_res["params"][0],
+                            fit_res["params"][1],
+                            fit_res["params"][2],
+                        )
+                        plotter.add_curve(
+                            x_fine,
+                            y_fine,
+                            color=get_color(var_name),
+                            linestyle="--",
+                            linewidth=2,
+                        )
+                        if cfg.get("gaussian_fit_cut_tails", False):
+                            plotter.add_line(
+                                "v", x=fit_res["x_min"], color=get_color(var_name), linestyle="dotted"
                             )
+                            plotter.add_line(
+                                "v", x=fit_res["x_max"], color=get_color(var_name), linestyle="dotted"
+                            )
+                            _ci_label = fit_res.get("ci_best")
+                            if _ci_label is not None:
+                                _ci_str = f"CI={_ci_label:.2f}"
+                                _amp = fit_res["params"][0]
+                                for _x_line, _ha in ((fit_res["x_min"], "right"), (fit_res["x_max"], "left")):
+                                    plotter.add_annotation(
+                                        _x_line,
+                                        _amp,
+                                        _ci_str,
+                                        coord_type="data",
+                                        fontsize=10,
+                                        color=get_color(var_name),
+                                        ha=_ha,
+                                        va="center",
+                                        rotation=90,
+                                    )
+                    else:
+                        sigma_label = f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
+                        if true_resolution_results is not None:
+                            true_entry = (true_resolution_results.get(var_name) or {}).get(bin_idx)
+                            if true_entry is not None:
+                                true_sigma, true_sigma_err = true_entry
+                                mean_str = ""
+                                if response_means_results is not None:
+                                    mean_entry = (response_means_results.get(var_name) or {}).get(bin_idx)
+                                    if mean_entry is not None:
+                                        mean_val, mean_err = mean_entry
+                                        if not np.isnan(mean_val):
+                                            mean_str = f"\n$\\mu={mean_val:.3f} \\pm {mean_err:.3f}$"
+                                sigma_label = (
+                                    f"$\\sigma={abs(true_sigma):.3f} \\pm {true_sigma_err:.3f}$"
+                                    + mean_str
+                                )
+
+                        if ci_bounds is not None and not (
+                            gaussian_fit_results is not None and cfg["gaussian_fit_resolution"]
+                        ) and False:
+                            x_lo, x_hi = ci_bounds
+                            _ci_str = f"CI={cfg.get('ci_conf_level', 0.87):.2f}"
+                            plotter.add_line(
+                                "v", x=x_lo, color=get_color(var_name), linestyle="dotted"
+                            )
+                            plotter.add_line(
+                                "v", x=x_hi, color=get_color(var_name), linestyle="dotted"
+                            )
+                            h_1d = series_dict[var_name]["data"]
+                            _amp = float(h_1d.values().max()) if h_1d.values().max() > 0 else 1.0
+                            for _x_line, _ha in ((x_lo, "right"), (x_hi, "left")):
+                                plotter.add_annotation(
+                                    _x_line,
+                                    _amp,
+                                    _ci_str,
+                                    coord_type="data",
+                                    fontsize=10,
+                                    color=get_color(var_name),
+                                    ha=_ha,
+                                    va="center",
+                                    rotation=90,
+                                )
 
                     plotter.add_annotation(
                         ann_x,
@@ -3149,6 +3179,38 @@ def process_response_type(
             else None
         )
 
+        response_means_results = (
+            {
+                var_name: {
+                    bin_idx: (
+                        mean,
+                        result.get("response_means_uncertainty", {}).get(bin_idx, 0.0),
+                    )
+                    for bin_idx, mean in result.get("response_means", {}).items()
+                    if mean is not None and not np.isnan(mean)
+                }
+                for var_name, result in response_tot_dict.items()
+            }
+            if response_tot_dict
+            else None
+        )
+
+        true_resolution_results = (
+            {
+                var_name: {
+                    bin_idx: (
+                        res,
+                        result.get("resolutions_uncertainty_raw", {}).get(bin_idx, 0.0),
+                    )
+                    for bin_idx, res in result.get("resolutions_raw", {}).items()
+                    if res is not None and not np.isnan(res)
+                }
+                for var_name, result in response_tot_dict.items()
+            }
+            if response_tot_dict
+            else None
+        )
+
         plot_variable_slices(
             h_dict=response_h_dict,
             variables_dict=available_response_vars,
@@ -3160,6 +3222,8 @@ def process_response_type(
             gaussian_fit_results=gaussian_fit_results,
             rebin_infos_results=rebin_infos_results,
             resolution_results=resolution_results,
+            response_means_results=response_means_results,
+            true_resolution_results=true_resolution_results,
         )
 
     if cfg["resolution_vs_pt_gen"]:
