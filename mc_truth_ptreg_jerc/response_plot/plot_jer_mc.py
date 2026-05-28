@@ -124,6 +124,12 @@ def _load_config(config_path, test_override=False):
 
 cfg = None
 
+_DEFAULT_CONFIG = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "plot_jer_configs",
+    "plot_config_jer_mc_default.yaml",
+)
+
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
 parser.add_argument(
     "-i",
@@ -172,8 +178,13 @@ parser.add_argument(
     "-c",
     "--config",
     type=str,
-    required=True,
-    help="Path to YAML configuration file",
+    default=_DEFAULT_CONFIG,
+    help=(
+        "Path to YAML configuration file "
+        "(default: plot_jer_configs/plot_config_jer_mc_default.yaml). "
+        "Any option present in the provided file overwrites the corresponding "
+        "default; options absent from the file keep their default values."
+    ),
 )
 parser.add_argument(
     "--refit",
