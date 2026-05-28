@@ -263,6 +263,36 @@ gaussian_model.formula = "[0]*exp(-0.5*((x-[1])/[2])^2)"
 gaussian_model.param_names = ["[0]", "[1]", "[2]"]
 gaussian_model.x_name = "x"
 
+_MISSING = object()
+
+
+def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
+    """Return (p0, bounds) for the NSC fit.
+
+    Lookup order for ``nsc_fit_parameters`` / ``nsc_fit_parameter_limits``: per-response variable → global cfg key → no p0 / no bounds.
+
+    In the YAML, set ``nsc_fit_parameter_limits: null`` (at global or per-response level) to
+    disable parameter limits.  Individual limit entries of ``null`` map to ±inf.
+    """
+    rv_cfg = response_vars.get(response_var, {})
+
+    p0 = rv_cfg.get("nsc_fit_parameters", _MISSING)
+    if p0 is _MISSING:
+        p0 = cfg.get("nsc_fit_parameters")
+
+    limits = rv_cfg.get("nsc_fit_parameter_limits", _MISSING)
+    if limits is _MISSING:
+        limits = cfg.get("nsc_fit_parameter_limits")
+
+    if limits is None:
+        bounds = (-np.inf, np.inf)
+    else:
+        lower = [v if v is not None else -np.inf for v in limits.get("lower", [])]
+        upper = [v if v is not None else np.inf for v in limits.get("upper", [])]
+        bounds = (lower, upper)
+
+    return (tuple(p0) if p0 is not None else None), bounds
+
 
 def perform_fit(
     x,
@@ -316,6 +346,8 @@ def perform_fit(
         "fit_function_name": getattr(fit_function, "__name__", str(fit_function)),
         "fit_formula": getattr(fit_function, "formula", None),
         "fit_param_names": getattr(fit_function, "param_names", None),
+        "p0": p0,
+        "bounds": bounds,
         "params": np.full(n_params, np.nan),
         "params_err": np.full(n_params, np.nan),
         "cov": None,
@@ -408,6 +440,8 @@ def perform_fit(
         "fit_function_name": getattr(fit_function, "__name__", str(fit_function)),
         "fit_formula": getattr(fit_function, "formula", None),
         "fit_param_names": getattr(fit_function, "param_names", None),
+        "p0": p0,
+        "bounds": bounds,
         "params": params,
         "params_err": params_err,
         "cov": pcov,
@@ -678,7 +712,7 @@ def plot_resolution_vs_x_variable(
                     },
                     "style": {
                         "fmt": get_fmt(response_var),
-                        "linestyle": "",
+                        "linestyle": None,
                         "color": get_color(response_var),
                         "markersize": 8,
                         "linewidth": 2,
@@ -742,16 +776,30 @@ def plot_resolution_vs_x_variable(
                     if y_fit_err is not None:
                         y_fit_err = np.asarray(y_fit_err, dtype=float)[pos]
 
+                    rv_cfg = response_vars.get(response_var, {})
+                    x_clip = rv_cfg.get("nsc_fit_x_clip", cfg.get("nsc_fit_x_clip"))
+                    if x_clip is not None:
+                        clip_lo, clip_hi = x_clip
+                        clip_mask = (x_fit >= clip_lo) & (x_fit <= clip_hi)
+                        x_fit = x_fit[clip_mask]
+                        y_fit = y_fit[clip_mask]
+                        if y_fit_err is not None:
+                            y_fit_err = y_fit_err[clip_mask]
+
                     if len(x_fit) < len(NSC.param_names):
                         continue
 
+                    nsc_p0, nsc_bounds = _get_nsc_fit_p0_and_bounds(
+                        response_var, response_vars, cfg
+                    )
                     fit_res = perform_fit(
                         x_fit,
                         y_fit,
                         y_fit_err,
                         NSC,
                         n_params=len(NSC.param_names),
-                        p0=(0.5, 0.5, 0.05, -1.0),
+                        p0=nsc_p0,
+                        bounds=nsc_bounds,
                     )
 
                     fit_results[f"{response_var}{fit_result_string}"] = fit_res
@@ -768,8 +816,7 @@ def plot_resolution_vs_x_variable(
                             "y": [y_fit_fit, np.zeros_like(y_fit_fit)],
                         },
                         "style": {
-                            "linestyle": "--",
-                            "fmt": "",
+                            "fmt": "--",
                             "color": get_color(response_var),
                             "linewidth": 2,
                             "appear_in_legend": False,
@@ -2924,7 +2971,11 @@ def save_fit_results(fit_results, output_path):
     def _to_builtin(obj):
         if obj is None:
             return None
-        if isinstance(obj, (str, int, float, bool)):
+        if isinstance(obj, bool):
+            return obj
+        if isinstance(obj, (int, float)):
+            if isinstance(obj, float) and not np.isfinite(obj):
+                return None
             return obj
         if isinstance(obj, (list, tuple)):
             return [_to_builtin(x) for x in obj]
@@ -2933,7 +2984,7 @@ def save_fit_results(fit_results, output_path):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         if isinstance(obj, (np.floating, np.integer)):
-            return obj.item()
+            return _to_builtin(obj.item())
         return str(obj)
 
     serializable = {}
@@ -3065,6 +3116,7 @@ def save_txt_resolution(
                 fit_map = (linear_fit_maps or {}).get(bin_var_cfg["txt_map_to"])
                 if fit_map is not None:
                     lo, hi = fit_map["fit_func"](np.array([lo, hi]))
+                    lo = 0.0
             row_cols.extend([lo, hi])
 
         if not build_ok:

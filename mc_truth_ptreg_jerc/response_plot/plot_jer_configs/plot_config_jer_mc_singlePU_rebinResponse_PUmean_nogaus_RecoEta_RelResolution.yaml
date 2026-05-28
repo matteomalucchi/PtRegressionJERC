@@ -2,20 +2,20 @@
 mixed_mode: true
 resolution_vs_pt_gen: true
 resolution_vs_pt_reco: true
-histograms_map: true
+histograms_map: false
 histograms_response: true
-gaussian_fit_resolution: true
-gaussian_fit_cut_tails: [0.87]
+gaussian_fit_resolution: false
+gaussian_fit_cut_tails: false
 gaussian_fit_max_sigma_rel_err: 1.0
 min_events_for_fit: 50
 ci_conf_level: 0.87
 
 # Response variable options (applied to all response variables)
-normalize_by_response_mean: false  # plot sigma / <R> instead of bare sigma
+normalize_by_response_mean: true  # plot sigma / <R> instead of bare sigma
 additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
 add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
 add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
-response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
+response_mean_method: "mean_storage"  # auto | gaussian_fit | histogram | mean_storage
 # NSC fit initial parameters [N, S, C, d]
 nsc_fit_parameters: [3.5, 0.5, 0.05, -1.0]
 # NSC fit parameter limits (null = no limit = ±inf); set to null to disable all limits
@@ -25,24 +25,24 @@ nsc_fit_parameter_limits:
 
 
 # Bin arrays (anchors allow reuse below without duplication)
-pu_bins: &pu_bins [0, 20, 30, 40, 50, 60, 70, 100]
+pu_bins: &pu_bins [0,100]
 jet_eta_bins: &jet_eta_bins
-  [-5.191, -3.839, -3.489, -3.139, -2.964, -2.853, -2.65, -2.5, -2.322,
+  [-5.191,-4.7, -3.839, -3.489, -3.139, -2.964, -2.853, -2.65, -2.5, -2.322,
    -2.172, -2.043, -1.93, -1.74, -1.566, -1.305, -1.044, -0.783, -0.522,
    -0.261, 0.0, 0.261, 0.522, 0.783, 1.044, 1.305, 1.566, 1.74, 1.93,
-   2.043, 2.172, 2.322, 2.5, 2.65, 2.853, 2.964, 3.139, 3.489, 3.839, 5.191]
+   2.043, 2.172, 2.322, 2.5, 2.65, 2.853, 2.964, 3.139, 3.489, 3.839, 4.7, 5.191]
 jet_pt_bins: &jet_pt_bins
   [8, 10, 12, 15, 17, 20, 23, 27, 30, 35, 40, 45, 57, 72, 90, 120, 150,
    200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000]
 
 # Reduced bin arrays used when test: true
-test_pu_bins: [0, 50, 100]
-test_jet_eta_bins: [-5.191, 0.0, 5.191]
-test_jet_pt_bins: [8, 50, 120, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000]
+test_pu_bins: [0, 100]
+test_jet_eta_bins: [-5.191,-3.839, -2.5, 0, 2.5, 3.839, 5.191]
+test_jet_pt_bins: [8, 30, 35, 72, 90, 120, 150, 200, 550]
 
 # Response histogram settings (anchors for reuse in response_variables)
-n_bins_response: &n_bins_response 150
-bin_limits_response: &bin_limits_response [0.5, 1.5]
+n_bins_response: &n_bins_response 200
+bin_limits_response: &bin_limits_response [0., 2]
 
 # Resolution plot y-axis limits
 y_lim_resolution: [0, 0.35]
@@ -66,10 +66,10 @@ bin_variables:
     name_plot: nPU
     resolution_x_variable: false
     txt_map_to: Rho_fixedGridRhoFastjetAll
-  MatchedJets_eta:
+  MatchedJets_RecoEta:
     event_var: false
     bin_edges: *jet_eta_bins
-    label: '$\eta$'
+    label: '$\eta^{reco}$'
     name_plot: jet_eta
     resolution_x_variable: false
     txt_name: JetEta
@@ -89,10 +89,10 @@ bin_variables_neutrino:
     name_plot: nPU
     resolution_x_variable: false
     txt_map_to: Rho_fixedGridRhoFastjetAll
-  MatchedJetsNeutrino_eta:
+  MatchedJetsNeutrino_RecoEta:
     event_var: false
     bin_edges: *jet_eta_bins
-    label: '$\eta$'
+    label: '$\eta^{reco}$'
     name_plot: jet_eta
     resolution_x_variable: false
     txt_name: JetEta
@@ -115,7 +115,7 @@ mapping_variables:
     N_bins: 1000
     bin_vars: [Pileup_nPU]
     linear_fit: true
-    fit_with_mean_bin_var: false
+    fit_with_mean_bin_var: true
     txt_name: Rho
     rebin_for_plotting: true
   MatchedJets_JetPtJEC:
@@ -123,64 +123,64 @@ mapping_variables:
     name_plot: jet_reco_pt
     N_bins: 1000
     bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: JEC
     rebin_for_plotting: true
-  MatchedJets_JetPtRaw:
-    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
-    name_plot: jet_reco_pt
-    N_bins: 1000
-    bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: Raw
-    rebin_for_plotting: true
+  # MatchedJets_JetPtRaw:
+  #   label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+  #   name_plot: jet_reco_pt
+  #   N_bins: 1000
+  #   bin_limits: [0, 6000]
+  #   bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+  #   legend_name: Raw
+  #   rebin_for_plotting: true
   MatchedJets_JetPtPNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
     N_bins: 1000
     bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: PNetReg
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: PNet
     rebin_for_plotting: true
   MatchedJets_JetPtUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
     N_bins: 1000
     bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: UparTReg
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: UParT
     rebin_for_plotting: true
-  MatchedJetsNeutrino_JetPtJEC:
-    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
-    name_plot: jet_reco_pt_neutrino
-    N_bins: 1000
-    bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: JEC
-    rebin_for_plotting: true
-  MatchedJetsNeutrino_JetPtRaw:
-    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
-    name_plot: jet_reco_pt_neutrino
-    N_bins: 1000
-    bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: Raw
-    rebin_for_plotting: true
+  # MatchedJetsNeutrino_JetPtJEC:
+  #   label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+  #   name_plot: jet_reco_pt
+  #   N_bins: 1000
+  #   bin_limits: [0, 6000]
+  #   bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+  #   legend_name: JEC
+  #   rebin_for_plotting: true
+  # MatchedJetsNeutrino_JetPtRaw:
+  #   label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+  #   name_plot: jet_reco_pt
+  #   N_bins: 1000
+  #   bin_limits: [0, 6000]
+  #   bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+  #   legend_name: Raw
+  #   rebin_for_plotting: true
   MatchedJetsNeutrino_JetPtPNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
-    name_plot: jet_reco_pt_neutrino
+    name_plot: jet_reco_pt
     N_bins: 1000
     bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: PNetRegNeutrino
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
     rebin_for_plotting: true
   MatchedJetsNeutrino_JetPtUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
-    name_plot: jet_reco_pt_neutrino
+    name_plot: jet_reco_pt
     N_bins: 1000
     bin_limits: [0, 6000]
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: UparTRegNeutrino
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
     rebin_for_plotting: true
 
 # ---------------------------------------------------------------------------
@@ -189,156 +189,156 @@ mapping_variables:
 response_variables:
   MatchedJets_ResponseJEC:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_jec
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: JEC
     map_x_variable: MatchedJets_JetPtJEC
     is_reference: true
     txt_jet_name: AK4PFPuppi
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJets_ResponseRaw:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_raw
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: Raw
     map_x_variable: MatchedJets_JetPtRaw
     is_reference: false
     txt_jet_name: AK4PFPuppiRaw
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJets_ResponsePNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_pnetreg
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: PNetReg
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: PNet
     map_x_variable: MatchedJets_JetPtPNetReg
     is_reference: false
     txt_jet_name: AK4PFPNet
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJets_ResponseUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_upartreg
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: UParTReg
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: UParT
     map_x_variable: MatchedJets_JetPtUparTReg
     is_reference: false
     txt_jet_name: AK4PFUParT
     eta_max: 2.5
-    rebin_for_plotting: false
+    rebin_for_plotting: true
 
 response_variables_neutrino:
   MatchedJetsNeutrino_ResponseJEC:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_jec
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
     legend_name: JEC
     map_x_variable: MatchedJetsNeutrino_JetPtJEC
     is_reference: true
     txt_jet_name: AK4PFPuppiNeutrino
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJetsNeutrino_ResponseRaw:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_raw
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
     legend_name: Raw
     map_x_variable: MatchedJetsNeutrino_JetPtRaw
     is_reference: false
     txt_jet_name: AK4PFPuppiNeutrinoRaw
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJetsNeutrino_ResponsePNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_pnetreg_neutrino
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: PNetRegNeutrino
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJetsNeutrino_ResponseUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_upartreg_neutrino
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: UParTRegNeutrino
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
     eta_max: 2.5
-    rebin_for_plotting: false
+    rebin_for_plotting: true
 
 # Mixed mode: regular JEC/PNetReg/UparTReg + neutrino PNetReg/UparTReg (no Raw)
 response_variables_mixed:
   MatchedJets_ResponseJEC:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_jec
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: JEC
     map_x_variable: MatchedJets_JetPtJEC
     is_reference: true
     txt_jet_name: AK4PFPuppi
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJets_ResponsePNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_pnetreg
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: PNetReg
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: PNet
     map_x_variable: MatchedJets_JetPtPNetReg
     is_reference: false
     txt_jet_name: AK4PFPNet
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJets_ResponseUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_upartreg
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
-    legend_name: UParTReg
+    bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: UParT
     map_x_variable: MatchedJets_JetPtUparTReg
     is_reference: false
     txt_jet_name: AK4PFUParT
     eta_max: 2.5
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJetsNeutrino_ResponsePNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_pnetreg_neutrino
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: PNetRegNeutrino
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
-    rebin_for_plotting: false
+    rebin_for_plotting: true
   MatchedJetsNeutrino_ResponseUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
-    name_plot: response_upartreg_neutrino
+    name_plot: response
     N_bins: *n_bins_response
     bin_limits: *bin_limits_response
-    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
-    legend_name: UParTRegNeutrino
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
     map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
     eta_max: 2.5
-    rebin_for_plotting: false
+    rebin_for_plotting: true
 
 # ---------------------------------------------------------------------------
 # Plot style settings

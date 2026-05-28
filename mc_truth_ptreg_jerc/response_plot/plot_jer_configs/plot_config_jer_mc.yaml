@@ -16,6 +16,13 @@ additional_uncertainty: "0.0"  # add (v*sigma) in quadrature to error
 add_min_err: "0.0"  # add a minimal uncertainty floor in quadrature
 add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
 response_mean_method: "auto"  # auto | gaussian_fit | histogram | mean_storage
+# NSC fit initial parameters [N, S, C, d]
+nsc_fit_parameters: [3.5, 0.5, 0.05, -1.0]
+# NSC fit parameter limits (null = no limit = ±inf); set to null to disable all limits
+nsc_fit_parameter_limits:
+  lower: [-5.0, 0.0, 0.0, null]
+  upper: [20.0, 10.0, 5.0, null]
+
 
 # Bin arrays (anchors allow reuse below without duplication)
 pu_bins: &pu_bins [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]

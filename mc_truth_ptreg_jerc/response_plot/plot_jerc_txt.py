@@ -136,9 +136,9 @@ _JERC_CONFIG = {
         "plot_vs_pt": True,    # True → also produce a vs-pt smooth-curve plot
         "onlyL3Residual": True,
     },
-    "MC_JER": {
+    "NSC_MC_PtResolution": {
         "ylabel": "Jet Energy Resolution",
-        "ylim": (0.0, 0.3),
+        "ylim": (0.0, 0.5),
         "ylim_eta_restricted": (0.0, 0.2),
         "lumitext": None,
         "cmstext": "Simulation Preliminary",
@@ -1425,6 +1425,155 @@ def plot_jerc_vs_pt_data(
 
 
 # ---------------------------------------------------------------------------
+# Per-bin plots (one plot per bin, quantity vs x variable)
+# ---------------------------------------------------------------------------
+
+
+def plot_jerc_per_bin(txt_path, output_dir, data_formats=("png", "pdf"), n_pts=200):
+    """
+    Produce one plot per bin in the txt file showing the JERC quantity as a
+    smooth curve vs the x variable (typically JetPt).
+
+    Each row in the txt file defines a bin (combination of all bin variables)
+    and a formula valid in [x_min, x_max].  This function evaluates that
+    formula on a fine grid and saves the curve.
+
+    Output files go in: output_dir/per_bin/<stem>/
+    """
+    header, rows = _parse_jerc_txt(txt_path)
+    bin_vars = header["bin_vars"]
+    x_var = header["x_var"]
+    formula = header["formula"]
+    stem = _short_stem(txt_path)
+    cfg = _get_jerc_config(stem)
+    param_offset = 0
+    if cfg.get("onlyL3Residual"):
+        formula, param_offset = _extract_l3residual_formula(formula)
+
+    year = _extract_year(txt_path, year_map=_YEAR_MAP)
+    jet_algo = _extract_jet_algo(txt_path)
+    is_ul = "UL" in (year or "")
+    lumi_text = f"{year} ({'13' if is_ul else '13.6'} TeV)" if year else "(13.6 TeV)"
+
+    per_bin_dir = os.path.join(output_dir, "per_bin", stem)
+    os.makedirs(per_bin_dir, exist_ok=True)
+
+    use_log_x = "pt" in x_var.lower()
+
+    for row in rows:
+        bin_edges = row["bin_edges"]
+        x_min, x_max = row["x_min"], row["x_max"]
+        params = row["params"][param_offset:]
+
+        bin_label_parts = []
+        safe_name_parts = []
+        for var in bin_vars:
+            lo, hi = bin_edges[var]
+            bin_label_parts.append(
+                rf"${_latex_label(var)} \in [{lo:.3g},\,{hi:.3g})$"
+            )
+            lo_str = f"{lo:.3g}".replace(".", "p").replace("-", "m")
+            hi_str = f"{hi:.3g}".replace(".", "p").replace("-", "m")
+            safe_name_parts.append(f"{var}{lo_str}to{hi_str}")
+        bin_label = ", ".join(bin_label_parts)
+        safe_name = "_".join(safe_name_parts)
+
+        if use_log_x:
+            x_grid = np.logspace(np.log10(max(x_min, 1.0)), np.log10(x_max), n_pts)
+        else:
+            x_grid = np.linspace(x_min, x_max, n_pts)
+
+        xs, ys = [], []
+        for x in x_grid:
+            try:
+                y = _eval_formula(formula, x, params)
+                if cfg.get("plot_inverse"):
+                    y = 1.0 / y
+            except Exception:
+                continue
+            if not np.isfinite(y) or y <= 0:
+                continue
+            xs.append(float(x))
+            ys.append(float(y))
+
+        if not xs:
+            log.warning("No valid points for bin %s in %s — skipping.", safe_name, txt_path)
+            continue
+
+        annotation = PUPPI_JET_STRING
+        if jet_algo:
+            annotation += f"\n{_format_jet_algo(jet_algo)}"
+        annotation += f"\n{bin_label}"
+
+        series_dict = {
+            "bin": {
+                "data": {"x": [xs, [0.0] * len(xs)], "y": ys},
+                "style": {
+                    "color": _BASE_COLORS[0],
+                    "fmt": "",
+                    "markersize": 0,
+                    "linestyle": "-",
+                    "linewidth": 1.5,
+                    "legend_name": "",
+                    "appear_in_legend": False,
+                },
+            }
+        }
+
+        output_base = os.path.join(per_bin_dir, f"{stem}_{safe_name}")
+
+        plotter = (
+            HEPPlotter("CMS")
+            .set_plot_config(
+                cmstext=cfg["cmstext"],
+                cmstext_font_size=20,
+                lumitext=lumi_text,
+                lumitext_font_size=20,
+                data_formats=list(data_formats),
+            )
+            .set_output(output_base)
+            .set_labels(
+                xlabel=_latex_label(x_var) + " [GeV]",
+                ylabel=cfg["ylabel"],
+            )
+            .set_data(series_dict, plot_type="graph")
+            .set_options(
+                legend=False,
+                set_ylim=True,
+                ylim_bottom_value=cfg["ylim"][0],
+                ylim_top_value=cfg["ylim"][1],
+                grid=True,
+            )
+        )
+
+        plotter.add_annotation(
+            0.05, 0.98, annotation, ha="left", va="top", fontsize="medium"
+        )
+
+        fig = plotter.get_figure()
+        ax = fig.axes[0]
+
+        if use_log_x:
+            ax.set_xscale("log")
+
+        if cfg["hline"] is not None:
+            ax.axhline(
+                cfg["hline"],
+                color="black",
+                linestyle="--",
+                linewidth=1.0,
+                alpha=0.6,
+                zorder=0,
+            )
+
+        for fmt in data_formats:
+            out_path = f"{output_base}.{fmt}"
+            fig.savefig(out_path, bbox_inches="tight", dpi=300, pad_inches=0.05)
+            print(f"Saved: {out_path}")
+        plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 # vs-pt smooth-curve plot
 # ---------------------------------------------------------------------------
 
@@ -1529,6 +1678,15 @@ def main():
             "Printed on the plot.  Only relevant when --plot-mode is 'pt', 'both', or 'auto'."
         ),
     )
+    parser.add_argument(
+        "--plot-per-bin",
+        action="store_true",
+        help=(
+            "Also produce one plot per bin showing the JERC quantity as a smooth "
+            "curve vs the x variable (typically JetPt).  "
+            "Saved in <output>/per_bin/<stem>/ — one subdirectory per input file."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -1578,6 +1736,9 @@ def main():
                 eta_range=pt_eta_range,
                 data_formats=args.formats,
             )
+
+        if args.plot_per_bin:
+            plot_jerc_per_bin(txt_path, args.output, data_formats=args.formats)
 
     if args.combine:
         if len(args.input) < 2:
