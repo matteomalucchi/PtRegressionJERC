@@ -3113,160 +3113,130 @@ def save_txt_resolution(
     log.info("Saved resolution txt to %s", output_path)
 
 
-def plot_1d_inclusive_distributions(
+def _make_inclusive_plotter(series_dict, xlabel, output_name, year):
+    if os.path.exists(f"{output_name}.png"):
+        log.debug("Skipping existing plot: %s.png", output_name)
+        return
+    _ann_y_incl = 0.75 if DP_NOTE_PLOTS else 0.95
+    (
+        HEPPlotter()
+        .set_plot_config(
+            cmstext=(
+                "Simulation Preliminary"
+                if not DP_NOTE_PLOTS
+                else "Simulation\nPreliminary"
+            ),
+            cmstext_font_size=30,
+            lumitext=f"{year} (13.6 TeV)" if year else "",
+            figsize=(13, 13),
+            **({"cmstext_loc": 2} if DP_NOTE_PLOTS else {}),
+        )
+        .set_data(series_dict, plot_type="1d")
+        .set_labels(xlabel=xlabel, ylabel="Events")
+        .set_output(output_name)
+        .set_options(
+            grid=not DP_NOTE_PLOTS,
+            legend=True,
+            legend_loc="upper right",
+            y_log=not DP_NOTE_PLOTS,
+            split_legend=False,
+            ylim_bottom_value=1,
+        )
+        .add_annotation(
+            0.05,
+            _ann_y_incl,
+            PUPPI_JET_STRING + "\nInclusive",
+            coord_type="axes",
+            verticalalignment="top",
+            fontsize=20,
+        )
+    ).run()
+
+
+def plot_1d_inclusive(
     *,
-    response_h_dict,
-    mapping_h_dict,
-    available_response_vars,
-    mapping_vars,
-    bin_var_configs,
+    h_dict,
+    var_configs,
+    plot_type,
     output_dir,
     category,
     year,
 ):
     """
-    Plot inclusive 1D distributions of response, mapping, and binning variables.
+    Plot inclusive 1D distributions for one variable type at a time.
 
-    For each variable, the ND histogram is projected onto the variable axis alone
-    (all bin axes are summed over), giving a dataset-inclusive 1D distribution.
-    Response and mapping variables that share the same ``name_plot`` are overlaid
-    on a single canvas. Each binning variable gets its own plot.
+    plot_type: "response" or "mapping" — groups variables by name_plot and overlays on
+               one canvas; "binvar" — projects bin-variable axes from all histograms.
+    h_dict: response_h_dict, mapping_h_dict, or the mapping h_dict used for binvars.
+    var_configs: available_response_vars, mapping_vars, or bin_var_configs accordingly.
     """
+    if not h_dict or not var_configs:
+        return
     os.makedirs(output_dir, exist_ok=True)
     log.info(
-        "Plotting inclusive 1D distributions for category '%s' in %s",
+        "Plotting inclusive 1D %s distributions for category '%s' in %s",
+        plot_type,
         category,
         output_dir,
     )
-    annotation_base = PUPPI_JET_STRING + "\nInclusive"
 
-    def _make_plotter(series_dict, xlabel, output_name):
-        _ann_y_incl = 0.75 if DP_NOTE_PLOTS else 0.95
-        return (
-            HEPPlotter()
-            .set_plot_config(
-                cmstext=(
-                    "Simulation Preliminary"
-                    if not DP_NOTE_PLOTS
-                    else "Simulation\nPreliminary"
-                ),
-                cmstext_font_size=30,
-                lumitext=f"{year} (13.6 TeV)" if year else "",
-                figsize=(13, 13),
-                **({"cmstext_loc": 2} if DP_NOTE_PLOTS else {}),
-            )
-            .set_data(series_dict, plot_type="1d")
-            .set_labels(xlabel=xlabel, ylabel="Events")
-            .set_output(output_name)
-            .set_options(
-                grid=not DP_NOTE_PLOTS,
-                legend=True,
-                legend_loc="upper right",
-                y_log=not DP_NOTE_PLOTS,
-                split_legend=False,
-                ylim_bottom_value=1,
-            )
-            .add_annotation(
-                0.05,
-                _ann_y_incl,
-                annotation_base,
-                coord_type="axes",
-                verticalalignment="top",
-                fontsize=20,
-            )
-        )
-
-    # --- response variables: group by name_plot, overlay on one canvas ---
-    response_groups = {}
-    for var_name, h_nd in response_h_dict.items():
-        if var_name not in available_response_vars:
-            continue
-        name_plot = available_response_vars[var_name].get("name_plot", var_name)
-        response_groups.setdefault(name_plot, {})[var_name] = h_nd
-
-    for name_plot, group in response_groups.items():
-        series_dict = {}
-        xlabel = None
-        for var_name, h_nd in group.items():
-            h_1d = h_nd.project(var_name)
-            if np.sum(h_1d.values()) == 0:
+    if plot_type in ("response", "mapping"):
+        groups = {}
+        for var_name, h_nd in h_dict.items():
+            if var_name not in var_configs:
                 continue
-            if available_response_vars[var_name].get("rebin_for_plotting", False):
-                h_1d, _ = rebin_histogram(h_1d)
-            if xlabel is None:
-                xlabel = h_nd.axes[var_name].label
-            series_dict[var_name] = {
-                "data": h_1d,
-                "style": {
-                    "color": get_color(var_name),
-                    "legend_name": available_response_vars[var_name].get(
-                        "legend_name", var_name
-                    ),
-                    "linewidth": 2,
-                },
-            }
-        if not series_dict:
-            continue
-        output_name = f"{output_dir}/inclusive_response_{name_plot}_{category}"
-        _make_plotter(series_dict, xlabel or name_plot, output_name).run()
+            name_plot = var_configs[var_name].get("name_plot", var_name)
+            groups.setdefault(name_plot, {})[var_name] = h_nd
 
-    # --- mapping variables: group by name_plot, overlay on one canvas ---
-    mapping_groups = {}
-    for var_name, h_nd in mapping_h_dict.items():
-        if var_name not in mapping_vars:
-            continue
-        name_plot = mapping_vars[var_name].get("name_plot", var_name)
-        mapping_groups.setdefault(name_plot, {})[var_name] = h_nd
-
-    for name_plot, group in mapping_groups.items():
-        series_dict = {}
-        xlabel = None
-        for var_name, h_nd in group.items():
-            h_1d = h_nd.project(var_name)
-            if np.sum(h_1d.values()) == 0:
+        for name_plot, group in groups.items():
+            series_dict = {}
+            xlabel = None
+            for var_name, h_nd in group.items():
+                h_1d = h_nd.project(var_name)
+                if np.sum(h_1d.values()) == 0:
+                    continue
+                if var_configs[var_name].get("rebin_for_plotting", False):
+                    h_1d, _ = rebin_histogram(h_1d)
+                if xlabel is None:
+                    xlabel = h_nd.axes[var_name].label
+                series_dict[var_name] = {
+                    "data": h_1d,
+                    "style": {
+                        "color": get_color(var_name),
+                        "legend_name": var_configs[var_name].get("legend_name", var_name),
+                        "linewidth": 2,
+                    },
+                }
+            if not series_dict:
                 continue
-            if mapping_vars[var_name].get("rebin_for_plotting", False):
-                h_1d, _ = rebin_histogram(h_1d)
-            if xlabel is None:
-                xlabel = h_nd.axes[var_name].label
-            series_dict[var_name] = {
-                "data": h_1d,
-                "style": {
-                    "color": get_color(var_name),
-                    "legend_name": mapping_vars[var_name].get("legend_name", var_name),
-                    "linewidth": 2,
-                },
-            }
-        if not series_dict:
-            continue
-        output_name = f"{output_dir}/inclusive_mapping_{name_plot}_{category}"
-        _make_plotter(series_dict, xlabel or name_plot, output_name).run()
+            output_name = f"{output_dir}/inclusive_{plot_type}_{name_plot}_{category}"
+            _make_inclusive_plotter(series_dict, xlabel or name_plot, output_name, year)
 
-    # --- bin variables: project from any available ND histogram ---
-    seen_bin_vars = {}
-    for h_nd in list(mapping_h_dict.values()) + list(response_h_dict.values()):
-        for axis in h_nd.axes:
-            bv_name = axis.name
-            if bv_name in bin_var_configs and bv_name not in seen_bin_vars:
-                h_1d = h_nd.project(bv_name)
-                if np.sum(h_1d.values()) > 0:
-                    seen_bin_vars[bv_name] = h_1d
+    else:  # "binvar"
+        seen_bin_vars = {}
+        for h_nd in h_dict.values():
+            for axis in h_nd.axes:
+                bv_name = axis.name
+                if bv_name in var_configs and bv_name not in seen_bin_vars:
+                    h_1d = h_nd.project(bv_name)
+                    if np.sum(h_1d.values()) > 0:
+                        seen_bin_vars[bv_name] = h_1d
 
-    for bv_name, h_1d in seen_bin_vars.items():
-        bv_cfg = bin_var_configs[bv_name]
-        xlabel = bv_cfg.get("label", bv_name)
-        series_dict = {
-            bv_name: {
-                "data": h_1d,
-                "style": {
-                    "color": None,
-                    "legend_name": xlabel,
-                    "linewidth": 2,
-                },
+        for bv_name, h_1d in seen_bin_vars.items():
+            bv_cfg = var_configs[bv_name]
+            xlabel = bv_cfg.get("label", bv_name)
+            series_dict = {
+                bv_name: {
+                    "data": h_1d,
+                    "style": {
+                        "color": None,
+                        "legend_name": xlabel,
+                        "linewidth": 2,
+                    },
+                }
             }
-        }
-        output_name = f"{output_dir}/inclusive_binvar_{bv_cfg['name_plot']}_{category}"
-        _make_plotter(series_dict, xlabel, output_name).run()
+            output_name = f"{output_dir}/inclusive_binvar_{bv_cfg['name_plot']}_{category}"
+            _make_inclusive_plotter(series_dict, xlabel, output_name, year)
 
 
 def plot_mapping_variable_histograms(*, category, year, h_dict):
@@ -3559,6 +3529,24 @@ def main():
                 ](cfg["bin_variables"][lf_var_cfg["bin_vars"][0]]["bin_edges"])
 
         plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
+        # Mapping variables and bin variables are mode-independent: plot once per category.
+        inclusive_dir = f"{args.output}/inclusive_1d_{category}"
+        plot_1d_inclusive(
+            h_dict=h_dict,
+            var_configs=cfg["mapping_variables"],
+            plot_type="mapping",
+            output_dir=inclusive_dir,
+            category=category,
+            year=year,
+        )
+        plot_1d_inclusive(
+            h_dict=h_dict,
+            var_configs=cfg["bin_variables_mixed"],
+            plot_type="binvar",
+            output_dir=inclusive_dir,
+            category=category,
+            year=year,
+        )
 
         # Process response variables from loaded data
         for mode in ["regular", "neutrino", "mixed"]:
@@ -3608,13 +3596,10 @@ def main():
                 results_for_mapping=results,
                 linear_fit_maps=linear_fit_maps,
             )
-            inclusive_dir = f"{args.output}/inclusive_1d_{category}_{mode}"
-            plot_1d_inclusive_distributions(
-                response_h_dict=response_h_dict,
-                mapping_h_dict=h_dict,
-                available_response_vars=available_response_vars,
-                mapping_vars=cfg["mapping_variables"],
-                bin_var_configs=bin_vars,
+            plot_1d_inclusive(
+                h_dict=response_h_dict,
+                var_configs=available_response_vars,
+                plot_type="response",
                 output_dir=inclusive_dir,
                 category=category,
                 year=year,
@@ -3765,6 +3750,24 @@ def main():
 
         # Plot
         plot_mapping_variable_histograms(category=category, year=year, h_dict=h_dict)
+        # Mapping variables and bin variables are mode-independent: plot once per category.
+        inclusive_dir = f"{args.output}/inclusive_1d_{category}"
+        plot_1d_inclusive(
+            h_dict=h_dict,
+            var_configs=cfg["mapping_variables"],
+            plot_type="mapping",
+            output_dir=inclusive_dir,
+            category=category,
+            year=year,
+        )
+        plot_1d_inclusive(
+            h_dict=h_dict,
+            var_configs=cfg["bin_variables_mixed"],
+            plot_type="binvar",
+            output_dir=inclusive_dir,
+            category=category,
+            year=year,
+        )
         for response_type, resp_data in category_data["response_data"].items():
 
             process_response_type(
@@ -3778,13 +3781,10 @@ def main():
                 results_for_mapping=results,
                 linear_fit_maps=linear_fit_maps,
             )
-            inclusive_dir = f"{args.output}/inclusive_1d_{category}_{response_type}"
-            plot_1d_inclusive_distributions(
-                response_h_dict=resp_data["response_h_dict"],
-                mapping_h_dict=h_dict,
-                available_response_vars=resp_data["available_response_vars"],
-                mapping_vars=cfg["mapping_variables"],
-                bin_var_configs=resp_data["bin_vars"],
+            plot_1d_inclusive(
+                h_dict=resp_data["response_h_dict"],
+                var_configs=resp_data["available_response_vars"],
+                plot_type="response",
                 output_dir=inclusive_dir,
                 category=category,
                 year=year,
