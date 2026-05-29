@@ -152,7 +152,7 @@ cd response_plot/
 python plot_jer_mc.py \
     -i <input_dir> \
     -o <output_dir> \
-    -c plot_jer_configs/plot_config_jer_mc_coarsePU_rebinResponse.yaml \
+    [-c plot_jer_configs/plot_config_jer_mc_coarsePU_rebinResponse.yaml] \
     [-w <N_workers>] \
     [--histo] \
     [--novars] \
@@ -168,7 +168,7 @@ python plot_jer_mc.py \
 |---|---|---|
 | `-i`/`--input-dir` | required | Directory containing `.coffea` output files from pocket-coffea |
 | `-o`/`--output` | `./plot_jer_mc/` | Output directory for all plots, coffea file, and log |
-| `-c`/`--config` | required | Path to the YAML configuration file (see below) |
+| `-c`/`--config` | `plot_jer_configs/plot_config_jer_mc_default.yaml` | Path to the YAML configuration file (see below). When omitted, the built-in default config is used automatically. Any option present in the provided file overwrites the corresponding default; options absent keep their default values. |
 | `-w`/`--workers` | `1` | Number of parallel workers for multiprocessing (speeds up histogram filling and Gaussian fitting) |
 | `--histo` | off | Also produce 1D/2D histogram plots of the response and mapping variables |
 | `--novars` | off | Use the old save format where variation arrays are not stored inside the coffea files |
@@ -179,7 +179,15 @@ python plot_jer_mc.py \
 
 #### Typical workflows
 
-**First run from scratch:**
+**First run from scratch (using the default config):**
+
+```bash
+python plot_jer_mc.py -i /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_2022_postEE \
+    -o plots_2022postEE \
+    -w 16 --histo
+```
+
+**First run from scratch (with a custom config):**
 
 ```bash
 python plot_jer_mc.py -i /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_2022_postEE \
@@ -267,6 +275,8 @@ For each pair of files `<stem_a>` and `<stem_b>`:
 ### Plot configuration file (`plot_jer_configs/`)
 
 The YAML configuration file controls every aspect of the binning, variables, response histograms, and plot style. Several pre-made configurations exist in `response_plot/plot_jer_configs/`.
+
+The file `plot_jer_configs/plot_config_jer_mc_default.yaml` is the built-in default loaded automatically when `-c` is not specified. Every option in that file is annotated with an inline comment explaining its purpose. Pass a custom config with `-c` to override only the options you need; the rest will keep their default values.
 
 #### Boolean flags
 

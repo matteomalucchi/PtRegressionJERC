@@ -51,10 +51,34 @@ def setup_logging(output_dir: str) -> None:
     log.info("Logging to %s", log_path)
 
 
-def _load_config(config_path, test_override=False):
-    """Load and process the YAML configuration file."""
-    with open(config_path) as f:
-        cfg = yaml.safe_load(f)
+def _deep_merge(base, override):
+    """Recursively merge *override* into *base*. Lists are replaced, not extended."""
+    result = dict(base)
+    for key, val in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(val, dict):
+            result[key] = _deep_merge(result[key], val)
+        else:
+            result[key] = val
+    return result
+
+
+def _load_config(config_path=None, default_path=None, test_override=False):
+    """Load and process the YAML configuration file.
+
+    *default_path* is always loaded first. When *config_path* is also given
+    its keys are deep-merged on top so that only the options present in the
+    custom file override the defaults; everything else keeps its default value.
+    """
+    if default_path is not None:
+        with open(default_path) as f:
+            cfg = yaml.safe_load(f)
+        if config_path is not None:
+            with open(config_path) as f:
+                override = yaml.safe_load(f)
+            cfg = _deep_merge(cfg, override)
+    else:
+        with open(config_path) as f:
+            cfg = yaml.safe_load(f)
 
     # Convert bin_edges lists to numpy arrays in bin_variable dicts
     for bv_dict_key in (
@@ -124,6 +148,12 @@ def _load_config(config_path, test_override=False):
 
 cfg = None
 
+_DEFAULT_CONFIG = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "plot_jer_configs",
+    "plot_config_jer_mc_default.yaml",
+)
+
 parser = argparse.ArgumentParser(description="Plot MET distributions from coffea files")
 parser.add_argument(
     "-i",
@@ -172,8 +202,13 @@ parser.add_argument(
     "-c",
     "--config",
     type=str,
-    required=True,
-    help="Path to YAML configuration file",
+    default=None,
+    help=(
+        "Path to YAML configuration file. Options present in this file overwrite "
+        "the corresponding defaults from plot_jer_configs/plot_config_jer_mc_default.yaml; "
+        "options absent from this file keep their default values. "
+        "When omitted, the built-in default config is used in full."
+    ),
 )
 parser.add_argument(
     "--refit",
@@ -195,7 +230,11 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-cfg = _load_config(args.config, test_override=args.test)
+cfg = _load_config(
+    config_path=args.config,
+    default_path=_DEFAULT_CONFIG,
+    test_override=args.test,
+)
 
 
 PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
