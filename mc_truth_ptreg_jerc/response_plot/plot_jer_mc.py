@@ -26,6 +26,7 @@ from utils_configs.plot.HEPPlotter import HEPPlotter
 import met_ptreg_performance.helpers as helpers
 
 from mc_truth_ptreg_jerc.response_plot.confidence import Confidence_numpy
+import mc_truth_ptreg_jerc.response_plot.plot_jer_utils as plt_utils
 
 
 def setup_logging(output_dir: str) -> None:
@@ -126,23 +127,23 @@ def _load_config(config_path=None, default_path=None, test_override=False):
             **cfg.get("bin_variables_neutrino", {}),
         }
 
-    # Convert bin_limits lists to tuples in mapping/response variable dicts
-    for var_dict_key in (
-        "mapping_variables",
-        "response_variables",
-        "response_variables_neutrino",
-        "response_variables_mixed",
-    ):
-        if var_dict_key not in cfg:
-            continue
-        for var_cfg in cfg[var_dict_key].values():
-            if "bin_limits" in var_cfg:
-                var_cfg["bin_limits"] = tuple(var_cfg["bin_limits"])
+    # # Convert bin_limits lists to tuples in mapping/response variable dicts
+    # for var_dict_key in (
+    #     "mapping_variables",
+    #     "response_variables",
+    #     "response_variables_neutrino",
+    #     "response_variables_mixed",
+    # ):
+    #     if var_dict_key not in cfg:
+    #         continue
+    #     for var_cfg in cfg[var_dict_key].values():
+    #         if "bin_limits" in var_cfg:
+    #             var_cfg["bin_limits"] = tuple(var_cfg["bin_limits"])
 
-    # Convert y_lim_resolution list to tuple
-    if "y_lim_resolution" in cfg:
-        cfg["y_lim_resolution"] = tuple(cfg["y_lim_resolution"])
-
+    # # Convert y_lim_resolution list to tuple
+    # if "y_lim_resolution" in cfg:
+    #     cfg["y_lim_resolution"] = tuple(cfg["y_lim_resolution"])
+        
     return cfg
 
 
@@ -714,13 +715,58 @@ def plot_resolution_vs_x_variable(
                             f"map_x_variable '{map_var_name}' not found in h_mean_dict for response variable '{response_var}'"
                         )
                     h_mean = h_mean_dict[map_var_name]["mean"]
-                    # h_mean is expected to share the same axis ordering as the merged dims
+                    h_mean_bin_vars = h_mean_dict[map_var_name].get(
+                        "bin_vars", [ax.name for ax in h_mean.axes]
+                    )
+                    # Map name_plot → position in h_mean axes so we can index
+                    # correctly even when axis names differ between the reference
+                    # response variable (e.g. MatchedJets_RecoEta) and the
+                    # mapping variable (e.g. MatchedJetsNeutrino_RecoEta).
+                    h_mean_np_to_pos = {
+                        _name_plot(bv): i for i, bv in enumerate(h_mean_bin_vars)
+                    }
                     h_mean_view = h_mean.view()
-                    x_values = []
-                    for x_idx in valid_x_indices:
-                        mean_idx = list(y_bin_idx) + [x_idx]
-                        x_values.append(h_mean_view.value[tuple(mean_idx)])
-                    x_values = np.asarray(x_values)
+
+                    if h_mean.ndim != len(y_bin_idx) + 1:
+                        log.warning(
+                            "h_mean dimension mismatch for '%s': expected %d dims "
+                            "(y=%s + x) but got %d (bin_vars=%s). "
+                            "Falling back to bin centres.",
+                            map_var_name,
+                            len(y_bin_idx) + 1,
+                            list(y_np),
+                            h_mean.ndim,
+                            h_mean_bin_vars,
+                        )
+                        x_values = x_bin_centers[valid_x_indices]
+                    else:
+                        x_values = []
+                        for x_idx in valid_x_indices:
+                            mean_idx = [None] * h_mean.ndim
+                            # Assign y-axis indices by matching name_plot
+                            ok = True
+                            for i, y_dim_np in enumerate(y_np):
+                                pos = h_mean_np_to_pos.get(y_dim_np)
+                                if pos is None:
+                                    log.warning(
+                                        "y-dim '%s' not found in h_mean axes %s "
+                                        "for '%s'; falling back to bin centre.",
+                                        y_dim_np, h_mean_bin_vars, map_var_name,
+                                    )
+                                    ok = False
+                                    break
+                                mean_idx[pos] = y_bin_idx[i]
+                            if not ok:
+                                x_values.append(x_bin_centers[x_idx])
+                                continue
+                            # The remaining unfilled position is the x axis
+                            remaining = [j for j, v in enumerate(mean_idx) if v is None]
+                            if len(remaining) != 1:
+                                x_values.append(x_bin_centers[x_idx])
+                                continue
+                            mean_idx[remaining[0]] = x_idx
+                            x_values.append(h_mean_view.value[tuple(mean_idx)])
+                        x_values = np.asarray(x_values)
 
                     if xlabel is None:
                         xlabel = (
@@ -2053,7 +2099,7 @@ def _compute_resolution_from_histogram(
                                 1
                             ]
                         else:
-                            log.warning(
+                            log.debug(
                                 "Fit quality too poor for bin %s for '%s' (best sigma rel. err. >= %.2f): setting resolution to NaN",
                                 bin_label_dict[bin_idx]["label"],
                                 response_var_name,
@@ -2063,7 +2109,7 @@ def _compute_resolution_from_histogram(
                             resolution_grid[bin_idx] = np.nan
                             resolutions_uncertainty[bin_idx] = 0
                     else:
-                        log.warning(
+                        log.debug(
                             "Not enough valid points for Gaussian fit in bin %s for '%s': n_points=%d, total_counts=%.1f",
                             bin_label_dict[bin_idx]["label"],
                             response_var_name,
@@ -2072,7 +2118,7 @@ def _compute_resolution_from_histogram(
                         )
                         failed = True
                 except Exception as e:
-                    log.error(
+                    log.debug(
                         "Failed to fit Gaussian for bin %s for '%s': %s",
                         bin_label_dict[bin_idx]["label"],
                         response_var_name,
@@ -2119,7 +2165,7 @@ def _compute_resolution_from_histogram(
                         response_means[bin_idx] = np.nan
                         response_means_uncertainty[bin_idx] = 0
                 except Exception as e:
-                    log.error(
+                    log.debug(
                         "Failed to compute resolution for bin %s for '%s': %s",
                         bin_label_dict[bin_idx]["label"],
                         response_var_name,
@@ -2135,7 +2181,7 @@ def _compute_resolution_from_histogram(
             failed = True
 
         if failed:
-            log.warning(
+            log.debug(
                 "Setting resolution to NaN for bin %s for '%s' due to failure",
                 bin_label_dict[bin_idx]["label"],
                 response_var_name,
@@ -3035,6 +3081,20 @@ def save_fit_results(fit_results, output_path):
         fr = dict(fit_result)
         fr.pop("fit_func", None)
 
+        for key in ("params_err", "cov"):
+            val = fr.get(key)
+            if val is None:
+                continue
+            arr = np.asarray(val, dtype=float)
+            if not np.all(np.isfinite(arr)):
+                log.error(
+                    "Fit result for '%s': '%s' contains non-finite values (%s) — saving as null.",
+                    response_var,
+                    key,
+                    arr,
+                )
+                fr[key] = None
+
         serializable[response_var] = _to_builtin(fr)
 
     with open(output_path, "w") as f:
@@ -3154,8 +3214,10 @@ def save_txt_resolution(
             if "txt_map_to" in bin_var_cfg:
                 fit_map = (linear_fit_maps or {}).get(bin_var_cfg["txt_map_to"])
                 if fit_map is not None:
+                    is_first_edge = lo == bin_var_cfg["bin_edges"][0]
                     lo, hi = fit_map["fit_func"](np.array([lo, hi]))
-                    lo = 0.0
+                    if is_first_edge:
+                        lo = 0.0
             row_cols.extend([lo, hi])
 
         if not build_ok:
@@ -3356,6 +3418,17 @@ def get_bin_vars_for_mode(mode):
         raise ValueError(f"Unknown mode: {mode}")
 
 
+def get_response_vars_for_mode(mode):
+    if mode == "regular":
+        return cfg["response_variables"]
+    elif mode == "neutrino":
+        return cfg["response_variables_neutrino"]
+    elif mode == "mixed":
+        return cfg["response_variables_mixed"]
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+
 def process_response_type(
     *,
     category,
@@ -3467,8 +3540,8 @@ def process_response_type(
         os.makedirs(output_dir, exist_ok=True)
         plot_resolution_vs_x_variable(
             response_types_dict=response_tot_dict,
-            bin_var_configs=bin_vars,
             response_vars=available_response_vars,
+            bin_var_configs=bin_vars,
             mapping_dict=cfg["mapping_variables"],
             output_dir=output_dir,
             year=year,
@@ -3480,8 +3553,8 @@ def process_response_type(
         os.makedirs(output_dir, exist_ok=True)
         fit_results = plot_resolution_vs_x_variable(
             response_types_dict=response_tot_dict,
-            bin_var_configs=bin_vars,
             response_vars=available_response_vars,
+            bin_var_configs=bin_vars,
             mapping_dict=cfg["mapping_variables"],
             output_dir=output_dir,
             year=year,
@@ -3492,6 +3565,12 @@ def process_response_type(
         save_fit_results(
             fit_results,
             f"{args.output}/resolution_fit_results_{category}{suffix}.json",
+        )
+        plt_utils.plot_nsc_fit_summary(
+            fit_results,
+            bin_vars,
+            output_dir,
+            year=year,
         )
 
         for resp_var_name, resp_var_cfg in available_response_vars.items():
@@ -3647,7 +3726,12 @@ def main():
             resp_data = cat_data["response_data"][mode]
             response_h_dict = resp_data["response_h_dict"]
             response_h_mean_dict = resp_data.get("response_h_mean_dict", {}) or {}
-            available_response_vars = resp_data["available_response_vars"]
+            current_response_vars = get_response_vars_for_mode(mode)
+            available_response_vars = {
+                k: current_response_vars[k]
+                for k in current_response_vars
+                if k in response_h_dict
+            }
 
             bin_vars = get_bin_vars_for_mode(mode)
 
@@ -3666,7 +3750,7 @@ def main():
                         )[0]
                         for vn, h in response_h_mean_dict.items()
                     }
-                log.info("--refit mode='%s': recomputing Gaussian fit...", mode)
+                log.info("--refit mode='%s': recomputing resolution...", mode)
                 response_tot_dict = compute_binned_resolution_from_histograms(
                     h_dict=response_h_dict,
                     bin_var_names=list(bin_vars.keys()),
@@ -3784,7 +3868,6 @@ def main():
         ):
             # Determine which bin_vars to use based on neutrino flag
             bin_vars = get_bin_vars_for_mode(mode)
-
             bin_var_names = list(bin_vars.keys())
 
             # Filter response variables to only those available in data
