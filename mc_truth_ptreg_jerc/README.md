@@ -293,6 +293,46 @@ The file `plot_jer_configs/plot_config_jer_mc_default.yaml` is the built-in defa
 | `gaussian_fit_max_sigma_rel_err` | `1.0` | Reject bins where the fitted `sigma_err / sigma` exceeds this value (resolution becomes NaN) |
 | `min_events_for_fit` | `50` | Minimum number of events in a 1D response slice before any fit or CI estimation is attempted |
 | `ci_conf_level` | `0.87` | Confidence level used by the CI estimator when `gaussian_fit_resolution: false` |
+| `save_response_summary` | `false` | Save a JSON summary of response histograms and fit results for later use in the JME text-file output |
+
+#### Fitting backend and convergence options
+
+All fits (per-bin Gaussian resolution, NSC resolution-vs-$p_T$, linear $\rho$-vs-$\mu$ mapping) share a single backend selected by `fit_backend`. The default `curve_fit` keeps the previous behaviour; switch to `iminuit` for the MINUIT minimizer ([documentation](https://scikit-hep.org/iminuit/)), which is often more robust for the NSC and Gaussian fits.
+
+```yaml
+fit_backend: curve_fit   # "curve_fit" (default) or "iminuit"
+```
+
+**`iminuit_options`** (used only when `fit_backend: iminuit`):
+
+| Sub-key | Default | Description |
+|---|---|---|
+| `optimizer` | `migrad` | Minimiser to run: `"migrad"` (recommended), `"simplex"`, or `"scan"` |
+| `run_simplex_first` | `false` | Run a SIMPLEX pass before MIGRAD to escape shallow local minima |
+| `strategy` | `1` | MINUIT strategy level: `0` = fast, `1` = default, `2` = accurate (slower, better error estimates) |
+| `tol` | `null` | EDM convergence tolerance; `null` uses the iminuit default |
+| `max_calls` | `0` | Maximum function calls per minimisation step; `0` = no limit |
+| `use_minos` | `false` | Run MINOS after MIGRAD to compute asymmetric uncertainties |
+
+**`curve_fit_options`** (used only when `fit_backend: curve_fit`):
+
+| Sub-key | Default | Description |
+|---|---|---|
+| `method` | `null` | scipy method: `null` (auto: LM when unbounded, TRF when bounded), `"lm"`, `"trf"`, or `"dogbox"` |
+| `maxfev` | `100000` | Maximum number of function evaluations |
+
+#### NSC fit options
+
+Options controlling the NSC formula ($\sigma/p_T = \sqrt{N^2/p_T^2 + S^2 p_T^d + C^2}$) fit to the resolution-vs-$p_T$ curves:
+
+| Key | Default | Description |
+|---|---|---|
+| `nsc_fit_parameters` | `[3.5, 0.5, 0.05, -1.0]` | Initial values `[N, S, C, d]` for the NSC fit |
+| `nsc_fit_parameter_limits` | all `null` | Lower and upper bounds per parameter; `null` entries are ±∞. Set the whole key to `null` to disable all limits |
+| `nsc_fix_parameters` | all `null` | Per-parameter list: float = fix to that value, `null` = free. Example: `[null, null, null, -1.0]` fixes `d=-1.0` |
+| `nsc_fit_x_clip` | `null` | `[min, max]` range to clip the x-axis before fitting (e.g. `[15, 3000]`); `null` disables clipping |
+
+These keys can also be set **per response variable** to override the global values for that variable only.
 
 #### Bin arrays
 
