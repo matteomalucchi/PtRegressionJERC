@@ -404,6 +404,90 @@ def _wrap_with_fixed_params(fit_function, fixed_params, p0, bounds):
     return wrapped, free_p0, free_bounds, reconstruct
 
 
+def _fit_iminuit(fit_function, x, y, sigma, n_params, p0, bounds, opts):
+    """Least-squares fit with iminuit, returning ``(popt, pcov)`` like curve_fit.
+
+    Keeping the return signature identical to ``scipy.optimize.curve_fit`` means
+    the surrounding quality-metric code in :func:`perform_fit` is unchanged.
+
+    Parameters
+    ----------
+    fit_function : callable
+        Model ``f(x, *params)``. May be a variadic wrapper produced by
+        :func:`_wrap_with_fixed_params`; the parameter-vector cost below avoids
+        iminuit's signature introspection so such functions work too.
+    sigma : array-like or None
+        1-sigma uncertainties on ``y``; ``None`` means an unweighted fit.
+    opts : dict
+        The ``iminuit_options`` block from the config (optimizer, strategy, ...).
+
+    Returns
+    -------
+    (popt, pcov) : tuple of numpy.ndarray
+        Best-fit parameters and covariance matrix, or ``(None, None)`` if the
+        minimisation did not converge to a valid result.
+    """
+    from iminuit import Minuit
+
+    opts = opts or {}
+    yerr = sigma if sigma is not None else np.ones_like(y)
+
+    def chi2(par):
+        residuals = (y - fit_function(x, *par)) / yerr
+        return float(np.sum(residuals * residuals))
+
+    chi2.errordef = Minuit.LEAST_SQUARES
+
+    start = (
+        np.asarray(p0, dtype=float)
+        if p0 is not None
+        else np.ones(n_params, dtype=float)
+    )
+    names = [f"p{i}" for i in range(len(start))]
+    m = Minuit(chi2, start, name=names)
+
+    if bounds != (-np.inf, np.inf):
+        lo, hi = bounds
+        m.limits = [
+            (
+                None if not np.isfinite(low) else low,
+                None if not np.isfinite(high) else high,
+            )
+            for low, high in zip(lo, hi)
+        ]
+
+    strategy = opts.get("strategy")
+    if strategy is not None:
+        m.strategy = int(strategy)
+    tol = opts.get("tol")
+    if tol is not None:
+        m.tol = float(tol)
+    ncall = opts.get("max_calls") or None
+
+    optimizer = str(opts.get("optimizer", "migrad")).lower()
+    if opts.get("run_simplex_first"):
+        m.simplex(ncall=ncall)
+
+    if optimizer == "simplex":
+        m.simplex(ncall=ncall)
+    elif optimizer == "scan":
+        m.scan(ncall=ncall)
+    else:
+        m.migrad(ncall=ncall)
+
+    if opts.get("use_minos"):
+        try:
+            m.minos()
+        except RuntimeError as exc:
+            log.warning("iminuit MINOS failed: %s", exc)
+
+    if not m.valid or m.covariance is None:
+        log.error("iminuit fit did not converge to a valid minimum")
+        return None, None
+
+    return np.asarray(m.values, dtype=float), np.asarray(m.covariance, dtype=float)
+
+
 def perform_fit(
     x,
     y,
@@ -493,30 +577,55 @@ def perform_fit(
     )
     sigma = y_err_arr if use_sigma else None
 
-    _curve_fit_kwargs = dict(
-        sigma=sigma,
-        absolute_sigma=absolute_sigma if use_sigma else False,
-        p0=p0,
-        bounds=bounds,
-        maxfev=100000,
-    )
-    try:
-        popt, pcov = curve_fit(fit_function, x, y, **_curve_fit_kwargs)
-    except RuntimeError:
-        # Levenberg-Marquardt failed; retry with Trust Region Reflective which
-        # handles poorly-scaled problems more robustly.
-        try:
-            _trf_bounds = bounds if bounds != (-np.inf, np.inf) else (-np.inf, np.inf)
-            popt, pcov = curve_fit(
-                fit_function,
-                x,
-                y,
-                method="trf",
-                **{**_curve_fit_kwargs, "bounds": _trf_bounds},
-            )
-        except RuntimeError as exc:
-            log.error("Fit failed: %s", exc)
+    # Select the fitting backend from the (module-global) config. Defaults to
+    # scipy curve_fit so existing configs keep their previous behaviour.
+    _cfg = cfg or {}
+    backend = str(_cfg.get("fit_backend", "curve_fit")).lower()
+
+    if backend == "iminuit":
+        popt, pcov = _fit_iminuit(
+            fit_function,
+            x,
+            y,
+            sigma,
+            int(n_params),
+            p0,
+            bounds,
+            _cfg.get("iminuit_options"),
+        )
+        if popt is None:
             return invalid_dict
+    else:
+        _cf_opts = _cfg.get("curve_fit_options") or {}
+        _curve_fit_kwargs = dict(
+            sigma=sigma,
+            absolute_sigma=absolute_sigma if use_sigma else False,
+            p0=p0,
+            bounds=bounds,
+            maxfev=int(_cf_opts.get("maxfev", 100000)),
+        )
+        _cf_method = _cf_opts.get("method")
+        if _cf_method is not None:
+            _curve_fit_kwargs["method"] = _cf_method
+        try:
+            popt, pcov = curve_fit(fit_function, x, y, **_curve_fit_kwargs)
+        except RuntimeError:
+            # Levenberg-Marquardt failed; retry with Trust Region Reflective
+            # which handles poorly-scaled problems more robustly.
+            try:
+                _trf_bounds = (
+                    bounds if bounds != (-np.inf, np.inf) else (-np.inf, np.inf)
+                )
+                popt, pcov = curve_fit(
+                    fit_function,
+                    x,
+                    y,
+                    method="trf",
+                    **{**_curve_fit_kwargs, "bounds": _trf_bounds},
+                )
+            except RuntimeError as exc:
+                log.error("Fit failed: %s", exc)
+                return invalid_dict
 
     params = np.array(popt, dtype=float)
     params_err = (
