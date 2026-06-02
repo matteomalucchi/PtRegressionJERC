@@ -67,8 +67,9 @@ def _load_config(config_path=None, default_path=None, test_override=False):
     """Load and process the YAML configuration file.
 
     *default_path* is always loaded first. When *config_path* is also given
-    its keys are deep-merged on top so that only the options present in the
-    custom file override the defaults; everything else keeps its default value.
+    its keys are merged on top: scalar/list values are replaced, and dict
+    values (e.g. bin_variables, mapping_variables) are replaced wholesale so
+    that the specific config fully controls each section it defines.
     """
     if default_path is not None:
         with open(default_path) as f:
@@ -76,7 +77,8 @@ def _load_config(config_path=None, default_path=None, test_override=False):
         if config_path is not None:
             with open(config_path) as f:
                 override = yaml.safe_load(f)
-            cfg = _deep_merge(cfg, override)
+            cfg = {**cfg, **override}
+            # cfg = _deep_merge(cfg, override)
     else:
         with open(config_path) as f:
             cfg = yaml.safe_load(f)
@@ -1653,6 +1655,7 @@ def _apply_response_mean_method(
     bin_shape,
     response_axis,
     response_vars,
+    gaussian_fit_resolution=False,
 ):
     """Optionally override the per-bin response mean using a configurable method.
 
@@ -1670,17 +1673,28 @@ def _apply_response_mean_method(
       values (as produced by ``create_ND_histo``). The uncertainty is the
       standard error of the mean ``sqrt(variance / count)``.
 
-    When the option is unset (or set to ``"auto"`` / None) the response means
-    that were stored inline during ``_compute_resolution_from_histogram`` are
-    left untouched (Gaussian fit mean when the resolution came from a
-    successful Gaussian fit, binned moments otherwise).
+    When the option is unset (or set to ``"auto"`` / None) the method is
+    chosen automatically:
+
+    - ``h_mean`` provided → ``"mean_storage"`` (single source of truth from
+      unbinned statistics).
+    - ``h_mean`` is None and ``gaussian_fit_resolution`` is False →
+      ``"histogram"`` (binned first-moment from ``h_response``).
+    - ``h_mean`` is None and ``gaussian_fit_resolution`` is True → no
+      override; the Gaussian fit means already stored in ``response_means``
+      by the main loop are left untouched.
     """
     var_cfg = response_vars.get(response_var_name, {})
     method = var_cfg.get("response_mean_method", cfg.get("response_mean_method"))
     if method in (None, "", "auto"):
-        return
-
-    method_str = str(method).strip().lower()
+        if h_mean is not None:
+            method_str = "mean_storage"
+        elif not gaussian_fit_resolution:
+            method_str = "histogram"
+        else:
+            return
+    else:
+        method_str = str(method).strip().lower()
     valid_methods = ("gaussian_fit", "histogram", "mean_storage")
     if method_str not in valid_methods:
         log.warning(
@@ -1898,6 +1912,14 @@ def _compute_resolution_from_histogram(
     h_view = h_response.view()
     h_variance = h_response.variances()
 
+    # Pre-compute Mean-storage views for RMS and uncertainty computation
+    _h_mean_value = _h_mean_count = _h_mean_variance = None
+    if h_mean is not None:
+        _mv = h_mean.view()
+        _h_mean_value = np.asarray(_mv.value)
+        _h_mean_count = np.asarray(_mv.count)
+        _h_mean_variance = np.asarray(_mv.variance)
+
     # Iterate over all bin combinations of bin variables
     for bin_idx in np.ndindex(bin_shape):
         if _bin_excluded_by_eta_max(bin_idx, bin_var_names, bin_edges_dict, eta_max):
@@ -2094,10 +2116,10 @@ def _compute_resolution_from_histogram(
                             resolutions[bin_idx] = fit_res["params"][2]
                             resolution_grid[bin_idx] = fit_res["params"][2]
                             resolutions_uncertainty[bin_idx] = fit_res["params_err"][2]
-                            response_means[bin_idx] = fit_res["params"][1]
-                            response_means_uncertainty[bin_idx] = fit_res["params_err"][
-                                1
-                            ]
+                            # response_means[bin_idx] = fit_res["params"][1]
+                            # response_means_uncertainty[bin_idx] = fit_res["params_err"][
+                            #     1
+                            # ]
                         else:
                             log.debug(
                                 "Fit quality too poor for bin %s for '%s' (best sigma rel. err. >= %.2f): setting resolution to NaN",
@@ -2140,30 +2162,17 @@ def _compute_resolution_from_histogram(
                     ci_intervals[bin_idx] = (float(x_fit[lo_idx]), float(x_fit[hi_idx]))
                     ntot = np.sum(y_fit)
                     if ntot > 0:
-                        # mean = sum(n_i * x_i) / N
-                        mean = np.sum(y_fit * x_fit) / ntot
-                        # mu2 = sum(n_i * (x_i - mean)^2) / N  [variance = RMS^2]
-                        mu2 = np.sum(y_fit * (x_fit - mean) ** 2) / ntot
-                        # mu4 = sum(n_i * (x_i - mean)^4) / N  [4th central moment]
-                        mu4 = np.sum(y_fit * (x_fit - mean) ** 4) / ntot
-                        # uncertainty on variance estimator (high N): sigma(s^2) = sqrt((mu4 - mu2^2) / N)
-                        # uncertainty on RMS via error propagation d(RMS)/d(s^2) = 1/(2*RMS):
-                        #   sigma(RMS) = sigma(s^2) / (2 * RMS)
-                        #             = sqrt((mu4 - mu2^2) / N) / (2 * sqrt(mu2))
-                        #             = sqrt((mu4 - mu2^2) / (4 * N * mu2))
-                        # reduces to RMS/sqrt(2N) for a Gaussian where mu4 = 3*mu2^2
-                        resolutions_uncertainty[bin_idx] = (
-                            np.sqrt((mu4 - mu2**2) / (4 * ntot * mu2)) if mu2 > 0 else 0
-                        )
-                        response_means[bin_idx] = mean
-                        # standard error of the mean = sigma / sqrt(N) = sqrt(mu2 / N)
-                        response_means_uncertainty[bin_idx] = (
-                            np.sqrt(mu2 / ntot) if mu2 > 0 else 0
-                        )
+                        if _h_mean_value is not None:
+                            N = float(_h_mean_count[bin_idx])
+                            rms_h = np.sqrt(max(float(_h_mean_variance[bin_idx]), 0.0))
+                            resolutions_uncertainty[bin_idx] = rms_h / np.sqrt(2 * N) if N > 0 else 0
+                        else:
+                            mean = np.sum(y_fit * x_fit) / ntot
+                            mu2 = np.sum(y_fit * (x_fit - mean) ** 2) / ntot
+                            rms = np.sqrt(mu2) if mu2 > 0 else 0
+                            resolutions_uncertainty[bin_idx] = rms / np.sqrt(2 * ntot) if rms > 0 else 0
                     else:
                         resolutions_uncertainty[bin_idx] = 0
-                        response_means[bin_idx] = np.nan
-                        response_means_uncertainty[bin_idx] = 0
                 except Exception as e:
                     log.debug(
                         "Failed to compute resolution for bin %s for '%s': %s",
@@ -2189,8 +2198,6 @@ def _compute_resolution_from_histogram(
             resolutions[bin_idx] = np.nan
             resolution_grid[bin_idx] = np.nan
             resolutions_uncertainty[bin_idx] = 0
-            response_means.setdefault(bin_idx, np.nan)
-            response_means_uncertainty.setdefault(bin_idx, 0)
 
     # Optionally override the per-bin response means with a configurable
     # computation method (Gaussian fit / histogram moments / Mean storage).
@@ -2205,6 +2212,7 @@ def _compute_resolution_from_histogram(
         bin_shape=bin_shape,
         response_axis=response_axis,
         response_vars=response_vars,
+        gaussian_fit_resolution=cfg["gaussian_fit_resolution"],
     )
 
     # Snapshot raw (pre-normalization) resolutions for display on histogram slices.
@@ -3046,31 +3054,30 @@ def plot_mapping_variable_linear_fit(
 
     return fit_results
 
+def _to_builtin(obj):
+    if obj is None:
+        return None
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int, float)):
+        if isinstance(obj, float) and not np.isfinite(obj):
+            return None
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [_to_builtin(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(k): _to_builtin(v) for k, v in obj.items()}
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.floating, np.integer)):
+        return _to_builtin(obj.item())
+    return str(obj)
 
 def save_fit_results(fit_results, output_path):
     """
     Save fit results to a json file.
     """
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-
-    def _to_builtin(obj):
-        if obj is None:
-            return None
-        if isinstance(obj, bool):
-            return obj
-        if isinstance(obj, (int, float)):
-            if isinstance(obj, float) and not np.isfinite(obj):
-                return None
-            return obj
-        if isinstance(obj, (list, tuple)):
-            return [_to_builtin(x) for x in obj]
-        if isinstance(obj, dict):
-            return {str(k): _to_builtin(v) for k, v in obj.items()}
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, (np.floating, np.integer)):
-            return _to_builtin(obj.item())
-        return str(obj)
 
     serializable = {}
     for response_var, fit_result in (fit_results or {}).items():
@@ -3100,6 +3107,87 @@ def save_fit_results(fit_results, output_path):
     with open(output_path, "w") as f:
         json.dump(serializable, f, indent=4)
     log.info("Saved fit results to %s", output_path)
+
+
+def save_response_summary(
+    response_tot_dict,
+    bin_vars,
+    available_response_vars,
+    results_for_mapping,
+    output_path,
+):
+    """Save a JSON summary of resolution, response mean, and uncertainties per bin."""
+
+    output = {}
+    for resp_var, result in (response_tot_dict or {}).items():
+        bin_var_names = result["bin_var_names"]
+        bin_edges = result["bin_edges"]
+
+        pt_gen_var = next(
+            (v for v in bin_var_names if bin_vars.get(v, {}).get("resolution_x_variable", False)),
+            None,
+        )
+
+        map_var = (available_response_vars or {}).get(resp_var, {}).get("map_x_variable")
+        h_mean_data = (results_for_mapping or {}).get(map_var) if map_var else None
+        h_mean_bin_vars = h_mean_data["bin_vars"] if h_mean_data else None
+        h_mean_view = h_mean_data["mean"].view() if h_mean_data else None
+
+        records = []
+        for bin_idx, resolution in result.get("resolutions", {}).items():
+            idx = tuple(bin_idx)
+
+            bin_centers = {}
+            for i, var in enumerate(bin_var_names):
+                edges = np.asarray(bin_edges.get(var, []))
+                if len(edges) > idx[i] + 1:
+                    bin_centers[var] = float((edges[idx[i]] + edges[idx[i] + 1]) / 2)
+
+            mean_pt_reco = None
+            if h_mean_view is not None and h_mean_bin_vars is not None:
+                try:
+                    mean_idx = tuple(
+                        idx[bin_var_names.index(bv)] for bv in h_mean_bin_vars
+                    )
+                    val = h_mean_view.value[mean_idx]
+                    mean_pt_reco = float(val) if np.isfinite(val) else None
+                except (ValueError, IndexError):
+                    pass
+
+            records.append({
+                "bin_idx": list(idx),
+                "bin_centers": {k: _to_builtin(v) for k, v in bin_centers.items()},
+                "gen_pt_center": _to_builtin(bin_centers.get(pt_gen_var)),
+                "mean_pt_reco": _to_builtin(mean_pt_reco),
+                "resolution": _to_builtin(resolution),
+                "resolution_uncertainty": _to_builtin(
+                    result.get("resolutions_uncertainty", {}).get(bin_idx)
+                ),
+                "resolution_raw": _to_builtin(
+                    result.get("resolutions_raw", {}).get(bin_idx)
+                ),
+                "resolution_uncertainty_raw": _to_builtin(
+                    result.get("resolutions_uncertainty_raw", {}).get(bin_idx)
+                ),
+                "response_mean": _to_builtin(
+                    result.get("response_means", {}).get(bin_idx)
+                ),
+                "response_mean_uncertainty": _to_builtin(
+                    result.get("response_means_uncertainty", {}).get(bin_idx)
+                ),
+                "ci_interval": _to_builtin(result.get("ci_intervals", {}).get(bin_idx)),
+            })
+
+        output[resp_var] = {
+            "bin_var_names": bin_var_names,
+            "bin_edges": _to_builtin(bin_edges),
+            "bins": records,
+        }
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(output, f, indent=2)
+    log.info("Saved response summary to %s", output_path)
 
 
 def save_txt_resolution(
@@ -3572,6 +3660,14 @@ def process_response_type(
             output_dir,
             year=year,
         )
+        if cfg["save_response_summary"]:
+            save_response_summary(
+                response_tot_dict=response_tot_dict,
+                bin_vars=bin_vars,
+                available_response_vars=available_response_vars,
+                results_for_mapping=results_for_mapping,
+                output_path=f"{args.output}/response_summary_{category}{suffix}.json",
+            )
 
         for resp_var_name, resp_var_cfg in available_response_vars.items():
             save_txt_resolution(
