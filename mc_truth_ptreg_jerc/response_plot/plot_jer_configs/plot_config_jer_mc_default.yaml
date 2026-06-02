@@ -30,12 +30,13 @@ histograms_response: true
 
 # Derive resolution from a Gaussian fit to the response histogram.
 # When false, a confidence-interval estimator is used instead.
-gaussian_fit_resolution: true
+gaussian_fit_resolution: false
 
 # List of CI fractions to try when trimming the fit window around the peak.
 # The CI that yields the best p-value is kept per bin.
 # Set to false to disable tail clipping entirely.
-gaussian_fit_cut_tails: [0.87]
+# E.g. 0.87 means the fit window is iteratively trimmed to the smallest range
+gaussian_fit_cut_tails: false
 
 # Reject bins where the fitted sigma_err / sigma exceeds this value
 # (resolution becomes NaN for those bins).
@@ -48,6 +49,9 @@ min_events_for_fit: 50
 # Confidence level used by the CI estimator when gaussian_fit_resolution: false.
 ci_conf_level: 0.87
 
+# Whether to save a JSON summary of the response histograms and fits for later use in the JME text file output.
+save_response_summary: false
+
 # -----------------------------------------------------------------------------
 # Response variable options (applied to all response variables as defaults)
 # -----------------------------------------------------------------------------
@@ -58,6 +62,7 @@ normalize_by_response_mean: false
 
 # Add a relative uncertainty in quadrature: new_err = sqrt(err^2 + (v*sigma)^2).
 # Set to "0.0" to disable.
+# E.g. 0.02 adds a 2% uncertainty to each bin to account for systematic effects not captured by the fit error.
 additional_uncertainty: "0.0"
 
 # Add a minimal uncertainty floor in quadrature: new_err = sqrt(err^2 + add_min_err^2).
@@ -85,8 +90,11 @@ nsc_fit_parameters: [3.5, 0.5, 0.05, -1.0]
 # NSC fit parameter limits (null = no limit = +/-inf for that parameter).
 # Set nsc_fit_parameter_limits to null to disable all limits entirely.
 nsc_fit_parameter_limits:
-  lower: [-5.0, 0.0, 0.0, null]   # lower bounds for [N, S, C, d]
-  upper: [20.0, 10.0, 5.0, null]  # upper bounds for [N, S, C, d]
+  lower: [null ,null ,null, null]   # lower bounds for [N, S, C, d], e.g. [-5.0, 0.0, 0.0, null]
+  upper: [null ,null ,null, null]   # upper bounds for [N, S, C, d], e.g. [20.0, 10.0, 5.0, null]
+
+# X-axis range to clip x values for the NSC fit; null to disable clipping
+nsc_fit_x_clip: null  # [min, max] range to clip x values for the NSC fit (E.G. [15, 3000])
 
 # -----------------------------------------------------------------------------
 # Bin arrays (YAML anchors &name allow reuse below without duplication)
@@ -323,6 +331,7 @@ mapping_variables:
 #   add_min_err                - Override the global default for this variable.
 #   add_chi2_ndof              - Override the global default for this variable.
 #   response_mean_method       - Override the global default for this variable.
+#   nsc_fit_x_clip       - Override the global default for this variable.
 response_variables:
   MatchedJets_ResponseJEC:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
