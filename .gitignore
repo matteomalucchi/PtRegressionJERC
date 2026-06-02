@@ -166,3 +166,6 @@ tags
 *.png
 *.pdf
 *.svg
+
+# Claude
+CLAUDE.md
