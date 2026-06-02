@@ -309,12 +309,14 @@ _MISSING = object()
 
 
 def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
-    """Return (p0, bounds) for the NSC fit.
+    """Return (p0, bounds, fixed_params) for the NSC fit.
 
-    Lookup order for ``nsc_fit_parameters`` / ``nsc_fit_parameter_limits``: per-response variable → global cfg key → no p0 / no bounds.
+    Lookup order for each key: per-response variable → global cfg key → default.
 
-    In the YAML, set ``nsc_fit_parameter_limits: null`` (at global or per-response level) to
-    disable parameter limits.  Individual limit entries of ``null`` map to ±inf.
+    ``nsc_fix_parameters``: list where each entry is a float (fixed value) or null
+    (free).  Example: ``[0.0, null, null]`` fixes the first parameter to 0.
+    Set ``nsc_fit_parameter_limits: null`` to disable parameter limits.
+    Individual limit entries of ``null`` map to ±inf.
     """
     rv_cfg = response_vars.get(response_var, {})
 
@@ -326,6 +328,10 @@ def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
     if limits is _MISSING:
         limits = cfg.get("nsc_fit_parameter_limits")
 
+    fixed_params = rv_cfg.get("nsc_fix_parameters", _MISSING)
+    if fixed_params is _MISSING:
+        fixed_params = cfg.get("nsc_fix_parameters")  # None if absent
+
     if limits is None:
         bounds = (-np.inf, np.inf)
     else:
@@ -333,7 +339,69 @@ def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
         upper = [v if v is not None else np.inf for v in limits.get("upper", [])]
         bounds = (lower, upper)
 
-    return (tuple(p0) if p0 is not None else None), bounds
+    return (tuple(p0) if p0 is not None else None), bounds, fixed_params
+
+
+def _wrap_with_fixed_params(fit_function, fixed_params, p0, bounds):
+    """Reduce fit_function to free parameters only and return reconstruction helpers.
+
+    Parameters
+    ----------
+    fixed_params : list or None
+        Per-parameter list: float = fixed to that value, None = free.
+        If None or all-None, returns the original function unchanged.
+
+    Returns
+    -------
+    wrapped_func, free_p0, free_bounds, reconstruct
+        ``reconstruct(free_popt, free_perr)`` reinserts fixed values
+        (with err=0) and returns (full_popt, full_perr).
+    """
+    if fixed_params is None or all(v is None for v in fixed_params):
+        return fit_function, p0, bounds, lambda popt, perr: (popt, perr)
+
+    n_total = len(fixed_params)
+    fixed_map = {i: v for i, v in enumerate(fixed_params) if v is not None}
+    free_indices = [i for i in range(n_total) if fixed_params[i] is None]
+
+    def wrapped(x, *free_args):
+        full = np.empty(n_total)
+        for fi, val in fixed_map.items():
+            full[fi] = val
+        for j, fi in enumerate(free_indices):
+            full[fi] = free_args[j]
+        return fit_function(x, *full)
+
+    wrapped.__name__ = getattr(fit_function, "__name__", "fit")
+    wrapped.formula = getattr(fit_function, "formula", None)
+    wrapped.param_names = (
+        [getattr(fit_function, "param_names", [])[i] for i in free_indices]
+        if hasattr(fit_function, "param_names")
+        else None
+    )
+
+    free_p0 = tuple(p0[i] for i in free_indices) if p0 is not None else None
+
+    if bounds == (-np.inf, np.inf):
+        free_bounds = (-np.inf, np.inf)
+    else:
+        lo, hi = bounds
+        free_bounds = (
+            [lo[i] for i in free_indices],
+            [hi[i] for i in free_indices],
+        )
+
+    def reconstruct(free_popt, free_perr):
+        full_popt = np.empty(n_total)
+        full_perr = np.zeros(n_total)
+        for fi, val in fixed_map.items():
+            full_popt[fi] = val
+        for j, fi in enumerate(free_indices):
+            full_popt[fi] = free_popt[j]
+            full_perr[fi] = free_perr[j]
+        return full_popt, full_perr
+
+    return wrapped, free_p0, free_bounds, reconstruct
 
 
 def perform_fit(
@@ -873,20 +941,31 @@ def plot_resolution_vs_x_variable(
                         if y_fit_err is not None:
                             y_fit_err = y_fit_err[clip_mask]
 
-                    if len(x_fit) < len(NSC.param_names):
-                        continue
-
-                    nsc_p0, nsc_bounds = _get_nsc_fit_p0_and_bounds(
+                    nsc_p0, nsc_bounds, nsc_fixed = _get_nsc_fit_p0_and_bounds(
                         response_var, response_vars, cfg
                     )
+                    fit_func, fit_p0, fit_bounds, reconstruct = (
+                        _wrap_with_fixed_params(NSC, nsc_fixed, nsc_p0, nsc_bounds)
+                    )
+                    n_free = len(fit_func.param_names) if hasattr(fit_func, "param_names") and fit_func.param_names is not None else len(NSC.param_names)
+
+                    if len(x_fit) < n_free:
+                        continue
+
                     fit_res = perform_fit(
                         x_fit,
                         y_fit,
                         y_fit_err,
-                        NSC,
-                        n_params=len(NSC.param_names),
-                        p0=nsc_p0,
-                        bounds=nsc_bounds,
+                        fit_func,
+                        n_params=n_free,
+                        p0=fit_p0,
+                        bounds=fit_bounds,
+                    )
+                    fit_res["params"], fit_res["params_err"] = reconstruct(
+                        fit_res["params"], fit_res["params_err"]
+                    )
+                    fit_res["fit_func"] = lambda x_val, _p=fit_res["params"]: NSC(
+                        np.asarray(x_val, dtype=float), *_p
                     )
 
                     fit_results[f"{response_var}{fit_result_string}"] = fit_res
