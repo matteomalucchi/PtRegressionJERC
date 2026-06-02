@@ -101,6 +101,32 @@ nsc_fix_parameters: [null, null, null, null]
 nsc_fit_x_clip: null  # [min, max] range to clip x values for the NSC fit (E.G. [15, 3000])
 
 # -----------------------------------------------------------------------------
+# Fitting backend and convergence options
+# -----------------------------------------------------------------------------
+
+# Minimizer used for ALL fits (per-bin Gaussian resolution, NSC resolution-vs-pT,
+# and the linear rho-vs-mu mapping fit).
+#   "curve_fit" - scipy.optimize.curve_fit (default; Levenberg-Marquardt with a
+#                 Trust-Region-Reflective fallback).
+#   "iminuit"   - iminuit / MINUIT (https://scikit-hep.org/iminuit), the de-facto
+#                 HEP minimizer; often more robust for the NSC and Gaussian fits.
+fit_backend: curve_fit
+
+# Options for the iminuit backend (used only when fit_backend: iminuit).
+iminuit_options:
+  optimizer: migrad        # minimiser: "migrad", "simplex", or "scan"
+  run_simplex_first: false # run a SIMPLEX pass before MIGRAD to aid convergence
+  strategy: 1              # MINUIT strategy: 0 (fast), 1 (default), 2 (accurate)
+  tol: null                # EDM convergence tolerance (null = iminuit default)
+  max_calls: 0             # max function calls per minimisation (0 = no limit)
+  use_minos: false         # also run MINOS for asymmetric uncertainty estimation
+
+# Options for the scipy curve_fit backend (used only when fit_backend: curve_fit).
+curve_fit_options:
+  method: null             # null (auto: "lm" unbounded / "trf" bounded), "lm", "trf", "dogbox"
+  maxfev: 100000           # maximum number of function evaluations
+
+# -----------------------------------------------------------------------------
 # Bin arrays (YAML anchors &name allow reuse below without duplication)
 # -----------------------------------------------------------------------------
 
