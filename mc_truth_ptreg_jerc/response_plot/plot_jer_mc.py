@@ -404,6 +404,95 @@ def _wrap_with_fixed_params(fit_function, fixed_params, p0, bounds):
     return wrapped, free_p0, free_bounds, reconstruct
 
 
+def _compute_nsc_bounds_band(x_vals, p0, bounds, fixed_params):
+    """Compute the analytic envelope of NSC over all allowed parameter ranges.
+
+    The NSC squared argument ``N·|N|/x² + S²·x^d + C²`` is a sum of three
+    independent terms, so per-x min/max decompose as the sum of per-term
+    min/max (no sampling required).
+
+    Parameters
+    ----------
+    x_vals : np.ndarray
+        pT values (all > 0).
+    p0 : sequence of 4 floats or None
+        Initial parameters ``[N, S, C, d]``.  Used as a fallback for any
+        parameter whose bounds are infinite (no variation assumed).
+    bounds : tuple
+        Either the scalar sentinel ``(-np.inf, np.inf)`` (all unlimited) or
+        ``(lower_list, upper_list)`` with 4 finite-or-inf entries each.
+    fixed_params : list of 4 (float | None) or None
+        Per-parameter fixed values; ``None`` means free.
+
+    Returns
+    -------
+    (y_lo, y_hi) : tuple of np.ndarray, or (None, None)
+        Envelope arrays.  Returns ``(None, None)`` when no finite bounds exist,
+        i.e. there is no bounded variation to show.
+    """
+    x = np.asarray(x_vals, dtype=float)
+
+    # Resolve effective [lo, hi] for each of the 4 NSC parameters.
+    # Fixed → single value (no variation).
+    # Infinite bound → fall back to p0 (treated as fixed for this axis).
+    def _range(i):
+        if fixed_params is not None and fixed_params[i] is not None:
+            v = float(fixed_params[i])
+            return v, v
+        # Scalar sentinel: all bounds are ±inf
+        if not hasattr(bounds[0], "__len__"):
+            v = float(p0[i]) if p0 is not None else 0.0
+            return v, v
+        lo_raw, hi_raw = bounds[0][i], bounds[1][i]
+        p0_val = float(p0[i]) if p0 is not None else 0.0
+        lo = float(lo_raw) if lo_raw is not None and np.isfinite(lo_raw) else p0_val
+        hi = float(hi_raw) if hi_raw is not None and np.isfinite(hi_raw) else p0_val
+        return lo, hi
+
+    (N_lo, N_hi), (S_lo, S_hi), (C_lo, C_hi), (d_lo, d_hi) = (
+        _range(0), _range(1), _range(2), _range(3)
+    )
+
+    if N_lo == N_hi and S_lo == S_hi and C_lo == C_hi and d_lo == d_hi:
+        return None, None  # nothing varies → no band
+
+    # ---- Term 1: N·|N| / x²  (= sign(N)·N² / x²) ----
+    # N·|N| is monotone in N, zero at N=0; interior zero is only a min.
+    def _n_abs_n(v):
+        return v * abs(v)
+
+    n_vals = [_n_abs_n(N_lo), _n_abs_n(N_hi)]
+    if N_lo < 0 < N_hi:
+        n_vals.append(0.0)
+    n_coeff_min, n_coeff_max = min(n_vals), max(n_vals)
+    term1_min = n_coeff_min / (x * x)
+    term1_max = n_coeff_max / (x * x)
+
+    # ---- Term 2: S² · x^d  (both factors ≥ 0) ----
+    # min(S²·x^d) = min(S²) · min(x^d);  max analogously.
+    s2_min = 0.0 if S_lo <= 0 <= S_hi else min(S_lo**2, S_hi**2)
+    s2_max = max(S_lo**2, S_hi**2)
+    # For x > 1 (pT in GeV always >> 1): larger d → larger x^d.
+    xd_a = np.power(x, d_lo)
+    xd_b = np.power(x, d_hi)
+    xd_min = np.minimum(xd_a, xd_b)
+    xd_max = np.maximum(xd_a, xd_b)
+    term2_min = s2_min * xd_min
+    term2_max = s2_max * xd_max
+
+    # ---- Term 3: C²  (scalar per bin) ----
+    c2_min = 0.0 if C_lo <= 0 <= C_hi else min(C_lo**2, C_hi**2)
+    c2_max = max(C_lo**2, C_hi**2)
+
+    # ---- Combine and take sqrt ----
+    arg_min = term1_min + term2_min + c2_min
+    arg_max = term1_max + term2_max + c2_max
+    y_lo = np.sqrt(np.maximum(arg_min, 0.0))
+    y_hi = np.sqrt(np.maximum(arg_max, 0.0))
+
+    return y_lo, y_hi
+
+
 def _fit_iminuit(fit_function, x, y, sigma, n_params, p0, bounds, opts):
     """Least-squares fit with iminuit, returning ``(popt, pcov)`` like curve_fit.
 
@@ -1026,6 +1115,7 @@ def plot_resolution_vs_x_variable(
             if fit_resolution:
                 fit_data = {}
                 fit_results = {}
+                bands_data = {}
                 for response_var, gd in graph_data.items():
                     x_fit = gd["data"]["x"][0]
                     y_fit = gd["data"]["y"][0]
@@ -1097,6 +1187,35 @@ def plot_resolution_vs_x_variable(
                             "appear_in_legend": False,
                         },
                     }
+
+                    if cfg.get("plot_fit_diagnostics", False):
+                        # --- p0 curve ---
+                        if nsc_p0 is not None:
+                            y_p0 = NSC(x_fit_fit, *nsc_p0)
+                            if np.all(np.isfinite(y_p0)):
+                                fit_data[f"{response_var}_fit_p0"] = {
+                                    "data": {
+                                        "x": [x_fit_fit, np.zeros_like(x_fit_fit)],
+                                        "y": [y_p0, np.zeros_like(y_p0)],
+                                    },
+                                    "style": {
+                                        "fmt": ":",
+                                        "color": get_color(response_var),
+                                        "linewidth": 1.5,
+                                        "appear_in_legend": False,
+                                    },
+                                }
+                        # --- bounds band ---
+                        y_band_lo, y_band_hi = _compute_nsc_bounds_band(
+                            x_fit_fit, nsc_p0, nsc_bounds, nsc_fixed
+                        )
+                        if y_band_lo is not None:
+                            bands_data[response_var] = {
+                                "x": x_fit_fit,
+                                "y_lo": y_band_lo,
+                                "y_hi": y_band_hi,
+                                "color": get_color(response_var),
+                            }
 
                 graph_data.update(fit_data)
                 all_fit_results.update(fit_results)
@@ -1179,6 +1298,20 @@ def plot_resolution_vs_x_variable(
                         verticalalignment="top",
                         fontsize=15,
                     )
+
+                if cfg.get("plot_fit_diagnostics", False) and bands_data:
+                    fig = plotter.get_figure()
+                    ax = fig.axes[0]
+                    for band in bands_data.values():
+                        ax.fill_between(
+                            band["x"],
+                            band["y_lo"],
+                            band["y_hi"],
+                            color=band["color"],
+                            alpha=0.15,
+                            linewidth=0,
+                            zorder=0,
+                        )
 
             plotters[y_bin_idx] = plotter
 

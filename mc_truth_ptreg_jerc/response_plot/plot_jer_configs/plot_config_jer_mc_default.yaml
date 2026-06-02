@@ -100,6 +100,17 @@ nsc_fix_parameters: [null, null, null, null]
 # X-axis range to clip x values for the NSC fit; null to disable clipping
 nsc_fit_x_clip: null  # [min, max] range to clip x values for the NSC fit (E.G. [15, 3000])
 
+# When true, two diagnostic overlays are drawn on top of the NSC fit curve:
+#   1. A dotted line showing the NSC curve evaluated at the initial parameters (p0).
+#   2. A semi-transparent band covering all NSC values reachable within the
+#      parameter bounds (nsc_fit_parameter_limits).  The band is computed
+#      analytically from the additive structure of the NSC formula, so each
+#      point shows the exact [min, max] range without sampling.
+#      Parameters with infinite (unconstrained) bounds or fixed parameters do
+#      not contribute to the band width.  The band is omitted entirely when no
+#      finite bounds are set.
+plot_fit_diagnostics: false
+
 # -----------------------------------------------------------------------------
 # Fitting backend and convergence options
 # -----------------------------------------------------------------------------

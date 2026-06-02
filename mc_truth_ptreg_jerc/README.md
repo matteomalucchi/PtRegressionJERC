@@ -331,8 +331,21 @@ Options controlling the NSC formula ($\sigma/p_T = \sqrt{N^2/p_T^2 + S^2 p_T^d +
 | `nsc_fit_parameter_limits` | all `null` | Lower and upper bounds per parameter; `null` entries are ±∞. Set the whole key to `null` to disable all limits |
 | `nsc_fix_parameters` | all `null` | Per-parameter list: float = fix to that value, `null` = free. Example: `[null, null, null, -1.0]` fixes `d=-1.0` |
 | `nsc_fit_x_clip` | `null` | `[min, max]` range to clip the x-axis before fitting (e.g. `[15, 3000]`); `null` disables clipping |
+| `plot_fit_diagnostics` | `false` | When `true`, draw two diagnostic overlays on the NSC fit: a dotted line at the initial parameters (`p0`) and a semi-transparent band spanning all NSC values reachable within `nsc_fit_parameter_limits` (see below) |
 
 These keys can also be set **per response variable** to override the global values for that variable only.
+
+##### `plot_fit_diagnostics` details
+
+When `plot_fit_diagnostics: true` and `fit_resolution` is enabled, each fit curve gets two additional overlays drawn in the same colour:
+
+* **p0 curve** (dotted line) — the NSC formula evaluated at the initial parameter guess (`nsc_fit_parameters`).  Useful for checking whether the converged fit moved far from the starting point.
+
+* **Bounds band** (semi-transparent filled region) — the exact envelope of all NSC curves reachable within `nsc_fit_parameter_limits`.  The band is computed analytically by exploiting the additive structure of the NSC squared argument $N|N|/p_T^2 + S^2 p_T^d + C^2$: because the three terms involve independent parameters, the per-$p_T$ minimum and maximum of $\text{NSC}^2$ equal the sums of the per-term minima and maxima respectively.  This gives the tightest possible envelope without any sampling.
+
+  * Parameters with infinite (unconstrained) bounds are treated as fixed at their `p0` value and do not widen the band.
+  * Fixed parameters (`nsc_fix_parameters`) contribute a single value and do not widen the band.
+  * The band is omitted entirely when no parameter has finite bounds on both sides.
 
 #### Bin arrays
 
