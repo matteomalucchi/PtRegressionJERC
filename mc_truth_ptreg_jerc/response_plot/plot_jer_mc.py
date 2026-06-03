@@ -272,6 +272,7 @@ def run_plot_with_bands(args):
     for ext in plotter.data_formats:
         fig.savefig(f"{plotter.output_base}.{ext}", bbox_inches="tight", dpi=300)
     plt.close(fig)
+    log.info("Saved plot with bands to %s with formats %s", plotter.output_base, plotter.data_formats)
 
 
 def get_color(response_var):
@@ -1395,7 +1396,7 @@ def plot_resolution_vs_x_variable(
                         plotter.add_annotation(
                             0.69,
                             ann_y_top - 0.07,
-                            rf"$\square$ bounds band ($\Delta\chi^2\!<\!{delta:.1f}$, N$={n_acc}$)",
+                            rf"bounds band ($\Delta\chi^2\!<\!{delta:.1f}$, N$={n_acc}$)",
                             color=bcolor,
                             horizontalalignment="left",
                             verticalalignment="top",
