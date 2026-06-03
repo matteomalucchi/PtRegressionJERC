@@ -18,13 +18,12 @@ add_min_err: "0.000"  # add a minimal uncertainty floor in quadrature
 add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
 response_mean_method: "mean_storage"  # auto | gaussian_fit | histogram | mean_storage
 # NSC fit initial parameters [N, S, C, d]
-nsc_fit_parameters: [-4., 2., 0.05, -1.]
+nsc_fit_parameters: [-4., 2., 0.05, -1.5]
 # NSC fit parameter limits (null = no limit = ±inf); set to null to disable all limits
 nsc_fit_parameter_limits:
-  lower: [-4.5, 1.5, 0.0, -1.5]
-  upper: [-3.5, 2.5, 0.5, -0.5]
+  lower: [-5.0, 0.0, 0.0, null]
+  upper: [20.0, 10.0, 5.0, null]
 nsc_fit_x_clip: [30, 10000]
-plot_fit_diagnostics: true
 
 
 fit_backend: iminuit

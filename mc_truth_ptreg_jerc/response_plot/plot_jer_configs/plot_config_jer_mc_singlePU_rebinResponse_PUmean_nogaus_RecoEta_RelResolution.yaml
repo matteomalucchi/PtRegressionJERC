@@ -1,29 +1,30 @@
 # Boolean flags
 mixed_mode: true
-resolution_vs_pt_gen: true
+resolution_vs_pt_gen: false
 resolution_vs_pt_reco: true
-histograms_map: true
-histograms_response: true
+histograms_map: false
+histograms_response: false
 gaussian_fit_resolution: false
 gaussian_fit_cut_tails: false
 gaussian_fit_max_sigma_rel_err: 1.0
 min_events_for_fit: 70
 ci_conf_level: 0.87
-save_response_summary: true
+save_response_summary: false
 
 # Response variable options (applied to all response variables)
 normalize_by_response_mean: true  # plot sigma / <R> instead of bare sigma
-additional_uncertainty: "0.025"  # add (v*sigma) in quadrature to error
-add_min_err: "0.005"  # add a minimal uncertainty floor in quadrature
+additional_uncertainty: "0.02"  # add (v*sigma) in quadrature to error
+add_min_err: "0.000"  # add a minimal uncertainty floor in quadrature
 add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
 response_mean_method: "mean_storage"  # auto | gaussian_fit | histogram | mean_storage
 # NSC fit initial parameters [N, S, C, d]
 nsc_fit_parameters: [-4., 2., 0.05, -1.5]
 # NSC fit parameter limits (null = no limit = ±inf); set to null to disable all limits
 nsc_fit_parameter_limits:
-  lower: [-10.0, null, null, null]
-  upper: [20.0, null, null, null]
-nsc_fit_x_clip: [15, 3000]
+  lower: [-5.0, 0.0, 0.0, -2]
+  upper: [20.0, 10.0, 5.0, -1]
+nsc_fit_x_clip: [30, 3000]
+plot_fit_diagnostics: true
 
 # Bin arrays (anchors allow reuse below without duplication)
 pu_bins: &pu_bins [0,100]
