@@ -331,21 +331,29 @@ Options controlling the NSC formula ($\sigma/p_T = \sqrt{N^2/p_T^2 + S^2 p_T^d +
 | `nsc_fit_parameter_limits` | all `null` | Lower and upper bounds per parameter; `null` entries are ±∞. Set the whole key to `null` to disable all limits |
 | `nsc_fix_parameters` | all `null` | Per-parameter list: float = fix to that value, `null` = free. Example: `[null, null, null, -1.0]` fixes `d=-1.0` |
 | `nsc_fit_x_clip` | `null` | `[min, max]` range to clip the x-axis before fitting (e.g. `[15, 3000]`); `null` disables clipping |
-| `plot_fit_diagnostics` | `false` | When `true`, draw two diagnostic overlays on the NSC fit: a dotted line at the initial parameters (`p0`) and a semi-transparent band spanning all NSC values reachable within `nsc_fit_parameter_limits` (see below) |
+| `plot_fit_diagnostics` | `false` | When `true`, draw two diagnostic overlays on the NSC fit for the **first response variable only** (p0 and bounds are shared; drawing them per-variable would overlay identically). See details below. |
+| `nsc_band_n_samples` | `10000` | Number of random parameter samples for the chi2-filtered bounds band |
+| `nsc_band_confidence` | `0.683` | Confidence level for the Wilks Δchi2 threshold (`0.683` ≈ 1σ, `0.954` ≈ 2σ) |
 
 These keys can also be set **per response variable** to override the global values for that variable only.
 
 ##### `plot_fit_diagnostics` details
 
-When `plot_fit_diagnostics: true` and `fit_resolution` is enabled, each fit curve gets two additional overlays drawn in the same colour:
+When `plot_fit_diagnostics: true` and `fit_resolution` is enabled, two overlays appear for the first response variable (in that variable's colour):
 
-* **p0 curve** (dotted line) — the NSC formula evaluated at the initial parameter guess (`nsc_fit_parameters`).  Useful for checking whether the converged fit moved far from the starting point.
+* **p₀ curve** (dotted line) — the NSC formula evaluated at the initial parameter guess (`nsc_fit_parameters`).  Useful for checking whether the converged fit moved far from the starting point.
 
-* **Bounds band** (semi-transparent filled region) — the exact envelope of all NSC curves reachable within `nsc_fit_parameter_limits`.  The band is computed analytically by exploiting the additive structure of the NSC squared argument $N|N|/p_T^2 + S^2 p_T^d + C^2$: because the three terms involve independent parameters, the per-$p_T$ minimum and maximum of $\text{NSC}^2$ equal the sums of the per-term minima and maxima respectively.  This gives the tightest possible envelope without any sampling.
+* **Bounds band** (semi-transparent filled region) — the envelope of all NSC curves whose parameters lie within `nsc_fit_parameter_limits` **and** whose weighted chi2 against the data satisfies
+  $$\chi^2 \leq \chi^2_\text{best} + \Delta, \quad \Delta = \chi^2_\text{ppf}(\text{confidence},\, n_\text{free})$$
+  (Wilks' theorem).  `nsc_band_n_samples` random parameter combinations are drawn uniformly within the bounds; those passing the filter are evaluated on the fine x-grid and their pointwise minimum/maximum form the band.
 
-  * Parameters with infinite (unconstrained) bounds are treated as fixed at their `p0` value and do not widen the band.
+  Unlike an independent per-x extremes band, **every point in this band belongs to a single globally-consistent parameter set that fits the data** within the stated confidence level.  The band therefore directly answers: *"given these bounds, what NSC shapes are consistent with the data?"*
+
+  Annotation text in the plot states the Δchi2 threshold and the number of accepted samples.
+
+  * Parameters with infinite (unconstrained) bounds are pinned to their `p0` value and do not contribute to the band width.
   * Fixed parameters (`nsc_fix_parameters`) contribute a single value and do not widen the band.
-  * The band is omitted entirely when no parameter has finite bounds on both sides.
+  * The band is omitted when no sample passes the chi2 filter (bounds incompatible with data at the chosen confidence level).
 
 #### Bin arrays
 

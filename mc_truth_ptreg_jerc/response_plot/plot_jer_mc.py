@@ -426,43 +426,77 @@ def _wrap_with_fixed_params(fit_function, fixed_params, p0, bounds):
     return wrapped, free_p0, free_bounds, reconstruct
 
 
-def _compute_nsc_bounds_band(x_vals, p0, bounds, fixed_params):
-    """Compute the analytic envelope of NSC over all allowed parameter ranges.
+def _compute_nsc_chi2_band(
+    x_fine, x_data, y_data, y_data_err, chi2_min, n_free_params,
+    p0, bounds, fixed_params, n_samples=10_000, confidence=0.683,
+):
+    """Compute the chi2-filtered envelope of NSC curves within parameter bounds.
 
-    The NSC squared argument ``N·|N|/x² + S²·x^d + C²`` is a sum of three
-    independent terms, so per-x min/max decompose as the sum of per-term
-    min/max (no sampling required).
+    Draws ``n_samples`` parameter combinations uniformly within the bounds and
+    retains those whose weighted chi2 against the data satisfies
+
+        chi2 ≤ chi2_min + Δ,   Δ = chi2_dist.ppf(confidence, df=n_free_params)
+
+    (Wilks' theorem).  The returned band is the per-x envelope of all *accepted*
+    curves — every point in the band belongs to a single globally-consistent
+    parameter set that fits the data within the chosen confidence level.
+
+    This is more physically meaningful than an independent per-x extremes band:
+    the old approach would show a point as "reachable" even if no single curve
+    passes through it together with the rest of the data.
 
     Parameters
     ----------
-    x_vals : np.ndarray
-        pT values (all > 0).
+    x_fine : np.ndarray
+        Dense x grid on which to evaluate the band (e.g. 100 log-spaced pts).
+    x_data, y_data : np.ndarray
+        Data points used for chi2 evaluation.
+    y_data_err : np.ndarray or None
+        Data uncertainties; if None or all-zero, unweighted chi2 is used.
+    chi2_min : float
+        Chi2 of the converged fit (reference for the Wilks threshold).
+    n_free_params : int
+        Number of free NSC parameters (determines the Wilks Δ).
     p0 : sequence of 4 floats or None
-        Initial parameters ``[N, S, C, d]``.  Used as a fallback for any
-        parameter whose bounds are infinite (no variation assumed).
+        Initial parameters [N, S, C, d]; used as fallback for infinite/unfixed
+        bounds (those parameters are treated as fixed at p0 for the band).
     bounds : tuple
-        Either the scalar sentinel ``(-np.inf, np.inf)`` (all unlimited) or
+        Either the scalar sentinel ``(-np.inf, np.inf)`` (no limits) or
         ``(lower_list, upper_list)`` with 4 finite-or-inf entries each.
     fixed_params : list of 4 (float | None) or None
         Per-parameter fixed values; ``None`` means free.
+    n_samples : int
+        Number of random uniform samples to draw (default 10 000).
+    confidence : float
+        Confidence level for the Wilks Δ (default 0.683 ≈ 1σ).
 
     Returns
     -------
-    (y_lo, y_hi) : tuple of np.ndarray, or (None, None)
-        Envelope arrays.  Returns ``(None, None)`` when no finite bounds exist,
-        i.e. there is no bounded variation to show.
+    (y_lo, y_hi, n_accepted, delta_threshold)
+        Envelope arrays and diagnostic counts.  Returns ``(None, None, 0, 0.0)``
+        when no parameter varies within finite bounds, or when no sample passes
+        the chi2 filter.
     """
-    x = np.asarray(x_vals, dtype=float)
+    from scipy.stats import chi2 as chi2_dist
+
+    x_f = np.asarray(x_fine, dtype=float)
+    x_d = np.asarray(x_data, dtype=float)
+    y_d = np.asarray(y_data, dtype=float)
+
+    # Use uniform sigma=1 when errors are absent or all-zero
+    if y_data_err is not None:
+        sigma = np.asarray(y_data_err, dtype=float)
+        sigma = np.where(sigma > 0, sigma, 1.0)
+    else:
+        sigma = np.ones_like(y_d)
 
     # Resolve effective [lo, hi] for each of the 4 NSC parameters.
-    # Fixed → single value (no variation).
-    # Infinite bound → fall back to p0 (treated as fixed for this axis).
+    # Fixed or infinite-bounded params are pinned to their p0/fixed value.
     def _range(i):
         if fixed_params is not None and fixed_params[i] is not None:
             v = float(fixed_params[i])
             return v, v
-        # Scalar sentinel: all bounds are ±inf
-        if not hasattr(bounds[0], "__len__"):
+        if not hasattr(bounds[0], "__len__"):  # scalar sentinel: all ±inf
             v = float(p0[i]) if p0 is not None else 0.0
             return v, v
         lo_raw, hi_raw = bounds[0][i], bounds[1][i]
@@ -471,48 +505,52 @@ def _compute_nsc_bounds_band(x_vals, p0, bounds, fixed_params):
         hi = float(hi_raw) if hi_raw is not None and np.isfinite(hi_raw) else p0_val
         return lo, hi
 
-    (N_lo, N_hi), (S_lo, S_hi), (C_lo, C_hi), (d_lo, d_hi) = (
-        _range(0), _range(1), _range(2), _range(3)
+    ranges = [_range(i) for i in range(4)]
+    if all(lo == hi for lo, hi in ranges):
+        return None, None, 0, 0.0  # nothing varies → no band
+
+    # Wilks' theorem: Δchi2 for n_free_params at given confidence level
+    delta_threshold = float(chi2_dist.ppf(confidence, df=max(1, n_free_params)))
+    chi2_accept = chi2_min + delta_threshold
+
+    # Draw uniform samples within parameter ranges (fixed seed for reproducibility)
+    rng = np.random.default_rng(42)
+    lo_arr = np.array([r[0] for r in ranges])
+    hi_arr = np.array([r[1] for r in ranges])
+    samples = rng.uniform(lo_arr, hi_arr, size=(n_samples, 4))
+    for i, (lo, hi) in enumerate(ranges):
+        if lo == hi:
+            samples[:, i] = lo  # keep fixed/pinned parameters exact
+
+    # Vectorised NSC evaluation at data points: shape (n_data, n_samples)
+    x_dc = x_d[:, np.newaxis]
+    N, S, C, d = samples[:, 0], samples[:, 1], samples[:, 2], samples[:, 3]
+    nsc2 = N * np.abs(N) / (x_dc**2) + S**2 * np.power(x_dc, d) + C**2
+    nsc_at_data = np.where(nsc2 >= 0, np.sqrt(np.maximum(nsc2, 0.0)), np.nan)
+
+    # Chi2 for each sample; nansum treats NaN (unphysical arg) as 0 contribution
+    res = (nsc_at_data - y_d[:, np.newaxis]) / sigma[:, np.newaxis]
+    chi2_samples = np.nansum(res**2, axis=0)
+
+    # Accept samples within the Wilks threshold
+    accepted = chi2_samples <= chi2_accept
+    n_accepted = int(np.sum(accepted))
+    if n_accepted == 0:
+        return None, None, 0, delta_threshold
+
+    # Evaluate accepted samples on the fine x grid and compute the envelope
+    N_a, S_a, C_a, d_a = (
+        samples[accepted, 0], samples[accepted, 1],
+        samples[accepted, 2], samples[accepted, 3],
     )
+    x_fc = x_f[:, np.newaxis]
+    nsc2_f = N_a * np.abs(N_a) / (x_fc**2) + S_a**2 * np.power(x_fc, d_a) + C_a**2
+    nsc_fine = np.where(nsc2_f >= 0, np.sqrt(np.maximum(nsc2_f, 0.0)), np.nan)
 
-    if N_lo == N_hi and S_lo == S_hi and C_lo == C_hi and d_lo == d_hi:
-        return None, None  # nothing varies → no band
+    y_lo = np.nanmin(nsc_fine, axis=1)
+    y_hi = np.nanmax(nsc_fine, axis=1)
 
-    # ---- Term 1: N·|N| / x²  (= sign(N)·N² / x²) ----
-    # N·|N| is monotone in N, zero at N=0; interior zero is only a min.
-    def _n_abs_n(v):
-        return v * abs(v)
-
-    n_vals = [_n_abs_n(N_lo), _n_abs_n(N_hi)]
-    if N_lo < 0 < N_hi:
-        n_vals.append(0.0)
-    n_coeff_min, n_coeff_max = min(n_vals), max(n_vals)
-    term1_min = n_coeff_min / (x * x)
-    term1_max = n_coeff_max / (x * x)
-
-    # ---- Term 2: S² · x^d  (both factors ≥ 0) ----
-    # min(S²·x^d) = min(S²) · min(x^d);  max analogously.
-    s2_min = 0.0 if S_lo <= 0 <= S_hi else min(S_lo**2, S_hi**2)
-    s2_max = max(S_lo**2, S_hi**2)
-    # For x > 1 (pT in GeV always >> 1): larger d → larger x^d.
-    xd_a = np.power(x, d_lo)
-    xd_b = np.power(x, d_hi)
-    xd_min = np.minimum(xd_a, xd_b)
-    xd_max = np.maximum(xd_a, xd_b)
-    term2_min = s2_min * xd_min
-    term2_max = s2_max * xd_max
-
-    # ---- Term 3: C²  (scalar per bin) ----
-    c2_min = 0.0 if C_lo <= 0 <= C_hi else min(C_lo**2, C_hi**2)
-    c2_max = max(C_lo**2, C_hi**2)
-
-    # ---- Combine and take sqrt ----
-    arg_min = term1_min + term2_min + c2_min
-    arg_max = term1_max + term2_max + c2_max
-    y_lo = np.sqrt(np.maximum(arg_min, 0.0))
-    y_hi = np.sqrt(np.maximum(arg_max, 0.0))
-
-    return y_lo, y_hi
+    return y_lo, y_hi, n_accepted, delta_threshold
 
 
 def _fit_iminuit(fit_function, x, y, sigma, n_params, p0, bounds, opts):
@@ -1139,6 +1177,7 @@ def plot_resolution_vs_x_variable(
                 fit_data = {}
                 fit_results = {}
                 bands_data = {}
+                _diag_done = False  # draw p0/band only for the first response var
                 for response_var, gd in graph_data.items():
                     x_fit = gd["data"]["x"][0]
                     y_fit = gd["data"]["y"][0]
@@ -1211,8 +1250,9 @@ def plot_resolution_vs_x_variable(
                         },
                     }
 
-                    if cfg.get("plot_fit_diagnostics", False):
-                        # --- p0 curve ---
+                    if cfg.get("plot_fit_diagnostics", False) and not _diag_done:
+                        _diag_done = True
+                        # --- p0 curve (only for the first response var) ---
                         if nsc_p0 is not None:
                             y_p0 = NSC(x_fit_fit, *nsc_p0)
                             if np.all(np.isfinite(y_p0)):
@@ -1228,9 +1268,18 @@ def plot_resolution_vs_x_variable(
                                         "appear_in_legend": False,
                                     },
                                 }
-                        # --- bounds band ---
-                        y_band_lo, y_band_hi = _compute_nsc_bounds_band(
-                            x_fit_fit, nsc_p0, nsc_bounds, nsc_fixed
+                        # --- chi2-filtered bounds band ---
+                        n_samples = cfg.get("nsc_band_n_samples", 10_000)
+                        band_conf = cfg.get("nsc_band_confidence", 0.683)
+                        y_band_lo, y_band_hi, n_acc, delta_thr = (
+                            _compute_nsc_chi2_band(
+                                x_fit_fit,
+                                x_fit, y_fit, y_fit_err,
+                                fit_res["chi2"], n_free,
+                                nsc_p0, nsc_bounds, nsc_fixed,
+                                n_samples=n_samples,
+                                confidence=band_conf,
+                            )
                         )
                         if y_band_lo is not None:
                             bands_data[response_var] = {
@@ -1238,6 +1287,8 @@ def plot_resolution_vs_x_variable(
                                 "y_lo": y_band_lo,
                                 "y_hi": y_band_hi,
                                 "color": get_color(response_var),
+                                "n_accepted": n_acc,
+                                "delta_threshold": delta_thr,
                             }
 
                 graph_data.update(fit_data)
@@ -1324,6 +1375,32 @@ def plot_resolution_vs_x_variable(
 
                 if cfg.get("plot_fit_diagnostics", False) and bands_data:
                     plotters_bands[y_bin_idx] = bands_data
+                    # Annotations describing the diagnostic overlays
+                    # Positioned below the chi2 rows (which start at y=0.65)
+                    n_chi2_rows = len(fit_results)
+                    ann_y_top = 0.65 - n_chi2_rows * 0.07 - 0.04
+                    for bvar, bdata in bands_data.items():
+                        bcolor = bdata["color"]
+                        n_acc = bdata.get("n_accepted", 0)
+                        delta = bdata.get("delta_threshold", 0.0)
+                        plotter.add_annotation(
+                            0.69,
+                            ann_y_top,
+                            r"$\cdots\!$ p$_0$ (initial params)",
+                            color=bcolor,
+                            horizontalalignment="left",
+                            verticalalignment="top",
+                            fontsize=12,
+                        )
+                        plotter.add_annotation(
+                            0.69,
+                            ann_y_top - 0.07,
+                            rf"$\square$ bounds band ($\Delta\chi^2\!<\!{delta:.1f}$, N$={n_acc}$)",
+                            color=bcolor,
+                            horizontalalignment="left",
+                            verticalalignment="top",
+                            fontsize=12,
+                        )
 
             plotters[y_bin_idx] = plotter
 
