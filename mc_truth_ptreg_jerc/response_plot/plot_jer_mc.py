@@ -252,6 +252,28 @@ def run_plot(plotter):
     plotter.run()
 
 
+def run_plot_with_bands(args):
+    """Run a HEPPlotter instance and overlay fill_between bands before saving."""
+    import matplotlib.pyplot as plt
+
+    plotter, bands_data = args
+    fig = plotter.get_figure()
+    ax = fig.axes[0]
+    for band in bands_data.values():
+        ax.fill_between(
+            band["x"],
+            band["y_lo"],
+            band["y_hi"],
+            color=band["color"],
+            alpha=0.15,
+            linewidth=0,
+            zorder=0,
+        )
+    for ext in plotter.data_formats:
+        fig.savefig(f"{plotter.output_base}.{ext}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
 def get_color(response_var):
     for key in cfg["plot_settings"]:
         if response_var.endswith(key):
@@ -917,6 +939,7 @@ def plot_resolution_vs_x_variable(
         y_bin_label_dict = build_bin_label_dict(y_bin_shape, y_vars_ref, bin_edges_dict)
 
         plotters = {}
+        plotters_bands = {}
 
         for y_bin_idx in np.ndindex(y_bin_shape):
             graph_data = {}
@@ -1300,18 +1323,7 @@ def plot_resolution_vs_x_variable(
                     )
 
                 if cfg.get("plot_fit_diagnostics", False) and bands_data:
-                    fig = plotter.get_figure()
-                    ax = fig.axes[0]
-                    for band in bands_data.values():
-                        ax.fill_between(
-                            band["x"],
-                            band["y_lo"],
-                            band["y_hi"],
-                            color=band["color"],
-                            alpha=0.15,
-                            linewidth=0,
-                            zorder=0,
-                        )
+                    plotters_bands[y_bin_idx] = bands_data
 
             plotters[y_bin_idx] = plotter
 
@@ -1320,7 +1332,11 @@ def plot_resolution_vs_x_variable(
                 log.info(
                     "Plotting resolution vs x variable for bin combination %s...", name
                 )
-                plotter.run()
+                bands = plotters_bands.get(name)
+                if bands:
+                    run_plot_with_bands((plotter, bands))
+                else:
+                    plotter.run()
         else:
             log.info(
                 "Plotting resolution vs x variable for %d bin combinations in parallel with %d workers...",
@@ -1328,7 +1344,16 @@ def plot_resolution_vs_x_variable(
                 args.workers,
             )
             with Pool(args.workers) as pool:
-                pool.map(run_plot, plotters.values())
+                plain = [
+                    p for k, p in plotters.items() if k not in plotters_bands
+                ]
+                banded = [
+                    (plotters[k], plotters_bands[k]) for k in plotters_bands
+                ]
+                if plain:
+                    pool.map(run_plot, plain)
+                if banded:
+                    pool.map(run_plot_with_bands, banded)
 
     return all_fit_results
 
