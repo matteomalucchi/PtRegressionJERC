@@ -252,29 +252,6 @@ def run_plot(plotter):
     plotter.run()
 
 
-def run_plot_with_bands(args):
-    """Run a HEPPlotter instance and overlay fill_between bands before saving."""
-    import matplotlib.pyplot as plt
-
-    plotter, bands_data = args
-    fig = plotter.get_figure()
-    ax = fig.axes[0]
-    for band in bands_data.values():
-        ax.fill_between(
-            band["x"],
-            band["y_lo"],
-            band["y_hi"],
-            color=band["color"],
-            alpha=0.15,
-            linewidth=0,
-            zorder=0,
-        )
-    for ext in plotter.data_formats:
-        fig.savefig(f"{plotter.output_base}.{ext}", bbox_inches="tight", dpi=300)
-    plt.close(fig)
-    log.info("Saved plot with bands to %s with formats %s", plotter.output_base, plotter.data_formats)
-
-
 def get_color(response_var):
     for key in cfg["plot_settings"]:
         if response_var.endswith(key):
@@ -425,133 +402,6 @@ def _wrap_with_fixed_params(fit_function, fixed_params, p0, bounds):
         return full_popt, full_perr
 
     return wrapped, free_p0, free_bounds, reconstruct
-
-
-def _compute_nsc_chi2_band(
-    x_fine, x_data, y_data, y_data_err, chi2_min, n_free_params,
-    p0, bounds, fixed_params, n_samples=10_000, confidence=0.683,
-):
-    """Compute the chi2-filtered envelope of NSC curves within parameter bounds.
-
-    Draws ``n_samples`` parameter combinations uniformly within the bounds and
-    retains those whose weighted chi2 against the data satisfies
-
-        chi2 ≤ chi2_min + Δ,   Δ = chi2_dist.ppf(confidence, df=n_free_params)
-
-    (Wilks' theorem).  The returned band is the per-x envelope of all *accepted*
-    curves — every point in the band belongs to a single globally-consistent
-    parameter set that fits the data within the chosen confidence level.
-
-    This is more physically meaningful than an independent per-x extremes band:
-    the old approach would show a point as "reachable" even if no single curve
-    passes through it together with the rest of the data.
-
-    Parameters
-    ----------
-    x_fine : np.ndarray
-        Dense x grid on which to evaluate the band (e.g. 100 log-spaced pts).
-    x_data, y_data : np.ndarray
-        Data points used for chi2 evaluation.
-    y_data_err : np.ndarray or None
-        Data uncertainties; if None or all-zero, unweighted chi2 is used.
-    chi2_min : float
-        Chi2 of the converged fit (reference for the Wilks threshold).
-    n_free_params : int
-        Number of free NSC parameters (determines the Wilks Δ).
-    p0 : sequence of 4 floats or None
-        Initial parameters [N, S, C, d]; used as fallback for infinite/unfixed
-        bounds (those parameters are treated as fixed at p0 for the band).
-    bounds : tuple
-        Either the scalar sentinel ``(-np.inf, np.inf)`` (no limits) or
-        ``(lower_list, upper_list)`` with 4 finite-or-inf entries each.
-    fixed_params : list of 4 (float | None) or None
-        Per-parameter fixed values; ``None`` means free.
-    n_samples : int
-        Number of random uniform samples to draw (default 10 000).
-    confidence : float
-        Confidence level for the Wilks Δ (default 0.683 ≈ 1σ).
-
-    Returns
-    -------
-    (y_lo, y_hi, n_accepted, delta_threshold)
-        Envelope arrays and diagnostic counts.  Returns ``(None, None, 0, 0.0)``
-        when no parameter varies within finite bounds, or when no sample passes
-        the chi2 filter.
-    """
-    from scipy.stats import chi2 as chi2_dist
-
-    x_f = np.asarray(x_fine, dtype=float)
-    x_d = np.asarray(x_data, dtype=float)
-    y_d = np.asarray(y_data, dtype=float)
-
-    # Use uniform sigma=1 when errors are absent or all-zero
-    if y_data_err is not None:
-        sigma = np.asarray(y_data_err, dtype=float)
-        sigma = np.where(sigma > 0, sigma, 1.0)
-    else:
-        sigma = np.ones_like(y_d)
-
-    # Resolve effective [lo, hi] for each of the 4 NSC parameters.
-    # Fixed or infinite-bounded params are pinned to their p0/fixed value.
-    def _range(i):
-        if fixed_params is not None and fixed_params[i] is not None:
-            v = float(fixed_params[i])
-            return v, v
-        if not hasattr(bounds[0], "__len__"):  # scalar sentinel: all ±inf
-            v = float(p0[i]) if p0 is not None else 0.0
-            return v, v
-        lo_raw, hi_raw = bounds[0][i], bounds[1][i]
-        p0_val = float(p0[i]) if p0 is not None else 0.0
-        lo = float(lo_raw) if lo_raw is not None and np.isfinite(lo_raw) else p0_val
-        hi = float(hi_raw) if hi_raw is not None and np.isfinite(hi_raw) else p0_val
-        return lo, hi
-
-    ranges = [_range(i) for i in range(4)]
-    if all(lo == hi for lo, hi in ranges):
-        return None, None, 0, 0.0  # nothing varies → no band
-
-    # Wilks' theorem: Δchi2 for n_free_params at given confidence level
-    delta_threshold = float(chi2_dist.ppf(confidence, df=max(1, n_free_params)))
-    chi2_accept = chi2_min + delta_threshold
-
-    # Draw uniform samples within parameter ranges (fixed seed for reproducibility)
-    rng = np.random.default_rng(42)
-    lo_arr = np.array([r[0] for r in ranges])
-    hi_arr = np.array([r[1] for r in ranges])
-    samples = rng.uniform(lo_arr, hi_arr, size=(n_samples, 4))
-    for i, (lo, hi) in enumerate(ranges):
-        if lo == hi:
-            samples[:, i] = lo  # keep fixed/pinned parameters exact
-
-    # Vectorised NSC evaluation at data points: shape (n_data, n_samples)
-    x_dc = x_d[:, np.newaxis]
-    N, S, C, d = samples[:, 0], samples[:, 1], samples[:, 2], samples[:, 3]
-    nsc2 = N * np.abs(N) / (x_dc**2) + S**2 * np.power(x_dc, d) + C**2
-    nsc_at_data = np.where(nsc2 >= 0, np.sqrt(np.maximum(nsc2, 0.0)), np.nan)
-
-    # Chi2 for each sample; nansum treats NaN (unphysical arg) as 0 contribution
-    res = (nsc_at_data - y_d[:, np.newaxis]) / sigma[:, np.newaxis]
-    chi2_samples = np.nansum(res**2, axis=0)
-
-    # Accept samples within the Wilks threshold
-    accepted = chi2_samples <= chi2_accept
-    n_accepted = int(np.sum(accepted))
-    if n_accepted == 0:
-        return None, None, 0, delta_threshold
-
-    # Evaluate accepted samples on the fine x grid and compute the envelope
-    N_a, S_a, C_a, d_a = (
-        samples[accepted, 0], samples[accepted, 1],
-        samples[accepted, 2], samples[accepted, 3],
-    )
-    x_fc = x_f[:, np.newaxis]
-    nsc2_f = N_a * np.abs(N_a) / (x_fc**2) + S_a**2 * np.power(x_fc, d_a) + C_a**2
-    nsc_fine = np.where(nsc2_f >= 0, np.sqrt(np.maximum(nsc2_f, 0.0)), np.nan)
-
-    y_lo = np.nanmin(nsc_fine, axis=1)
-    y_hi = np.nanmax(nsc_fine, axis=1)
-
-    return y_lo, y_hi, n_accepted, delta_threshold
 
 
 def _fit_iminuit(fit_function, x, y, sigma, n_params, p0, bounds, opts):
@@ -978,7 +828,6 @@ def plot_resolution_vs_x_variable(
         y_bin_label_dict = build_bin_label_dict(y_bin_shape, y_vars_ref, bin_edges_dict)
 
         plotters = {}
-        plotters_bands = {}
 
         for y_bin_idx in np.ndindex(y_bin_shape):
             graph_data = {}
@@ -1177,8 +1026,7 @@ def plot_resolution_vs_x_variable(
             if fit_resolution:
                 fit_data = {}
                 fit_results = {}
-                bands_data = {}
-                _diag_done = False  # draw p0/band only for the first response var
+                _p0_curve_done = False  # draw p0 curve only once (first response var)
                 for response_var, gd in graph_data.items():
                     x_fit = gd["data"]["x"][0]
                     y_fit = gd["data"]["y"][0]
@@ -1251,46 +1099,23 @@ def plot_resolution_vs_x_variable(
                         },
                     }
 
-                    if cfg.get("plot_fit_diagnostics", False) and not _diag_done:
-                        _diag_done = True
-                        # --- p0 curve (only for the first response var) ---
+                    if cfg.get("plot_fit_diagnostics", False) and not _p0_curve_done:
+                        _p0_curve_done = True
                         if nsc_p0 is not None:
                             y_p0 = NSC(x_fit_fit, *nsc_p0)
                             if np.all(np.isfinite(y_p0)):
-                                fit_data[f"{response_var}_fit_p0"] = {
+                                fit_data["_fit_p0"] = {
                                     "data": {
                                         "x": [x_fit_fit, np.zeros_like(x_fit_fit)],
                                         "y": [y_p0, np.zeros_like(y_p0)],
                                     },
                                     "style": {
                                         "fmt": ":",
-                                        "color": get_color(response_var),
+                                        "color": "black",
                                         "linewidth": 1.5,
-                                        "appear_in_legend": False,
+                                        "legend_name": "initial params (p$_0$)",
                                     },
                                 }
-                        # --- chi2-filtered bounds band ---
-                        n_samples = cfg.get("nsc_band_n_samples", 10_000)
-                        band_conf = cfg.get("nsc_band_confidence", 0.683)
-                        y_band_lo, y_band_hi, n_acc, delta_thr = (
-                            _compute_nsc_chi2_band(
-                                x_fit_fit,
-                                x_fit, y_fit, y_fit_err,
-                                fit_res["chi2"], n_free,
-                                nsc_p0, nsc_bounds, nsc_fixed,
-                                n_samples=n_samples,
-                                confidence=band_conf,
-                            )
-                        )
-                        if y_band_lo is not None:
-                            bands_data[response_var] = {
-                                "x": x_fit_fit,
-                                "y_lo": y_band_lo,
-                                "y_hi": y_band_hi,
-                                "color": get_color(response_var),
-                                "n_accepted": n_acc,
-                                "delta_threshold": delta_thr,
-                            }
 
                 graph_data.update(fit_data)
                 all_fit_results.update(fit_results)
@@ -1374,35 +1199,6 @@ def plot_resolution_vs_x_variable(
                         fontsize=15,
                     )
 
-                if cfg.get("plot_fit_diagnostics", False) and bands_data:
-                    plotters_bands[y_bin_idx] = bands_data
-                    # Annotations describing the diagnostic overlays
-                    # Positioned below the chi2 rows (which start at y=0.65)
-                    n_chi2_rows = len(fit_results)
-                    ann_y_top = 0.65 - n_chi2_rows * 0.07 - 0.04
-                    for bvar, bdata in bands_data.items():
-                        bcolor = bdata["color"]
-                        n_acc = bdata.get("n_accepted", 0)
-                        delta = bdata.get("delta_threshold", 0.0)
-                        plotter.add_annotation(
-                            0.69,
-                            ann_y_top,
-                            r"$\cdots\!$ p$_0$ (initial params)",
-                            color=bcolor,
-                            horizontalalignment="left",
-                            verticalalignment="top",
-                            fontsize=12,
-                        )
-                        plotter.add_annotation(
-                            0.69,
-                            ann_y_top - 0.07,
-                            rf"bounds band ($\Delta\chi^2\!<\!{delta:.1f}$, N$={n_acc}$)",
-                            color=bcolor,
-                            horizontalalignment="left",
-                            verticalalignment="top",
-                            fontsize=12,
-                        )
-
             plotters[y_bin_idx] = plotter
 
         if args.workers == 1:
@@ -1410,11 +1206,7 @@ def plot_resolution_vs_x_variable(
                 log.info(
                     "Plotting resolution vs x variable for bin combination %s...", name
                 )
-                bands = plotters_bands.get(name)
-                if bands:
-                    run_plot_with_bands((plotter, bands))
-                else:
-                    plotter.run()
+                plotter.run()
         else:
             log.info(
                 "Plotting resolution vs x variable for %d bin combinations in parallel with %d workers...",
@@ -1422,16 +1214,7 @@ def plot_resolution_vs_x_variable(
                 args.workers,
             )
             with Pool(args.workers) as pool:
-                plain = [
-                    p for k, p in plotters.items() if k not in plotters_bands
-                ]
-                banded = [
-                    (plotters[k], plotters_bands[k]) for k in plotters_bands
-                ]
-                if plain:
-                    pool.map(run_plot, plain)
-                if banded:
-                    pool.map(run_plot_with_bands, banded)
+                pool.map(run_plot, plotters.values())
 
     return all_fit_results
 
