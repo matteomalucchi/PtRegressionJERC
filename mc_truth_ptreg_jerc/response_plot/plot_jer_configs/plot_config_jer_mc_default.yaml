@@ -1,0 +1,583 @@
+# =============================================================================
+# Default plot configuration for plot_jer_mc.py
+#
+# This file controls every aspect of binning, histogram settings, response
+# variables, and plot style. All options are documented inline.
+# Pass a custom config via -c/--config to override individual sections.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Boolean flags
+# -----------------------------------------------------------------------------
+
+# Process regular and neutrino-inclusive response variables together in a
+# single "mixed" mode. When false they are processed as two separate "regular"
+# and "neutrino" modes.
+mixed_mode: true
+
+# Plot JER as a function of gen-pT (one curve per (nPU, eta) slice).
+resolution_vs_pt_gen: true
+
+# Plot JER as a function of mean reco-pT (mapped x-axis via mapping_variables).
+resolution_vs_pt_reco: true
+
+# Save and optionally plot the mapping-variable histograms (rho vs mu,
+# reco-pT vs gen-pT, etc.).
+histograms_map: true
+
+# Save and optionally plot the 1D response histograms per (nPU, eta, pT) bin.
+histograms_response: true
+
+# Derive resolution from a Gaussian fit to the response histogram.
+# When false, a confidence-interval estimator is used instead.
+gaussian_fit_resolution: false
+
+# List of CI fractions to try when trimming the fit window around the peak.
+# The CI that yields the best p-value is kept per bin.
+# Set to false to disable tail clipping entirely.
+# E.g. 0.87 means the fit window is iteratively trimmed to the smallest range
+gaussian_fit_cut_tails: false
+
+# Reject bins where the fitted sigma_err / sigma exceeds this value
+# (resolution becomes NaN for those bins).
+gaussian_fit_max_sigma_rel_err: 1.0
+
+# Minimum number of events in a 1D response slice before any fit or CI
+# estimation is attempted. Bins with fewer events are set to NaN.
+min_events_for_fit: 50
+
+# Confidence level used by the CI estimator when gaussian_fit_resolution: false.
+ci_conf_level: 0.87
+
+# Whether to save a JSON summary of the response histograms and fits for later use in the JME text file output.
+save_response_summary: false
+
+# -----------------------------------------------------------------------------
+# Response variable options (applied to all response variables as defaults)
+# -----------------------------------------------------------------------------
+
+# Plot sigma / <R> (relative resolution) instead of bare sigma.
+# The uncertainty is propagated as (sigma/<R>) * sqrt((sigma_err/sigma)^2 + (mean_err/<R>)^2).
+normalize_by_response_mean: false
+
+# Add a relative uncertainty in quadrature: new_err = sqrt(err^2 + (v*sigma)^2).
+# Set to "0.0" to disable.
+# E.g. 0.02 adds a 2% uncertainty to each bin to account for systematic effects not captured by the fit error.
+additional_uncertainty: "0.0"
+
+# Add a minimal uncertainty floor in quadrature: new_err = sqrt(err^2 + add_min_err^2).
+# For example "0.0005" enforces a 0.05% floor. Set to "0.0" to disable.
+add_min_err: "0.0"
+
+# Multiply the uncertainty by sqrt(chi2/ndf) wherever the per-bin Gaussian fit's
+# reduced chi-square exceeds 1. Requires gaussian_fit_resolution: true.
+add_chi2_ndof: false
+
+# Selects how the mean of the response is computed per bin. Affects the value
+# used by normalize_by_response_mean. Allowed values:
+#   "auto"          - Gaussian fit mean when resolution comes from a successful
+#                     fit, binned moments otherwise.
+#   "gaussian_fit"  - Force the Gaussian fit mean.
+#   "histogram"     - First moment of the binned 1D response slice.
+#   "mean_storage"  - Mean read from a hist.storage.Mean() histogram filled
+#                     with the un-binned response values.
+response_mean_method: "auto"
+
+# NSC fit initial parameters [N, S, C, d].
+# The NSC formula is: sigma/pT = sqrt(N^2/pT^2 + S^2*pT^d + C^2)
+nsc_fit_parameters: [3.5, 0.5, 0.05, -1.0]
+
+# NSC fit parameter limits (null = no limit = +/-inf for that parameter).
+# Set nsc_fit_parameter_limits to null to disable all limits entirely.
+nsc_fit_parameter_limits:
+  lower: [null ,null ,null, null]   # lower bounds for [N, S, C, d], e.g. [-5.0, 0.0, 0.0, null]
+  upper: [null ,null ,null, null]   # upper bounds for [N, S, C, d], e.g. [20.0, 10.0, 5.0, null]
+
+# Fix individual NSC parameters (null = free, float = fixed to that value).
+# Example: [null, null, null, -1.0] fixes d=-1.0 and leaves N, S, C free.
+nsc_fix_parameters: [null, null, null, null]
+
+# Per-eta overrides for NSC fit initial parameters, limits, and fixed parameters.
+# Each entry: {eta_range: [lo, hi], <key>: <value>}.  First matching rule wins.
+# Can also be set per response variable (same syntax, takes priority over global).
+# Example:
+# nsc_fit_parameters_by_eta:
+#   - eta_range: [0.0, 1.3]
+#     nsc_fit_parameters: [3.5, 0.5, 0.05, -1.0]
+#   - eta_range: [2.5, 5.2]
+#     nsc_fit_parameters: [5.0, 0.8, 0.05, -1.0]
+# nsc_fit_parameter_limits_by_eta:
+#   - eta_range: [2.5, 5.2]
+#     nsc_fit_parameter_limits: {lower: [0, 0, 0, null], upper: [null, null, null, null]}
+# nsc_fix_parameters_by_eta:
+#   - eta_range: [2.5, 5.2]
+#     nsc_fix_parameters: [null, null, null, -1.0]
+nsc_fit_parameters_by_eta: null
+nsc_fit_parameter_limits_by_eta: null
+nsc_fix_parameters_by_eta: null
+
+# X-axis range to clip x values for the NSC fit; null to disable clipping
+nsc_fit_x_clip: null  # [min, max] range to clip x values for the NSC fit (E.G. [15, 3000])
+
+# Per-eta overrides for the NSC fit x-clip.  Each entry specifies an |eta|
+# range and the x_clip to use when the current bin's |eta| midpoint falls
+# inside that range.  The first matching rule wins and overwrites nsc_fit_x_clip.
+# Can also be set per response variable (same syntax, takes priority over global).
+# Example:
+# nsc_fit_x_clip_by_eta:
+#   - eta_range: [0.0, 1.3]
+#     x_clip: [15, 3000]
+#   - eta_range: [1.3, 2.5]
+#     x_clip: [20, 3000]
+#   - eta_range: [2.5, 5.2]
+#     x_clip: [30, 3000]
+nsc_fit_x_clip_by_eta: null
+
+# When true, a black dotted line is drawn showing the NSC formula evaluated at
+# the initial parameters (p0) for the first response variable only. It appears
+# in the legend as "initial params (p0)".
+plot_fit_diagnostics: false
+
+# -----------------------------------------------------------------------------
+# Fitting backend and convergence options
+# -----------------------------------------------------------------------------
+
+# Minimizer used for ALL fits (per-bin Gaussian resolution, NSC resolution-vs-pT,
+# and the linear rho-vs-mu mapping fit).
+#   "curve_fit" - scipy.optimize.curve_fit (default; Levenberg-Marquardt with a
+#                 Trust-Region-Reflective fallback).
+#   "iminuit"   - iminuit / MINUIT (https://scikit-hep.org/iminuit), the de-facto
+#                 HEP minimizer; often more robust for the NSC and Gaussian fits.
+fit_backend: curve_fit
+
+# Options for the iminuit backend (used only when fit_backend: iminuit).
+iminuit_options:
+  optimizer: migrad        # minimiser: "migrad", "simplex", or "scan"
+  run_simplex_first: false # run a SIMPLEX pass before MIGRAD to aid convergence
+  strategy: 1              # MINUIT strategy: 0 (fast), 1 (default), 2 (accurate)
+  tol: null                # EDM convergence tolerance (null = iminuit default)
+  max_calls: 0             # max function calls per minimisation (0 = no limit)
+  use_minos: false         # also run MINOS for asymmetric uncertainty estimation
+
+# Options for the scipy curve_fit backend (used only when fit_backend: curve_fit).
+curve_fit_options:
+  method: null             # null (auto: "lm" unbounded / "trf" bounded), "lm", "trf", "dogbox"
+  maxfev: 100000           # maximum number of function evaluations
+
+# -----------------------------------------------------------------------------
+# Bin arrays (YAML anchors &name allow reuse below without duplication)
+# -----------------------------------------------------------------------------
+
+# nPU (number of pileup interactions) bin edges.
+pu_bins: &pu_bins [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+
+# Jet eta bin edges following the JME standard detector segmentation.
+jet_eta_bins: &jet_eta_bins
+  [-5.191, -3.839, -3.489, -3.139, -2.964, -2.853, -2.65, -2.5, -2.322,
+   -2.172, -2.043, -1.93, -1.74, -1.566, -1.305, -1.044, -0.783, -0.522,
+   -0.261, 0.0, 0.261, 0.522, 0.783, 1.044, 1.305, 1.566, 1.74, 1.93,
+   2.043, 2.172, 2.322, 2.5, 2.65, 2.853, 2.964, 3.139, 3.489, 3.839, 5.191]
+
+# Generator-level jet pT bin edges [GeV].
+jet_pt_bins: &jet_pt_bins
+  [8, 10, 12, 15, 17, 20, 23, 27, 30, 35, 40, 45, 57, 72, 90, 120, 150,
+   200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000]
+
+# Reduced bin arrays used when --test is passed (or test: true in this file).
+# They replace the full arrays above to allow fast iteration.
+test_pu_bins: [0, 50, 100]
+test_jet_eta_bins: [-5.191, 0.0, 5.191]
+test_jet_pt_bins: [8, 50, 120, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000]
+
+# -----------------------------------------------------------------------------
+# Response histogram settings (anchors for reuse in response_variables below)
+# -----------------------------------------------------------------------------
+
+# Number of bins in the response (pT_reco/pT_gen) histogram.
+n_bins_response: &n_bins_response 150
+
+# [min, max] range of the response axis.
+bin_limits_response: &bin_limits_response [0.5, 1.5]
+
+# Y-axis range for resolution plots [y_min, y_max].
+y_lim_resolution: [0, 0.35]
+
+# -----------------------------------------------------------------------------
+# Year tag mapping
+# -----------------------------------------------------------------------------
+# Maps the year tag extracted from dataset names to the campaign string used
+# in JME text-file names (e.g. "AK4PFPuppi_Run3Summer22_V1_MC_PtResolution.txt").
+year_map:
+  "2022_preEE": Summer22
+  "2022_postEE": Summer22EE
+  "2023_preBPix": Summer23
+  "2023_postBPix": Summer23BPix
+  "2024": Winter24
+
+# -----------------------------------------------------------------------------
+# Bin variable definitions
+# -----------------------------------------------------------------------------
+# Define the variables used as binning axes for the response histograms.
+# Each key is a column name from the coffea arrays.
+#
+# Per-variable keys:
+#   event_var           - true if one value per event; false if one per jet.
+#   bin_edges           - array of bin edges (YAML anchor or inline list).
+#   label               - LaTeX axis label used on plots.
+#   name_plot           - short name used to build plot filenames.
+#   resolution_x_variable - true if this variable is the x-axis of the
+#                           JER-vs-pT plot (exactly one variable should be true).
+#   txt_map_to          - (optional) variable to map this axis to in the JME
+#                         text-file output (used for nPU → rho mapping).
+#   txt_name            - (optional) name used in the JME text-file header.
+bin_variables:
+  Pileup_nPU:
+    event_var: true                # one value per event (not per jet)
+    bin_edges: *pu_bins
+    label: '$\mu$'
+    name_plot: nPU
+    resolution_x_variable: false
+    txt_map_to: Rho_fixedGridRhoFastjetAll  # map nPU bins to rho for txt output
+  MatchedJets_eta:
+    event_var: false               # one value per jet
+    bin_edges: *jet_eta_bins
+    label: '$\eta$'
+    name_plot: jet_eta
+    resolution_x_variable: false
+    txt_name: JetEta
+  MatchedJets_pt:
+    event_var: false
+    bin_edges: *jet_pt_bins
+    label: '$p_{\mathrm{T}}^{ptcl}$ [GeV]'
+    name_plot: jet_gen_pt
+    resolution_x_variable: true   # this is the x-axis of the JER-vs-pT plot
+    txt_name: JetPt
+
+# Mirror of bin_variables for the neutrino-inclusive jet collection.
+bin_variables_neutrino:
+  Pileup_nPU:
+    event_var: true
+    bin_edges: *pu_bins
+    label: '$\mu$'
+    name_plot: nPU
+    resolution_x_variable: false
+    txt_map_to: Rho_fixedGridRhoFastjetAll
+  MatchedJetsNeutrino_eta:
+    event_var: false
+    bin_edges: *jet_eta_bins
+    label: '$\eta$'
+    name_plot: jet_eta
+    resolution_x_variable: false
+    txt_name: JetEta
+  MatchedJetsNeutrino_pt:
+    event_var: false
+    bin_edges: *jet_pt_bins
+    label: '$p_{\mathrm{T}}^{ptcl}$ [GeV]'
+    name_plot: jet_gen_pt
+    resolution_x_variable: true
+    txt_name: JetPt
+
+# -----------------------------------------------------------------------------
+# Mapping variable definitions
+# -----------------------------------------------------------------------------
+# Variables profiled and fit per bin (e.g. rho vs mu, reco-pT vs gen-pT).
+# Their per-bin means are used as the x-axis of resolution-vs-reco-pT plots
+# and for the JME text output.
+#
+# Per-variable keys:
+#   event_var          - true if one value per event (e.g. rho), false per jet.
+#   label              - LaTeX axis label.
+#   name_plot          - short name used in filenames.
+#   N_bins             - number of histogram bins for profiling.
+#   bin_limits         - [lo, hi] range; if absent, auto-range is used.
+#   bin_vars           - list of bin_variable keys that define the binning grid.
+#   linear_fit         - if true, fit a linear model (e.g. rho = m*mu + b).
+#   fit_with_mean_bin_var - if true, use the mean of the bin variable as x
+#                          instead of the bin centre for the linear fit.
+#   legend_name        - label shown in overlay plot legends.
+#   txt_name           - name used in the JME text-file header.
+#   rebin_for_plotting - if true, rebin the stored histogram before plotting.
+mapping_variables:
+  Rho_fixedGridRhoFastjetAll:
+    event_var: true
+    label: '$\rho$ [GeV/area]'
+    name_plot: rho
+    N_bins: 1000
+    bin_vars: [Pileup_nPU]          # profile rho in nPU bins only
+    linear_fit: true                # fit rho = m*mu + b
+    fit_with_mean_bin_var: false
+    txt_name: Rho
+    rebin_for_plotting: true
+  MatchedJets_JetPtJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: JEC
+    rebin_for_plotting: true
+  MatchedJets_JetPtRaw:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: Raw
+    rebin_for_plotting: true
+  MatchedJets_JetPtPNetReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: PNet
+    rebin_for_plotting: true
+  MatchedJets_JetPtUparTReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: UParT
+    rebin_for_plotting: true
+  MatchedJetsNeutrino_JetPtJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_neutrino
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: JEC
+    rebin_for_plotting: true
+  MatchedJetsNeutrino_JetPtRaw:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_neutrino
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: Raw
+    rebin_for_plotting: true
+  MatchedJetsNeutrino_JetPtPNetRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_neutrino
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
+    rebin_for_plotting: true
+  MatchedJetsNeutrino_JetPtUparTRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_neutrino
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
+    rebin_for_plotting: true
+
+# -----------------------------------------------------------------------------
+# Response variable definitions
+# -----------------------------------------------------------------------------
+# Define which response columns to read and how to plot them.
+# Each entry corresponds to one jet correction type.
+#
+# Per-variable keys:
+#   label              - Axis label on response histograms.
+#   name_plot          - Short name used in filenames and for plot_settings lookup.
+#   N_bins             - Number of bins in the response histogram.
+#   bin_limits         - [lo, hi] range of the response axis.
+#   bin_vars           - Ordered list of binning variable keys (from bin_variables).
+#   legend_name        - Label shown in overlay plot legends.
+#   map_x_variable     - Mapping variable whose per-bin mean is the x-axis of
+#                        the resolution-vs-reco-pT plot.
+#   is_reference       - If true, this curve is the denominator of ratio panels.
+#   txt_jet_name       - Jet-algorithm tag in the JME text-file name
+#                        (e.g. "AK4PFPuppi").
+#   rebin_for_plotting - If true, the stored fine-binned response is rebinned
+#                        before fitting/plotting.
+#   eta_max            - Optional upper |eta| cut; bins beyond it are skipped.
+#   normalize_by_response_mean - Override the global default for this variable.
+#   additional_uncertainty     - Override the global default for this variable.
+#   add_min_err                - Override the global default for this variable.
+#   add_chi2_ndof              - Override the global default for this variable.
+#   response_mean_method       - Override the global default for this variable.
+#   nsc_fit_x_clip       - Override the global default for this variable.
+response_variables:
+  MatchedJets_ResponseJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_jec
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: JEC
+    map_x_variable: MatchedJets_JetPtJEC
+    is_reference: true              # reference curve in overlay/ratio plots
+    txt_jet_name: AK4PFPuppi
+    rebin_for_plotting: false
+  MatchedJets_ResponseRaw:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_raw
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: Raw
+    map_x_variable: MatchedJets_JetPtRaw
+    is_reference: false
+    txt_jet_name: AK4PFPuppiRaw
+    rebin_for_plotting: false
+  MatchedJets_ResponsePNetReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_pnetreg
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: PNet
+    map_x_variable: MatchedJets_JetPtPNetReg
+    is_reference: false
+    txt_jet_name: AK4PFPNet
+    rebin_for_plotting: false
+  MatchedJets_ResponseUparTReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_upartreg
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: UParT
+    map_x_variable: MatchedJets_JetPtUparTReg
+    is_reference: false
+    txt_jet_name: AK4PFUParT
+    eta_max: 2.5                    # skip |eta| > 2.5 for UParT
+    rebin_for_plotting: false
+
+# Response variables for neutrino-inclusive jets.
+response_variables_neutrino:
+  MatchedJetsNeutrino_ResponseJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_jec
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: JEC
+    map_x_variable: MatchedJetsNeutrino_JetPtJEC
+    is_reference: true
+    txt_jet_name: AK4PFPuppiNeutrino
+    rebin_for_plotting: false
+  MatchedJetsNeutrino_ResponseRaw:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_raw
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: Raw
+    map_x_variable: MatchedJetsNeutrino_JetPtRaw
+    is_reference: false
+    txt_jet_name: AK4PFPuppiNeutrinoRaw
+    rebin_for_plotting: false
+  MatchedJetsNeutrino_ResponsePNetRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_pnetreg_neutrino
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
+    map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
+    is_reference: false
+    txt_jet_name: AK4PFPNetPlusNeutrino
+    rebin_for_plotting: false
+  MatchedJetsNeutrino_ResponseUparTRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_upartreg_neutrino
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
+    map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
+    is_reference: false
+    txt_jet_name: AK4PFUParTPlusNeutrino
+    eta_max: 2.5
+    rebin_for_plotting: false
+
+# Mixed mode: regular JEC/PNetReg/UparTReg + neutrino PNetReg/UparTReg (no Raw).
+# Used when mixed_mode: true (the default above).
+response_variables_mixed:
+  MatchedJets_ResponseJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_jec
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: JEC
+    map_x_variable: MatchedJets_JetPtJEC
+    is_reference: true
+    txt_jet_name: AK4PFPuppi
+    rebin_for_plotting: false
+  MatchedJets_ResponsePNetReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_pnetreg
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: PNet
+    map_x_variable: MatchedJets_JetPtPNetReg
+    is_reference: false
+    txt_jet_name: AK4PFPNet
+    rebin_for_plotting: false
+  MatchedJets_ResponseUparTReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_upartreg
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJets_eta, MatchedJets_pt]
+    legend_name: UParT
+    map_x_variable: MatchedJets_JetPtUparTReg
+    is_reference: false
+    txt_jet_name: AK4PFUParT
+    eta_max: 2.5
+    rebin_for_plotting: false
+  MatchedJetsNeutrino_ResponsePNetRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_pnetreg_neutrino
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
+    map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
+    is_reference: false
+    txt_jet_name: AK4PFPNetPlusNeutrino
+    rebin_for_plotting: false
+  MatchedJetsNeutrino_ResponseUparTRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
+    name_plot: response_upartreg_neutrino
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [Pileup_nPU, MatchedJetsNeutrino_eta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
+    map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
+    is_reference: false
+    txt_jet_name: AK4PFUParTPlusNeutrino
+    eta_max: 2.5
+    rebin_for_plotting: false
+
+# -----------------------------------------------------------------------------
+# Plot style settings
+# -----------------------------------------------------------------------------
+# Controls color and marker style for each correction type in overlay plots.
+# Keys are matched against the suffix of the response variable name
+# (e.g. "JEC", "Raw", "PNetReg").
+plot_settings:
+  JEC:
+    color: darkorange    # matplotlib color string
+    fmt: "o"             # matplotlib marker style
+  Raw:
+    color: green
+    fmt: "s"
+  PNetReg:
+    color: darkred
+    fmt: "<"
+  UparTReg:
+    color: tomato
+    fmt: "^"
+  PNetRegNeutrino:
+    color: darkblue
+    fmt: ">"
+  UparTRegNeutrino:
+    color: cornflowerblue
+    fmt: "v"

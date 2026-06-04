@@ -90,8 +90,6 @@ parser.add_argument("-o", "--output", type=str, help="Output directory", default
 args = parser.parse_args()
 
 
-YEARS = ["2022_preEE", "2022_postEE", "2023_preBPix", "2023_postBPix", "2024"]
-
 BIN_VARIABLES = {
     "ll_pt": {
         "bin_edges": qT_bins,

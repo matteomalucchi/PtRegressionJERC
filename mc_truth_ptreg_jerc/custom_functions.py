@@ -105,33 +105,6 @@ def get_closure_function_information(coor_file, use_function=False, ak_array=Tru
             for j, column in enumerate(columns)
         ]
 
-        # print(corrections_eta_bins[0])
-        # print(corrections_eta_bins[1])
-        # print(num_params)
-        # print(jet_pt[0])
-        # print(jet_pt[1])
-        # print(params)
-
-        # consier only eta bins in the eta_bins range
-        # correct_indeces=[]
-        # mask_eta_bins = (corrections_eta_bins[0][0] >= eta_bins[0]) & (corrections_eta_bins[1][0] <= eta_bins[-1])
-        # for i in range(len(corrections_eta_bins[0])):
-        #     for j in range(len(eta_bins)-1):
-        #         if corrections_eta_bins[0][i] >= eta_bins[j] and corrections_eta_bins[1][i] <= eta_bins[j+1]:
-        #             correct_indeces.append(i)
-        #             break
-        # print(correct_indeces)
-        # # keep only the correct indeces
-        # corrections_eta_bins=[
-        #     [corrections_eta_bins[0][i] for i in correct_indeces],
-        #     [corrections_eta_bins[1][i] for i in correct_indeces]
-        # ]
-        # num_params=[num_params[i] for i in correct_indeces]
-        # jet_pt=[
-        #     [jet_pt[0][i] for i in correct_indeces],
-        #     [jet_pt[1][i] for i in correct_indeces]
-        # ]
-
         eta_bins_array = np.array(corrections_eta_bins)
         if int(os.environ.get("ABS_ETA_INCLUSIVE", 0)) == 1:
             # array of True
@@ -178,14 +151,6 @@ def get_closure_function_information(coor_file, use_function=False, ak_array=Tru
         # remove empty lists
         params = [i for i in params if i]
 
-        # print("\n\nAfter")
-        # print(mask_eta_bins)
-        # print(corrections_eta_bins[0])
-        # print(corrections_eta_bins[1])
-        # print(num_params[0])
-        # print(jet_pt[0])
-        # print(jet_pt[1])
-        # print(params)
 
         function_dict = {
             "function_string": function_string,
@@ -255,18 +220,70 @@ def get_closure_function_information(coor_file, use_function=False, ak_array=Tru
         return def_closure_function_awkard
 
 
+
+def get_mc_truth_corr(corr_dict, eta, phi, pt, pnetreg=True, upartreg=False):
+    corr = ak.ones_like(eta)
+
+    function_string = corr_dict["function_string"]
+    corrections_eta_bins = corr_dict["corrections_eta_bins"]
+    corrections_phi_bins = corr_dict["corrections_phi_bins"]
+    num_params = corr_dict["num_params"]
+    jet_pt = corr_dict["jet_pt"]
+    params = corr_dict["params"]
+
+    if function_string=="((x<[10])*([9])+(x>=[10])*([0]+([1]/(pow(log10(x),2)+[2]))+([3]*exp(-([4]*((log10(x)-[5])*(log10(x)-[5])))))+([6]*exp(-([7]*((log10(x)-[8])*(log10(x)-[8])))))))":
+        corr_function = standard_gaus_function
+    elif pnetreg or upartreg:
+        corr_function = string_to_pol_function(function_string)
+    else:
+        corr_function = standard_gaus_function
+        if not all(n == 13 for n in num_params):
+            # parse older function string format used in Run 2
+            # where the pt threshold is given explicitly in the formula, not as a parameter
+            # e.g. "((x<14)*([9]))+((x>=14)*([0]+([1]/(pow(log10(x),2)+[2]))+([3]*exp(-([4]*((log10(x)-[5])*(log10(x)-[5])))))+([6]*exp(-([7]*((log10(x)-[8])*(log10(x)-[8])))))))"
+            if all(n == 12 for n in num_params):
+                num_params = [n+1 for n in num_params]
+                x_lessthan_idx = function_string.find("x<")
+                x_lessthan_closingparenthesis = function_string.find(")", x_lessthan_idx)
+                params = [[*p, float(function_string[x_lessthan_idx + 2 : x_lessthan_closingparenthesis])] for p in params]
+            else:
+                raise ValueError(f"Invalid number of parameters for standard_gaus_function evaluation.")
+
+    pt = ak.values_astype(pt, "float64")
+
+    for i in range(len(corrections_eta_bins[0])):
+        mask_bins = (corrections_eta_bins[0][i] <= eta) & (
+            eta < corrections_eta_bins[1][i]
+        )
+        if corrections_phi_bins:
+            mask_bins = (
+                mask_bins
+                & (corrections_phi_bins[0][i] <= phi)
+                & (phi < corrections_phi_bins[1][i])
+            )
+        mask_pt = (jet_pt[0][i] <= pt) & (pt < jet_pt[1][i])
+        corr = ak.where(
+            mask_bins,
+            ak.where(
+                mask_pt,
+                corr_function(pt, *params[i]),
+                ak.where(
+                    pt < jet_pt[0][i],
+                    corr_function(jet_pt[0][i], *params[i]),
+                    corr_function(jet_pt[1][i], *params[i]),
+                ),
+            ),
+            corr,
+        )
+
+    return corr
+
+
 if __name__ == "__main__":
     test_closure_function = get_closure_function_information(
         "params/Summer23Run3_V2_MC_L2Relative_AK4PFPNetPlusNeutrino.txt", use_function=True, ak_array=False
     )
 
-    # print(test_closure_function(0.5, 15.19084472))
-    # print(test_closure_function(0.5, 15.1))
-    # print(test_closure_function(0.5, 4587.0))
-    # print(test_closure_function(0.5, 4587.10368490))
-    # print(test_closure_function(0.5, 500000))
-    # print(test_closure_function(6, 15.1))
-    # print(test_closure_function(-5, 20))
     print(test_closure_function(-0.130706787109375, 14.727144241333008))
 
     # a = ak.highlevel.Array([[-0.8, -0.8], [-0.8, -0.8, -0.8]])
