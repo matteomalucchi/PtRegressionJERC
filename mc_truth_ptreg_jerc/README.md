@@ -328,12 +328,38 @@ Options controlling the NSC formula ($\sigma/p_T = \sqrt{N^2/p_T^2 + S^2 p_T^d +
 | Key | Default | Description |
 |---|---|---|
 | `nsc_fit_parameters` | `[3.5, 0.5, 0.05, -1.0]` | Initial values `[N, S, C, d]` for the NSC fit |
+| `nsc_fit_parameters_by_eta` | `null` | List of `{eta_range: [lo, hi], nsc_fit_parameters: [...]}` rules; per-eta override for initial parameters |
 | `nsc_fit_parameter_limits` | all `null` | Lower and upper bounds per parameter; `null` entries are ±∞. Set the whole key to `null` to disable all limits |
+| `nsc_fit_parameter_limits_by_eta` | `null` | List of `{eta_range: [lo, hi], nsc_fit_parameter_limits: {lower: [...], upper: [...]}}` rules; per-eta override for parameter limits |
 | `nsc_fix_parameters` | all `null` | Per-parameter list: float = fix to that value, `null` = free. Example: `[null, null, null, -1.0]` fixes `d=-1.0` |
+| `nsc_fix_parameters_by_eta` | `null` | List of `{eta_range: [lo, hi], nsc_fix_parameters: [...]}` rules; per-eta override for fixed parameters |
 | `nsc_fit_x_clip` | `null` | `[min, max]` range to clip the x-axis before fitting (e.g. `[15, 3000]`); `null` disables clipping |
+| `nsc_fit_x_clip_by_eta` | `null` | List of `{eta_range: [lo, hi], x_clip: [min, max]}` rules; the first rule whose `eta_range` contains the current bin's \|η\| midpoint wins and overwrites `nsc_fit_x_clip` for that bin |
 | `plot_fit_diagnostics` | `false` | When `true`, draw a black dotted line showing the NSC formula at the initial parameters (p₀), added to the legend, for the **first response variable only** |
 
 These keys can also be set **per response variable** to override the global values for that variable only.
+
+`nsc_fit_x_clip_by_eta` example — different x ranges for barrel, endcap, and forward:
+
+```yaml
+# global (applies to all response variables)
+nsc_fit_x_clip_by_eta:
+  - eta_range: [0.0, 1.3]
+    x_clip: [15, 3000]
+  - eta_range: [1.3, 2.5]
+    x_clip: [20, 3000]
+  - eta_range: [2.5, 5.2]
+    x_clip: [30, 3000]
+
+# per response variable (takes priority over the global list)
+response_variables:
+  MatchedJets_ResponsePNet:
+    nsc_fit_x_clip_by_eta:
+      - eta_range: [2.5, 5.2]
+        x_clip: [40, 3000]
+```
+
+Rules are matched by the absolute-η midpoint of the bin; the first matching rule wins.  Bins whose midpoint falls in no rule fall back to `nsc_fit_x_clip`.
 
 #### Bin arrays
 
