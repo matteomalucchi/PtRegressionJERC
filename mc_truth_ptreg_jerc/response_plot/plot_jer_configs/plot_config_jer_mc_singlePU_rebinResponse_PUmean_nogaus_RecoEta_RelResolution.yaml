@@ -14,16 +14,29 @@ save_response_summary: false
 # Response variable options (applied to all response variables)
 normalize_by_response_mean: true  # plot sigma / <R> instead of bare sigma
 additional_uncertainty: "0.02"  # add (v*sigma) in quadrature to error
-add_min_err: "0.000"  # add a minimal uncertainty floor in quadrature
+add_min_err: "0.0005"  # add a minimal uncertainty floor in quadrature
 add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
 response_mean_method: "mean_storage"  # auto | gaussian_fit | histogram | mean_storage
 # NSC fit initial parameters [N, S, C, d]
-nsc_fit_parameters: [-4., 2., 0.05, -1.5]
+nsc_fit_parameters: [3.5, 0.5, 0.05, -1]
 # NSC fit parameter limits (null = no limit = ±inf); set to null to disable all limits
 nsc_fit_parameter_limits:
-  lower: [-5.0, 0.0, 0.0, -2]
-  upper: [20.0, 10.0, 5.0, -1]
-nsc_fit_x_clip: [30, 3000]
+  lower: [-30.0, 0.0, 0.0, null]
+  upper: [20.0, 50.0, 5.0, null]
+# nsc_fit_x_clip: [15, 3000]
+nsc_fit_x_clip_by_eta:
+  - eta_range: [-5.2, -2.]
+    x_clip: [30, 3000]
+  - eta_range: [-2., -1.3]
+    x_clip: [25, 3000]
+  - eta_range: [-1.3, 1.3]
+    x_clip: [20, 3000]
+  - eta_range: [1.3, 2.]
+    x_clip: [25, 3000]
+  - eta_range: [2., 5.2]
+    x_clip: [30, 3000]
+
+
 plot_fit_diagnostics: true
 
 # Bin arrays (anchors allow reuse below without duplication)
@@ -47,7 +60,7 @@ n_bins_response: &n_bins_response 300
 bin_limits_response: &bin_limits_response [0., 3]
 
 # Resolution plot y-axis limits
-y_lim_resolution: [0, 0.35]
+y_lim_resolution: [0, 0.5]
 
 # Year tag mapping
 year_map:

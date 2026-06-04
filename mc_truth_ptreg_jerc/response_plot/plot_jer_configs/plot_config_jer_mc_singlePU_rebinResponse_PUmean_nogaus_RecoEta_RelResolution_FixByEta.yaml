@@ -1,9 +1,9 @@
 # Boolean flags
 mixed_mode: true
-resolution_vs_pt_gen: false
+resolution_vs_pt_gen: true
 resolution_vs_pt_reco: true
-histograms_map: false
-histograms_response: false
+histograms_map: true
+histograms_response: true
 gaussian_fit_resolution: false
 gaussian_fit_cut_tails: false
 gaussian_fit_max_sigma_rel_err: 1.0
@@ -17,24 +17,52 @@ additional_uncertainty: "0.02"  # add (v*sigma) in quadrature to error
 add_min_err: "0.000"  # add a minimal uncertainty floor in quadrature
 add_chi2_ndof: false  # multiply error by sqrt(chi2/ndf) where >1
 response_mean_method: "mean_storage"  # auto | gaussian_fit | histogram | mean_storage
+
 # NSC fit initial parameters [N, S, C, d]
-nsc_fit_parameters: [-4., 2., 0.05, -1.5]
-# NSC fit parameter limits (null = no limit = ±inf); set to null to disable all limits
-# nsc_fit_parameter_limits:
-#   lower: [-5.0, 0.0, 0.0, null]
-#   upper: [20.0, 10.0, 5.0, null]
-nsc_fit_x_clip: [30, 10000]
+nsc_fit_parameters: [3.5, 0.5, 0.05, -1]
+# nsc_fit_x_clip: [15, 3000]
+nsc_fit_x_clip_by_eta:
+  - eta_range: [-5.2, -2.]
+    x_clip: [30, 3000]
+  - eta_range: [-2., -1.3]
+    x_clip: [25, 3000]
+  - eta_range: [-1.3, 1.3]
+    x_clip: [20, 3000]
+  - eta_range: [1.3, 2.]
+    x_clip: [25, 3000]
+  - eta_range: [2., 5.2]
+    x_clip: [30, 3000]
+
+nsc_fix_parameters_by_eta:
+  - eta_range: [-5.2, -3.139]
+    nsc_fix_parameters: [null, null, null, -1]
+  - eta_range: [-3.139, -2.]
+    nsc_fix_parameters: [null, null, null, null]
+  - eta_range: [-2., -1.3]
+    nsc_fix_parameters: [null, null, null, null]
+  - eta_range: [-1.3, 1.3]
+    nsc_fix_parameters: [null, null, null, null]
+  - eta_range: [1.3, 2.]
+    nsc_fix_parameters: [null, null, null, null]
+  - eta_range: [2., 3.139]
+    nsc_fix_parameters: [null, null, null, null]
+  - eta_range: [3.139, 5.2]
+    nsc_fix_parameters: [null, null, null, -1]
+
+nsc_fit_parameter_limits_by_eta:
+  - eta_range: [-5.2, -2.]
+    nsc_fit_parameter_limits: {lower: [-5.0, 0.0, 0.0, null], upper: [20.0, 10.0, 5.0, null]}
+  - eta_range: [-2., -1.3]
+    nsc_fit_parameter_limits: {lower: [-5.0, 0.0, 0.0, -1.5], upper: [20.0, 10.0, 5.0, -0.8]}
+  - eta_range: [-1.3, 1.3]
+    nsc_fit_parameter_limits: {lower: [-5.0, 0.0, 0.0, -1.5], upper: [20.0, 10.0, 5.0, -0.5]}
+  - eta_range: [1.3, 2.]
+    nsc_fit_parameter_limits: {lower: [-5.0, 0.0, 0.0, -1.5], upper: [20.0, 10.0, 5.0, -0.8]}
+  - eta_range: [2., 5.2]
+    nsc_fit_parameter_limits: {lower: [-5.0, 0.0, 0.0, null], upper: [20.0, 10.0, 5.0, null]}
 
 
-fit_backend: iminuit
-iminuit_options:
-  optimizer: migrad        # minimiser: "migrad", "simplex", or "scan"
-  run_simplex_first: true # run a SIMPLEX pass before MIGRAD to aid convergence
-  strategy: 1              # MINUIT strategy: 0 (fast), 1 (default), 2 (accurate)
-  tol: null                # EDM convergence tolerance (null = iminuit default)
-  max_calls: 0             # max function calls per minimisation (0 = no limit)
-  use_minos: false         # also run MINOS for asymmetric uncertainty estimation
-
+plot_fit_diagnostics: true
 
 # Bin arrays (anchors allow reuse below without duplication)
 pu_bins: &pu_bins [0,100]
@@ -49,15 +77,15 @@ jet_pt_bins: &jet_pt_bins
 
 # Reduced bin arrays used when test: true
 test_pu_bins: [0, 100]
-test_jet_eta_bins: [2.322, 2.5, 2.65, 2.853, 2.964, 3.139, 3.489, 3.839, 4.7, 5.191]
-test_jet_pt_bins: [8, 10, 12, 15, 17, 20, 23, 27, 30]
+test_jet_eta_bins: [-5.191,-3.839, -2.5, 0, 2.5, 3.839, 5.191]
+test_jet_pt_bins: [8, 30, 35, 72, 90, 120, 150, 200, 550]
 
 # Response histogram settings (anchors for reuse in response_variables)
-n_bins_response: &n_bins_response 200
+n_bins_response: &n_bins_response 300
 bin_limits_response: &bin_limits_response [0., 3]
 
 # Resolution plot y-axis limits
-y_lim_resolution: [0, 0.6]
+y_lim_resolution: [0, 0.5]
 
 # Year tag mapping
 year_map:
@@ -129,7 +157,7 @@ mapping_variables:
     linear_fit: true
     fit_with_mean_bin_var: true
     txt_name: Rho
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJets_JetPtJEC:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
@@ -137,7 +165,7 @@ mapping_variables:
     bin_limits: [0, 6000]
     bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: JEC
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJets_JetPtPNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
@@ -145,7 +173,7 @@ mapping_variables:
     bin_limits: [0, 6000]
     bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: PNet
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJets_JetPtUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
@@ -153,7 +181,7 @@ mapping_variables:
     bin_limits: [0, 6000]
     bin_vars: [Pileup_nPU, MatchedJets_RecoEta, MatchedJets_pt]
     legend_name: UParT
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJetsNeutrino_JetPtPNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
@@ -161,7 +189,7 @@ mapping_variables:
     bin_limits: [0, 6000]
     bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
     legend_name: PNet incl. neutrinos
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJetsNeutrino_JetPtUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
     name_plot: jet_reco_pt
@@ -169,7 +197,7 @@ mapping_variables:
     bin_limits: [0, 6000]
     bin_vars: [Pileup_nPU, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
     legend_name: UParT incl. neutrinos
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
 
 # ---------------------------------------------------------------------------
 # Response variable definitions
@@ -187,7 +215,7 @@ response_variables_mixed:
     map_x_variable: MatchedJets_JetPtJEC
     is_reference: true
     txt_jet_name: AK4PFPuppi
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJets_ResponsePNetReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response
@@ -198,7 +226,7 @@ response_variables_mixed:
     map_x_variable: MatchedJets_JetPtPNetReg
     is_reference: false
     txt_jet_name: AK4PFPNet
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
     # nsc_fit_x_clip: [20, 3000]
   MatchedJets_ResponseUparTReg:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
@@ -211,7 +239,7 @@ response_variables_mixed:
     is_reference: false
     txt_jet_name: AK4PFUParT
     eta_max: 2.5
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
   MatchedJetsNeutrino_ResponsePNetRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
     name_plot: response
@@ -222,7 +250,7 @@ response_variables_mixed:
     map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
     is_reference: false
     txt_jet_name: AK4PFPNetPlusNeutrino
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
     # nsc_fit_x_clip: [20, 3000]
   MatchedJetsNeutrino_ResponseUparTRegNeutrino:
     label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{ptcl}$'
@@ -235,4 +263,4 @@ response_variables_mixed:
     is_reference: false
     txt_jet_name: AK4PFUParTPlusNeutrino
     eta_max: 2.5
-    # rebin_for_plotting: true
+    rebin_for_plotting: true
