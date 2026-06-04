@@ -29,6 +29,14 @@ from mc_truth_ptreg_jerc.response_plot.confidence import Confidence_numpy
 import mc_truth_ptreg_jerc.response_plot.plot_jer_utils as plt_utils
 
 
+def fmt_pval(p):
+    mantissa, exp = f"{p:.2e}".split("e")
+    mantissa = mantissa.rstrip("0").rstrip(".")
+    sign = exp[0]
+    exp_num = str(int(exp[1:]))
+    return f"{mantissa}e{sign}{exp_num}"
+
+
 def setup_logging(output_dir: str) -> None:
     """Configure root logger with console + rotating file handlers."""
     fmt = logging.Formatter(
@@ -308,10 +316,10 @@ gaussian_model.x_name = "x"
 _MISSING = object()
 
 
-def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
+def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg, current_bin_edges):
     """Return (p0, bounds, fixed_params) for the NSC fit.
 
-    Lookup order for each key: per-response variable → global cfg key → default.
+    Lookup order for each key: per-eta override → per-response variable → global cfg.
 
     ``nsc_fix_parameters``: list where each entry is a float (fixed value) or null
     (free).  Example: ``[0.0, null, null]`` fixes the first parameter to 0.
@@ -320,17 +328,9 @@ def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
     """
     rv_cfg = response_vars.get(response_var, {})
 
-    p0 = rv_cfg.get("nsc_fit_parameters", _MISSING)
-    if p0 is _MISSING:
-        p0 = cfg.get("nsc_fit_parameters")
-
-    limits = rv_cfg.get("nsc_fit_parameter_limits", _MISSING)
-    if limits is _MISSING:
-        limits = cfg.get("nsc_fit_parameter_limits")
-
-    fixed_params = rv_cfg.get("nsc_fix_parameters", _MISSING)
-    if fixed_params is _MISSING:
-        fixed_params = cfg.get("nsc_fix_parameters")  # None if absent
+    p0 = _resolve_by_eta(rv_cfg, cfg, current_bin_edges, "nsc_fit_parameters")
+    limits = _resolve_by_eta(rv_cfg, cfg, current_bin_edges, "nsc_fit_parameter_limits")
+    fixed_params = _resolve_by_eta(rv_cfg, cfg, current_bin_edges, "nsc_fix_parameters")
 
     if limits is None:
         bounds = (-np.inf, np.inf)
@@ -340,6 +340,39 @@ def _get_nsc_fit_p0_and_bounds(response_var, response_vars, cfg):
         bounds = (lower, upper)
 
     return (tuple(p0) if p0 is not None else None), bounds, fixed_params
+
+
+def _resolve_by_eta(rv_cfg, cfg, current_bin_edges, base_key, value_key=None):
+    """Return effective value for base_key, with optional per-eta override.
+
+    Checks ``{base_key}_by_eta`` (rv_cfg first, then cfg): a list of
+    ``{eta_range: [lo, hi], <value_key>: ...}`` rules.  The first rule whose
+    ``eta_range`` contains the absolute-eta midpoint of the current bin wins.
+    Falls back to ``base_key`` (rv_cfg → cfg) when no rule matches.
+    ``value_key`` defaults to ``base_key`` when not specified.
+    """
+    if value_key is None:
+        value_key = base_key
+    eta_edges = None
+    for var_name, edges in current_bin_edges.items():
+        if "eta" in var_name.lower():
+            eta_edges = edges
+            break
+
+    if eta_edges is not None:
+        low_eta, high_eta = eta_edges
+        eta_center = (abs(low_eta) + abs(high_eta)) / 2
+        for source in (rv_cfg, cfg):
+            for rule in source.get(base_key + "_by_eta") or []:
+                eta_lo, eta_hi = rule["eta_range"]
+                if eta_lo <= eta_center <= eta_hi:
+                    return rule[value_key]
+
+    return rv_cfg.get(base_key, cfg.get(base_key))
+
+
+def _resolve_x_clip(rv_cfg, cfg, current_bin_edges):
+    return _resolve_by_eta(rv_cfg, cfg, current_bin_edges, "nsc_fit_x_clip", value_key="x_clip")
 
 
 def _wrap_with_fixed_params(fit_function, fixed_params, p0, bounds):
@@ -545,6 +578,7 @@ def perform_fit(
         "params": np.full(n_params, np.nan),
         "params_err": np.full(n_params, np.nan),
         "cov": None,
+        "corr": None,
         "r_squared": np.nan,
         "chi2": np.nan,
         "dof": 0,
@@ -633,6 +667,12 @@ def perform_fit(
         if pcov is not None and pcov.size
         else np.full_like(params, np.nan)
     )
+    if pcov is not None and pcov.size:
+        _diag_sqrt = np.sqrt(np.diag(pcov))
+        _outer = np.outer(_diag_sqrt, _diag_sqrt)
+        corr = np.where(_outer > 0, pcov / _outer, np.nan)
+    else:
+        corr = None
 
     y_pred = fit_function(x, *params)
     residuals = y - y_pred
@@ -664,6 +704,7 @@ def perform_fit(
         "params": params,
         "params_err": params_err,
         "cov": pcov,
+        "corr": corr,
         "r_squared": r_squared,
         "chi2": chi2_stat,
         "dof": dof,
@@ -1026,6 +1067,7 @@ def plot_resolution_vs_x_variable(
             if fit_resolution:
                 fit_data = {}
                 fit_results = {}
+                _p0_curve_done = False  # draw p0 curve only once (first response var)
                 for response_var, gd in graph_data.items():
                     x_fit = gd["data"]["x"][0]
                     y_fit = gd["data"]["y"][0]
@@ -1041,7 +1083,7 @@ def plot_resolution_vs_x_variable(
                         y_fit_err = np.asarray(y_fit_err, dtype=float)[pos]
 
                     rv_cfg = response_vars.get(response_var, {})
-                    x_clip = rv_cfg.get("nsc_fit_x_clip", cfg.get("nsc_fit_x_clip"))
+                    x_clip = _resolve_x_clip(rv_cfg, cfg, y_bin_label_dict[y_bin_idx]["edges"])
                     if x_clip is not None:
                         clip_lo, clip_hi = x_clip
                         clip_mask = (x_fit >= clip_lo) & (x_fit <= clip_hi)
@@ -1051,7 +1093,7 @@ def plot_resolution_vs_x_variable(
                             y_fit_err = y_fit_err[clip_mask]
 
                     nsc_p0, nsc_bounds, nsc_fixed = _get_nsc_fit_p0_and_bounds(
-                        response_var, response_vars, cfg
+                        response_var, response_vars, cfg, y_bin_label_dict[y_bin_idx]["edges"]
                     )
                     fit_func, fit_p0, fit_bounds, reconstruct = (
                         _wrap_with_fixed_params(NSC, nsc_fixed, nsc_p0, nsc_bounds)
@@ -1097,6 +1139,24 @@ def plot_resolution_vs_x_variable(
                             "appear_in_legend": False,
                         },
                     }
+
+                    if cfg.get("plot_fit_diagnostics", False) and not _p0_curve_done:
+                        _p0_curve_done = True
+                        if nsc_p0 is not None:
+                            y_p0 = NSC(x_fit_fit, *nsc_p0)
+                            if np.all(np.isfinite(y_p0)):
+                                fit_data["_fit_p0"] = {
+                                    "data": {
+                                        "x": [x_fit_fit, np.zeros_like(x_fit_fit)],
+                                        "y": [y_p0, np.zeros_like(y_p0)],
+                                    },
+                                    "style": {
+                                        "fmt": ":",
+                                        "color": "black",
+                                        "linewidth": 1.5,
+                                        "legend_name": "initial params (p$_0$)",
+                                    },
+                                }
 
                 graph_data.update(fit_data)
                 all_fit_results.update(fit_results)
@@ -1169,10 +1229,10 @@ def plot_resolution_vs_x_variable(
 
             if fit_resolution:
                 for i, (response_var, fit_res) in enumerate(fit_results.items()):
-                    chi2_str = f"$\\chi^2$/ndf={fit_res['chi2']:.0f}/{fit_res['dof']}, p={fit_res['p_value']:.2f}"
+                    chi2_str = f"$\\chi^2$/ndf={fit_res['chi2']:.0f}/{fit_res['dof']}, p={fit_res['p_value']:.0e}"
                     plotter.add_annotation(
                         0.69,
-                        0.65 - i * 0.07,
+                        0.6 - i * 0.07,
                         chi2_str,
                         color=get_color(response_var.replace(fit_result_string, "")),
                         horizontalalignment="left",
@@ -2874,7 +2934,7 @@ def plot_variable_slices(
                         sigma_label = (
                             f"$\\sigma={abs(sigma_val):.3f} \\pm {sigma_err:.3f}$"
                             f"\n$\\chi^2/\\mathrm{{ndf}}={fit_res['chi2']:.0f}/{fit_res['dof']}$, "
-                            f"$p={fit_res['p_value']:.2f}$"
+                            f"$p={fit_res['p_value']:.0e}$"
                         )
                         h_1d = series_dict[var_name]["data"]
                         axis = h_1d.axes[0]
@@ -3276,7 +3336,7 @@ def save_fit_results(fit_results, output_path):
         fr = dict(fit_result)
         fr.pop("fit_func", None)
 
-        for key in ("params_err", "cov"):
+        for key in ("params_err", "cov", "corr"):
             val = fr.get(key)
             if val is None:
                 continue
