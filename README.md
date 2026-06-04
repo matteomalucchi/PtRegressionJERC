@@ -6,7 +6,7 @@ Repository with [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree
 
 ### lxplus installation
 
-To setup a local installation on `lxplus`,:
+To setup a local installation on `lxplus`:
 
 ```bash
 # Clone the fork and checkout the desired branch
