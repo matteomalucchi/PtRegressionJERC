@@ -292,6 +292,7 @@ The file `plot_jer_configs/plot_config_jer_mc_default.yaml` is the built-in defa
 | `gaussian_fit_cut_tails` | `[0.87]` | List of CI fractions to try when trimming the fit window around the peak; set to `false` to disable. The CI that yields the best p-value is kept per bin |
 | `gaussian_fit_max_sigma_rel_err` | `1.0` | Reject bins where the fitted `sigma_err / sigma` exceeds this value (resolution becomes NaN) |
 | `min_events_for_fit` | `50` | Minimum number of events in a 1D response slice before any fit or CI estimation is attempted |
+| `rebin_max_factor` | `None` | Maximum rebin factor for the auto-rebinning algorithm. Prevents low-statistics slices (e.g. high pT, forward η) from being rebinned so coarsely that the Gaussian fit over-estimates the resolution. Set to `null` to disable (original behaviour). Typical range: 8–12 |
 | `ci_conf_level` | `0.87` | Confidence level used by the CI estimator when `gaussian_fit_resolution: false` |
 | `save_response_summary` | `false` | Save a JSON summary of response histograms and fit results for later use in the JME text-file output |
 

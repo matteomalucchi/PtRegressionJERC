@@ -2210,7 +2210,10 @@ def _compute_resolution_from_histogram(
                     )
                 )
                 h_1d_slice.view()[:] = hist_counts
-                h_1d_rebinned, rebin_info = rebin_histogram(h_1d_slice)
+                h_1d_rebinned, rebin_info = rebin_histogram(
+                    h_1d_slice,
+                    max_rebin_factor=cfg.get("rebin_max_factor", None),
+                )
                 if rebin_info is not None:
                     x_fit = h_1d_rebinned.axes[0].centers
                     y_fit = h_1d_rebinned.values().astype(float)
@@ -2566,7 +2569,9 @@ def compute_binned_resolution_from_histograms(
     return response_tot_dict
 
 
-def rebin_histogram(h, quantile_range=(0.01, 0.99), min_events_per_bin=20):
+def rebin_histogram(
+    h, quantile_range=(0.01, 0.99), min_events_per_bin=20, max_rebin_factor=None
+):
     """
     Rebin a 1D histogram automatically based on statistics.
 
@@ -2582,6 +2587,10 @@ def rebin_histogram(h, quantile_range=(0.01, 0.99), min_events_per_bin=20):
         Fraction of the distribution to keep (tails are trimmed).
     min_events_per_bin : int
         Desired minimum events per bin; drives the auto target_bins computation.
+    max_rebin_factor : int or None
+        Upper bound on the rebin factor. When set, prevents bins from becoming
+        so wide that the Gaussian shape is under-sampled in low-statistics slices.
+        ``None`` means no cap (original behaviour).
 
     Returns
     -------
@@ -2610,6 +2619,8 @@ def rebin_histogram(h, quantile_range=(0.01, 0.99), min_events_per_bin=20):
 
     # Floor division so the output has *at least* target_bins bins.
     rebin_factor = max(1, n_bins_in_range // target_bins)
+    if max_rebin_factor is not None:
+        rebin_factor = min(rebin_factor, max_rebin_factor)
     remainder = n_bins_in_range % rebin_factor
     if remainder != 0:
         hi_idx = min(len(centers), hi_idx + (rebin_factor - remainder))

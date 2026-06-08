@@ -46,6 +46,14 @@ gaussian_fit_max_sigma_rel_err: 1.0
 # estimation is attempted. Bins with fewer events are set to NaN.
 min_events_for_fit: 50
 
+# Maximum rebin factor applied by the auto-rebinning algorithm in
+# rebin_histogram(). Caps the factor computed from min_events_per_bin so that
+# bins never become wider than max_rebin_factor × original_bin_width. Without
+# this cap, low-statistics slices (e.g. high pT, forward η) can be rebinned so
+# coarsely that the Gaussian fit over-estimates the resolution. Set to null to
+# disable the cap (original behaviour). Typical value: 8–12.
+rebin_max_factor: null
+
 # Confidence level used by the CI estimator when gaussian_fit_resolution: false.
 ci_conf_level: 0.87
 
