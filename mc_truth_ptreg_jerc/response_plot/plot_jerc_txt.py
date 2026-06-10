@@ -138,8 +138,8 @@ _JERC_CONFIG = {
     },
     "NSC_MC_PtResolution": {
         "ylabel": "Jet Energy Resolution",
-        "ylim": (0.0, 0.5),
-        "ylim_eta_restricted": (0.0, 0.2),
+        "ylim": (0.0, 0.6),
+        "ylim_eta_restricted": (0.0, 0.6),
         "lumitext": None,
         "cmstext": "Simulation Preliminary",
         "fold_eta": True,
@@ -1232,17 +1232,19 @@ def plot_jerc_series(
                 marker=_MARKERS[i_pt % len(_MARKERS)],
                 linestyle="none",
                 markersize=8,
-                label=f"$p_{{T}}$ = {pt_val:.0f} GeV",
+                label=f"{pt_val:.0f}",
             )
             for i_pt, pt_val in pt_values_used
         ]
         ax.legend(
             handles=pt_handles,
-            loc="lower right",
-            bbox_to_anchor=(0.95, 0.0),
-            title=None,
-            fontsize="x-small",
+            loc="upper right",
+            bbox_to_anchor=(0.98, 1.0),
+            title="$p_{T}$ [GeV]",
+            title_fontsize=15,
+            fontsize=15,
             framealpha=0.85,
+            ncols=3,
         )
     else:
         # vs-eta with rho: two internal legends at the same height, left and right
