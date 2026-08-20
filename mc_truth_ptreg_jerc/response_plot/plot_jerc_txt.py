@@ -85,6 +85,7 @@ _YEAR_MAP = {
     "2023_preBPix": "Summer23",
     "2023_postBPix": "Summer23BPix",
     "2024": "Winter24",
+    "2025": "Winter25",
     # Ultra-Legacy — APV variant must come before plain UL16 (longer token wins)
     "UL16_APV": "Summer20UL16APV",
     "UL16": "Summer20UL16",
@@ -101,8 +102,8 @@ PUPPI_JET_STRING = r"anti-$k_{T}$ R=0.4 (PUPPI)"
 _JERC_CONFIG = {
     "L2Relative": {
         "ylabel": "Simulated jet response",
-        "ylim": (0.8, 1.4),
-        "ylim_eta_restricted": (0.8, 1.4),
+        "ylim": (0.5, 1.9),
+        "ylim_eta_restricted": (0.5, 1.9),
         "lumitext": None,
         "cmstext": "Simulation Preliminary",
         "fold_eta": True,
