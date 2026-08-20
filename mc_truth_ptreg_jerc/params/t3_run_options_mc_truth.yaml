@@ -1,0 +1,9 @@
+# Executor options for the column-based MC truth analysis on the PSI T3.
+# Used by `run_mc_truth.py -r params/t3_run_options_mc_truth.yaml` (default).
+scaleout: 30
+cores-per-worker: 1
+mem-per-worker: "10GB"
+disk-per-worker: "1GB"
+queue: "standard"
+walltime: "08:00:00"
+chunksize: 100000

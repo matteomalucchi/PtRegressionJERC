@@ -1,0 +1,12 @@
+# Executor options for the column-based MC truth analysis on lxplus (HTCondor).
+# Use with: run_mc_truth.py -e condor@lxplus -r params/lxplus_run_options_mc_truth.yaml
+# run_mc_truth.py appends a `custom-setup-commands` entry exporting the path of
+# the generated run card, so the worker nodes read the same configuration.
+scaleout: 10
+cores-per-worker: 1
+mem-per-worker: "15GB"
+disk-per-worker: "1GB"
+queue: "workday"
+walltime: "12:00:00"
+chunksize: 100000
+local-virtualenv: true

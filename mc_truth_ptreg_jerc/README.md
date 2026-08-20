@@ -4,6 +4,17 @@ Repository to compute MC Truth corrections and JER MC for regressed pT jets.
 
 This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) and was originally hosted [at this link](https://github.com/matteomalucchi/AnalysisConfigs/tree/legacy-jme-config/configs/jme).
 
+> [!IMPORTANT]
+> The MC Truth derivation described below (`exec.py`, `mc_truth_config.py`,
+> `cartesian_config.py`, `response_plot/response.py`) is the **legacy,
+> histogram-based** workflow. It has been replaced by a column-based one that
+> runs ParticleNet and UParT together, dumps flat columns into parquet files
+> instead of per-eta-bin histograms, needs neither tmux nor exported
+> environment variables, and implements the flavour splitting at plotting time.
+> See **[README_mc_truth.md](README_mc_truth.md)**.
+> The JER MC part of this file (`jer_mc_config.py`, `plot_jer_mc.py`,
+> `plot_jerc_txt.py`) is unchanged and still current.
+
 ## Workflow
 
 ### Running the analysis
