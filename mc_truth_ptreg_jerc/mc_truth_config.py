@@ -195,7 +195,7 @@ cfg = Configurator(
         "upart": True,
         "remove_jets_outside_binning": False,
         "invalid_pnet_pt15": False,
-        "invalid_pnet_eta4p7": True,
+        "invalid_pnet_eta4p7": False,
         "regression_value_when_invalid": "raw",
     },
     calibrators=[],
