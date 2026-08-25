@@ -1,0 +1,686 @@
+# =============================================================================
+# Jets calibration for the column-based MC truth derivation
+# (mc_truth_columns_config.py + mc_truth_workflow.py)
+#
+# The only job of this file is to let the PocketCoffea `JetsCalibrator`
+# (pocket_coffea.lib.calibrators.common.common) APPLY THE pT REGRESSION, exactly
+# as it is done for the MET studies in
+# `met_ptreg_performance/params/jets_calibration_MET_calibrator_noJER.yaml`.
+#
+# How it works
+# ------------
+# * `mc_truth_workflow.py` clones the NanoAOD `Jet` collection once per
+#   regression (`JetPNetReg`, `JetPNetRegNeutrino`, `JetUparTReg`,
+#   `JetUparTRegNeutrino`) in `process_extra_after_skim`, i.e. before the
+#   calibrators are initialized.
+# * `apply_pt_regr_MC` (and `apply_pt_regr_Data`) is True for the regression jet
+#   types, so the calibrator replaces `pt`/`mass` of each clone with the
+#   regressed values (raw pT x regression factor) and sets `rawFactor` to 0.
+#   Which tagger is used is decided by the NAME of the jet type:
+#     "PNet"        -> PNetRegPtRawCorr           (x PNetRegPtRawCorrNeutrino)
+#     "UParTAK4"    -> UParTAK4RegPtRawCorr, or   UParTAK4RegPtRawCorrNeutrino
+#                                                  alone for "PlusNeutrino"
+#   which reproduces exactly what the old workflow computed by hand.
+# * `apply_jec_MC`/`apply_jec_Data`/`apply_jer_MC` are False for those jet
+#   types: THE REGRESSED pT IS NOT CORRECTED FURTHER, the regression is the only
+#   thing applied. This is what the MC truth derivation needs, since the whole
+#   point is to measure the correction that the regressed pT still needs.
+#   (Because no JEC is applied to them, these jet types need no entry in
+#   `jet_types`/`variations`: the calibrator never looks them up.)
+# * `sort_by_pt` is False everywhere, so all the collections keep the NanoAOD
+#   jet order and stay index-aligned with `Jet`. The workflow relies on this to
+#   copy the regressed pT back onto `Jet` as extra fields.
+#
+# The nominal `Jet` collection
+# ----------------------------
+# By default no JEC is applied to `Jet` either (`apply_jec_MC: False`): the JEC
+# reference response of the derivation is built by re-applying the standard
+# L2Relative txt file on the raw pT (`reapply_jec: true` in the run card), which
+# is the correction the MC truth derivation is compared against.
+# To use the official corrlib JEC (L1L2L3Res) instead, set
+# `apply_jec_MC.<year>.AK4PFPuppi: True` here AND `reapply_jec: false` in the
+# run card.
+#
+# Everything not listed here is inherited from the PocketCoffea defaults; the
+# collections that this analysis does not use (FatJet, CorrT1METJet) are
+# explicitly set to null so that the calibrator skips them.
+# =============================================================================
+
+jets_calibration:
+  # Which collection is handled by which jet type. null = not calibrated at all.
+  collection:
+    2016_PreVFP:
+      AK4PFchs: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetchs: null
+    2016_PostVFP:
+      AK4PFchs: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetchs: null
+    "2017":
+      AK4PFchs: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetchs: null
+    "2018":
+      AK4PFchs: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetchs: null
+    2022_preEE:
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+    2022_postEE:
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+    2023_preBPix:
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+    2023_postBPix:
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+    "2024":
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+    "2025":
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+    "2026":
+      AK4PFPuppi: "Jet"
+      AK4PFPuppiPNetRegression: "JetPNetReg"
+      AK4PFPuppiPNetRegressionPlusNeutrino: "JetPNetRegNeutrino"
+      AK4PFPuppiUParTAK4Regression: "JetUparTReg"
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: "JetUparTRegNeutrino"
+      AK8PFPuppi: null
+      AK4CorrT1METJetPuppi: null
+
+  # Apply the pT regression: this is the only correction this file applies.
+  apply_pt_regr_MC:
+    2016_PreVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2016_PostVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2017":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2018":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2022_preEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2022_postEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_preBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_postBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2024":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2025":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2026":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+
+  # Same for data (this analysis is MC only, kept for completeness).
+  apply_pt_regr_Data:
+    2016_PreVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2016_PostVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2017":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2018":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2022_preEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2022_postEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_preBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_postBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2024":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2025":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2026":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: True
+      AK4PFPuppiPNetRegressionPlusNeutrino: True
+      AK4PFPuppiUParTAK4Regression: True
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: True
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+
+  # No JEC on top of the regression, and none on the nominal jets either (see header).
+  apply_jec_MC:
+    2016_PreVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2016_PostVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2017":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2018":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2022_preEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2022_postEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_preBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_postBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2024":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2025":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2026":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+
+  # No JEC on data either.
+  apply_jec_Data:
+    2016_PreVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2016_PostVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2017":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2018":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2022_preEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2022_postEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_preBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_postBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2024":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2025":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2026":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+
+  # No JER smearing: the response is measured against the unsmeared gen jets.
+  apply_jer_MC:
+    2016_PreVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2016_PostVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2017":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2018":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2022_preEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2022_postEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_preBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_postBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2024":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2025":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2026":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+
+  # Keep the NanoAOD jet order so that all the collections stay index-aligned.
+  sort_by_pt:
+    2016_PreVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2016_PostVFP:
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2017":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    "2018":
+      AK4PFchs: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetchs: False
+    2022_preEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2022_postEE:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_preBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    2023_postBPix:
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2024":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2025":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+    "2026":
+      AK4PFPuppi: False
+      AK4PFPuppiPNetRegression: False
+      AK4PFPuppiPNetRegressionPlusNeutrino: False
+      AK4PFPuppiUParTAK4Regression: False
+      AK4PFPuppiUParTAK4RegressionPlusNeutrino: False
+      AK8PFPuppi: False
+      AK4CorrT1METJetPuppi: False
+

@@ -2,6 +2,12 @@
 
 Repository with [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) configurations to compute the MC Truth corrections, JER and MET-Type1 correction for regressed pT jets.
 
+Documentation:
+
+- [`mc_truth_ptreg_jerc/README_mc_truth.md`](mc_truth_ptreg_jerc/README_mc_truth.md) — MC Truth (L2Relative) corrections from dumped columns, with flavour splitting (current workflow).
+- [`mc_truth_ptreg_jerc/README.md`](mc_truth_ptreg_jerc/README.md) — JER MC study and the legacy histogram-based MC Truth workflow.
+- [`met_ptreg_performance/README.md`](met_ptreg_performance/README.md) — MET performance studies.
+
 ## Setup
 
 ### lxplus installation

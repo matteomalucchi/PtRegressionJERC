@@ -1,0 +1,370 @@
+# =============================================================================
+# Default configuration for response_mc_truth.py
+#
+# It follows the same structure as plot_jer_configs/plot_config_jer_mc_default.yaml:
+# a set of global options, the binning variables (the axes of the N-D
+# histograms), the mapping variables (profiled quantities used as x-axis) and
+# the response variables (one per jet correction). Pass a custom file with
+# -c/--config to override individual options; nested dictionaries are merged
+# key by key, so overriding one option of one variable is enough.
+# =============================================================================
+
+# Replace the eta / pT binning with the reduced test arrays below (also set by
+# the --test command line flag).
+test: false
+
+# -----------------------------------------------------------------------------
+# Per-bin estimators
+# -----------------------------------------------------------------------------
+
+# Minimum number of entries in a (flavour, eta, pT) response slice. Bins with
+# fewer entries give NaN and are skipped in the plots and the fits.
+min_events_per_bin: 20
+
+# Bins whose median response is below this value are considered broken (the
+# regression collapsed to zero) and are dropped.
+median_min: 0.1
+
+# How the resolution is estimated from the response distribution:
+#   "quantile"   - half the distance between the 84th and the 16th percentile
+#   "confidence" - width of the smallest interval containing ci_conf_level of
+#                  the entries, divided by the corresponding number of sigmas
+resolution_estimator: quantile
+ci_conf_level: 0.87
+
+# Plot sigma / median (relative resolution) instead of the bare width.
+normalize_resolution_by_median: true
+
+# Rebin the fine-grained response histogram before plotting the 1D slices.
+rebin_for_plotting: true
+rebin_max_factor: null
+
+# -----------------------------------------------------------------------------
+# Fit of the inverse median (the MC truth correction itself)
+# -----------------------------------------------------------------------------
+
+# Total number of columns per row of the L2Relative txt file: the number of
+# polynomial parameters plus two for the pT validity range. 9 means a
+# polynomial of order 6 at most.
+num_params: 9
+
+# The polynomial order is increased until the fit p-value exceeds this value.
+fit_p_value_threshold: 0.05
+
+# Only bins whose mean reconstructed pT is above this value enter the fit.
+fit_pt_min: 1.0
+
+# Write the L2Relative txt files.
+write_txt: true
+
+# Version tag used in the txt file names.
+version: V3
+
+# Maps the year tag extracted from the dataset names to the campaign name used
+# in the txt file names.
+campaign_map:
+  "2016_PreVFP": Summer20UL16APV
+  "2016_PostVFP": Summer20UL16
+  "2017": Summer20UL17
+  "2018": Summer20UL18
+  "2022_preEE": Summer22Run3
+  "2022_postEE": Summer22EERun3
+  "2023_preBPix": Summer23Run3
+  "2023_postBPix": Summer23BPixRun3
+  "2024": Summer24Run3
+  "2025": Winter25Run3
+
+# -----------------------------------------------------------------------------
+# Flavour splitting
+# -----------------------------------------------------------------------------
+# The flavour of the matched gen jet is dumped as a column by the workflow, so
+# the splitting is done here instead of running one job per flavour.
+# Every jet is assigned to exactly one group (jets that match no group land in
+# `other_name`), therefore summing the flavour axis gives back the inclusive
+# sample exactly.
+flavour_split:
+  enabled: true
+  field: partonFlavour       # partonFlavour or hadronFlavour
+  use_abs: true              # compare |pdgId| with the values below
+  groups:
+    uds: [1, 2, 3]
+    c: [4]
+    b: [5]
+    g: [21]
+  other_name: other
+  # Flavours shown in the plots. "inclusive" is the sum of all the groups.
+  plot_flavours: [inclusive, b, c, uds, g]
+  # Flavours for which the correction is fitted and written to a txt file.
+  derive_correction_flavours: [inclusive]
+  labels:
+    inclusive: all flavours
+    b: b
+    c: c
+    uds: uds
+    g: gluon
+    other: undefined
+  colors:
+    inclusive: black
+    b: darkblue
+    c: darkgreen
+    uds: darkorange
+    g: darkred
+    other: gray
+  markers:
+    inclusive: "o"
+    b: "s"
+    c: "^"
+    uds: "v"
+    g: "<"
+    other: "x"
+
+# -----------------------------------------------------------------------------
+# Bin arrays
+# -----------------------------------------------------------------------------
+# Reconstructed jet eta bin edges (the JME standard segmentation, i.e. the
+# binning of the L2Relative txt files).
+jet_eta_bins: &jet_eta_bins
+  [-5.191, -4.889, -4.716, -4.538, -4.363, -4.191, -4.013, -3.839, -3.664,
+   -3.489, -3.314, -3.139, -2.964, -2.853, -2.65, -2.5, -2.322, -2.172,
+   -2.043, -1.93, -1.83, -1.74, -1.653, -1.566, -1.479, -1.392, -1.305,
+   -1.218, -1.131, -1.044, -0.957, -0.879, -0.783, -0.696, -0.609, -0.522,
+   -0.435, -0.348, -0.261, -0.174, -0.087, 0.0, 0.087, 0.174, 0.261, 0.348,
+   0.435, 0.522, 0.609, 0.696, 0.783, 0.879, 0.957, 1.044, 1.131, 1.218,
+   1.305, 1.392, 1.479, 1.566, 1.653, 1.74, 1.83, 1.93, 2.043, 2.172, 2.322,
+   2.5, 2.65, 2.853, 2.964, 3.139, 3.314, 3.489, 3.664, 3.839, 4.013, 4.191,
+   4.363, 4.538, 4.716, 4.889, 5.191]
+
+# Generator-level jet pT bin edges [GeV].
+jet_pt_bins: &jet_pt_bins
+  [15, 17, 20, 23, 27, 30, 35, 40, 45, 57, 72, 90, 120, 150, 200, 300, 400,
+   550, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000]
+
+# Reduced arrays used when test: true (or --test).
+test_jet_eta_bins: [-5.191, -2.5, -1.3, 0.0, 1.3, 2.5, 5.191]
+test_jet_pt_bins: [15, 30, 57, 120, 300, 750, 2000, 5000]
+
+# -----------------------------------------------------------------------------
+# Response histogram settings
+# -----------------------------------------------------------------------------
+# Number of bins of the response axis. The memory of a response histogram is
+# n_bins_response x n_flavours x n_eta x n_pT doubles, so this number should be
+# kept moderate: the median and the quantiles are obtained by interpolating the
+# cumulative distribution inside the bin, which makes them much more precise
+# than the bin width.
+n_bins_response: &n_bins_response 500
+bin_limits_response: &bin_limits_response [0.0, 3.0]
+
+# y-axis ranges of the summary plots
+y_lim_median: [0.5, 1.5]
+y_lim_inverse_median: [0.5, 2.0]
+y_lim_resolution: [0.0, 0.5]
+
+# -----------------------------------------------------------------------------
+# Bin variables (the axes of the N-D histograms)
+# -----------------------------------------------------------------------------
+# Per-variable keys:
+#   kind         - "flavour" for the categorical flavour axis (its categories
+#                  are filled in automatically from flavour_split), otherwise
+#                  omitted.
+#   bin_edges    - bin edges of the axis.
+#   label        - LaTeX label used on the plots.
+#   name_plot    - short name used in the plot file names.
+#   x_variable   - true for the axis used as x-axis of the summary plots.
+#   txt_name     - name of the axis in the L2Relative txt file.
+bin_variables:
+  MatchedJets_FlavourIndex:
+    kind: flavour
+    label: 'flavour'
+    name_plot: flavour
+    x_variable: false
+  MatchedJets_RecoEta:
+    bin_edges: *jet_eta_bins
+    label: '$\eta^{\mathrm{reco}}$'
+    name_plot: jet_eta
+    x_variable: false
+    txt_name: JetEta
+  MatchedJets_pt:
+    bin_edges: *jet_pt_bins
+    label: '$p_{\mathrm{T}}^{\mathrm{ptcl}}$ [GeV]'
+    name_plot: jet_gen_pt
+    x_variable: true
+    txt_name: JetPt
+  MatchedJetsNeutrino_FlavourIndex:
+    kind: flavour
+    label: 'flavour'
+    name_plot: flavour
+    x_variable: false
+  MatchedJetsNeutrino_RecoEta:
+    bin_edges: *jet_eta_bins
+    label: '$\eta^{\mathrm{reco}}$'
+    name_plot: jet_eta
+    x_variable: false
+    txt_name: JetEta
+  MatchedJetsNeutrino_pt:
+    bin_edges: *jet_pt_bins
+    label: '$p_{\mathrm{T}}^{\mathrm{ptcl}}$ [GeV]'
+    name_plot: jet_gen_pt
+    x_variable: true
+    txt_name: JetPt
+
+# -----------------------------------------------------------------------------
+# Mapping variables
+# -----------------------------------------------------------------------------
+# Their mean per bin is used as the x-axis of the inverse median plot and, most
+# importantly, as the x variable of the polynomial fit: the correction is a
+# function of the *reconstructed* jet pT.
+# `mean_only: true` stores only the per-bin mean (exact, un-binned) and skips
+# the count histogram along the variable axis, which saves a lot of memory. Set
+# it to false if you want the distribution itself, using N_bins / bin_limits.
+mapping_variables:
+  MatchedJets_JetPtJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_jec
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    mean_only: true
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: JEC
+  MatchedJets_JetPtRaw:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_raw
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    mean_only: true
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: Raw
+  MatchedJets_JetPtPNetReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_pnetreg
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    mean_only: true
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: PNet
+  MatchedJets_JetPtUparTReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_upartreg
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    mean_only: true
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: UParT
+  MatchedJetsNeutrino_JetPtPNetRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_pnetreg_neutrino
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    mean_only: true
+    bin_vars: [MatchedJetsNeutrino_FlavourIndex, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
+  MatchedJetsNeutrino_JetPtUparTRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$ [GeV]'
+    name_plot: jet_reco_pt_upartreg_neutrino
+    N_bins: 1000
+    bin_limits: [0, 6000]
+    mean_only: true
+    bin_vars: [MatchedJetsNeutrino_FlavourIndex, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
+
+# -----------------------------------------------------------------------------
+# Response variables
+# -----------------------------------------------------------------------------
+# Per-variable keys:
+#   bin_vars           - ordered list of binning axes (keys of bin_variables).
+#   map_x_variable     - mapping variable whose per-bin mean is the x-axis of
+#                        the inverse median plot and of the polynomial fit.
+#   is_reference       - denominator of the ratio panel of the resolution plot.
+#   derive_correction  - fit the inverse median and write a txt file.
+#   txt_jet_name       - jet algorithm tag used in the txt file name.
+#   eta_max            - optional |eta| limit (bins beyond it are skipped).
+response_variables:
+  MatchedJets_ResponseJEC:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{\mathrm{ptcl}}$'
+    name_plot: response_jec
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: JEC
+    map_x_variable: MatchedJets_JetPtJEC
+    is_reference: true
+    derive_correction: false
+  MatchedJets_ResponseRaw:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{\mathrm{ptcl}}$'
+    name_plot: response_raw
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: Raw
+    map_x_variable: MatchedJets_JetPtRaw
+    is_reference: false
+    derive_correction: false
+  MatchedJets_ResponsePNetReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{\mathrm{ptcl}}$'
+    name_plot: response_pnetreg
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: PNet
+    map_x_variable: MatchedJets_JetPtPNetReg
+    is_reference: false
+    derive_correction: true
+    txt_jet_name: AK4PFPNet
+  MatchedJets_ResponseUparTReg:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{\mathrm{ptcl}}$'
+    name_plot: response_upartreg
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [MatchedJets_FlavourIndex, MatchedJets_RecoEta, MatchedJets_pt]
+    legend_name: UParT
+    map_x_variable: MatchedJets_JetPtUparTReg
+    is_reference: false
+    derive_correction: true
+    txt_jet_name: AK4PFUparT
+    eta_max: 2.5
+  MatchedJetsNeutrino_ResponsePNetRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{\mathrm{ptcl}}$'
+    name_plot: response_pnetreg_neutrino
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [MatchedJetsNeutrino_FlavourIndex, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: PNet incl. neutrinos
+    map_x_variable: MatchedJetsNeutrino_JetPtPNetRegNeutrino
+    is_reference: false
+    derive_correction: true
+    txt_jet_name: AK4PFPNetPlusNeutrino
+  MatchedJetsNeutrino_ResponseUparTRegNeutrino:
+    label: '$p_{\mathrm{T}}^{\mathrm{reco}}$/$p_{\mathrm{T}}^{\mathrm{ptcl}}$'
+    name_plot: response_upartreg_neutrino
+    N_bins: *n_bins_response
+    bin_limits: *bin_limits_response
+    bin_vars: [MatchedJetsNeutrino_FlavourIndex, MatchedJetsNeutrino_RecoEta, MatchedJetsNeutrino_pt]
+    legend_name: UParT incl. neutrinos
+    map_x_variable: MatchedJetsNeutrino_JetPtUparTRegNeutrino
+    is_reference: false
+    derive_correction: true
+    txt_jet_name: AK4PFUparTPlusNeutrino
+    eta_max: 2.5
+
+# -----------------------------------------------------------------------------
+# Plot style
+# -----------------------------------------------------------------------------
+# Matched against the suffix of the response variable name.
+plot_settings:
+  JEC:
+    color: darkorange
+    fmt: "o"
+  Raw:
+    color: green
+    fmt: "s"
+  PNetReg:
+    color: darkred
+    fmt: "<"
+  UparTReg:
+    color: tomato
+    fmt: "^"
+  PNetRegNeutrino:
+    color: darkblue
+    fmt: ">"
+  UparTRegNeutrino:
+    color: cornflowerblue
+    fmt: "v"
