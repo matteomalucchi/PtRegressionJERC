@@ -99,7 +99,12 @@ def parse_args(argv=None):
     parser.add_argument(
         "--no-reapply-jec",
         action="store_true",
-        help="Use the PocketCoffea calibrated jet pT instead of re-applying L2Relative",
+        help=(
+            "Define the JEC response from the jet pT as left by the JetsCalibrator "
+            "instead of re-applying the L2Relative txt file. Only useful together "
+            "with apply_jec_MC.<year>.AK4PFPuppi: True in "
+            "params/jets_calibration_mc_truth.yaml, otherwise no JEC is applied at all"
+        ),
     )
     parser.add_argument(
         "--test",

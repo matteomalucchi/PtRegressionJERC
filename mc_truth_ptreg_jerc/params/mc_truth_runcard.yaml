@@ -35,8 +35,38 @@ samples:
 columns_output_dir: "root://t3dcachedb03.psi.ch:1094//pnfs/psi.ch/cms/trivcat/store/user/mmalucch/out_mc_truth_ptreg/out_mc_truth_{year}/parquet_files"
 
 # ----------------------------------------------------------------------------
-# Physics options (forwarded to MCTruthProcessor via workflow_options)
+# pT regressions
 # ----------------------------------------------------------------------------
+# The regressions are applied by the PocketCoffea JetsCalibrator, configured in
+# params/jets_calibration_mc_truth.yaml (that file applies the regression and
+# nothing else: the regressed pT is NOT corrected further).
+#
+# Each entry below connects one regression to that file and to the output:
+#   name       - suffix of the output columns: Response<name> / JetPt<name>
+#   collection - jet collection the calibration file regresses; it MUST match
+#                jets_calibration.collection.<year> in
+#                params/jets_calibration_mc_truth.yaml (the configuration
+#                raises an error if it does not)
+#   neutrinos  - true if the response is measured against the gen jets that
+#                include the neutrinos (MatchedJetsNeutrino)
+#   tagger     - which of the `pnet` / `upart` switches below enables it
+regressions:
+  - name: PNetReg
+    collection: JetPNetReg
+    neutrinos: false
+    tagger: pnet
+  - name: PNetRegNeutrino
+    collection: JetPNetRegNeutrino
+    neutrinos: true
+    tagger: pnet
+  - name: UparTReg
+    collection: JetUparTReg
+    neutrinos: false
+    tagger: upart
+  - name: UparTRegNeutrino
+    collection: JetUparTRegNeutrino
+    neutrinos: true
+    tagger: upart
 
 # Compute the ParticleNet / UParT regressed response. Both are run in the same
 # job: there is no reason any more to launch one job per tagger.
@@ -60,17 +90,21 @@ n_jets: 3
 com_energy: 13.6
 
 # Re-apply the standard L2Relative MC truth correction on top of the raw jet pT
-# to define the "JEC" response. When false, the jet pT calibrated by
-# PocketCoffea (jets_calibration.yaml) is used instead.
+# to define the "JEC" response: this is the correction the derivation is
+# compared against, so by default no JEC is applied by the calibrator either.
+# Set this to false AND apply_jec_MC.<year>.AK4PFPuppi: True in
+# params/jets_calibration_mc_truth.yaml to use the official corrlib JEC
+# (L1L2L3Res) as the reference instead.
 reapply_jec: true
 
 # Closure test: apply the freshly derived MC truth corrections on top of each
 # regression. The txt files are taken from params/ via params/l2relative_txt.py.
 closure: false
 
-# What to do when a regression factor is not positive:
+# What to do when the regressed pT is not positive, which is how the calibrator
+# leaves the jets whose regression factor is not valid:
 #   "raw"      - fall back to the raw jet pT (recommended)
-#   "original" - keep whatever the tagger returned
+#   "original" - keep whatever the calibrator returned
 #   <float>    - set pT and response to this value
 regression_value_when_invalid: raw
 

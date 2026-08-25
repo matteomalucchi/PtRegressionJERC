@@ -18,6 +18,7 @@ README](../README.md) for the installation.
 |---|---|
 | One job per eta region (`neg1`, `neg2`, ..., `pos4`) and per flavour | **One job** covering the full eta range and all flavours |
 | One job for ParticleNet, another one for UParT | **PNet and UParT together**, with and without neutrinos |
+| The regressed pT computed by hand in the workflow (one block of `ak.with_field` per tagger) | The regression applied by the PocketCoffea **`JetsCalibrator`**, configured in `params/jets_calibration_mc_truth.yaml`, as in `met_ptreg_performance` |
 | Output: one 2D histogram per eta/pT category inside `output_all.coffea` | Output: **flat columns dumped into parquet files** |
 | Binning frozen at analysis time (`CartesianSelection`, `MultiCut`) | Binning chosen **offline**, in a YAML config, and changed without re-running |
 | ~15 environment variables exported in bash (`YEAR`, `SIGN`, `PNET`, `UPART`, `CLOSURE`, `CARTESIAN`, `FLAVSPLIT`, ...) | A single **YAML run card**, written automatically from the command line |
@@ -29,7 +30,8 @@ README](../README.md) for the installation.
 | File | Purpose |
 |---|---|
 | `mc_truth_columns_config.py` | PocketCoffea configuration: selects the dataset, applies the corrections and declares the columns dumped to parquet |
-| `mc_truth_workflow.py` | `MCTruthProcessor`: jet matching and response computation for JEC, Raw, PNet and UParT (with and without neutrinos). No environment variables, no per-eta collections |
+| `mc_truth_workflow.py` | `MCTruthProcessor`: clones `Jet` once per regression for the calibrator, then does the jet matching and the response computation for JEC, Raw, PNet and UParT (with and without neutrinos). No environment variables, no per-eta collections |
+| `params/jets_calibration_mc_truth.yaml` | Calibration file whose only job is to **apply the regression**: no JEC and no JER on top of the regressed pT |
 | `mc_truth_corrections.py` | Environment-free parser of the JME `L2Relative` txt files |
 | `params/mc_truth_runcard.yaml` | Default run card: year, dataset, physics options |
 | `params/t3_run_options_mc_truth.yaml` | Executor options for the PSI T3 |
@@ -69,7 +71,7 @@ It writes
 | `--closure` | off | Apply the freshly derived MC truth corrections on top of the regressions (closure test) |
 | `--no-pnet` / `--no-upart` | off | Skip one of the two taggers (by default **both** run) |
 | `--no-neutrinos` | off | Skip the neutrino-inclusive gen jet collection |
-| `--no-reapply-jec` | off | Use the jet pT calibrated by PocketCoffea instead of re-applying the L2Relative txt file |
+| `--no-reapply-jec` | off | Define the JEC response from the jet pT as left by the calibrator instead of re-applying the L2Relative txt file; only useful together with `apply_jec_MC.<year>.AK4PFPuppi: True` (see [How the regression is applied](#how-the-regression-is-applied)) |
 | `--test` | off | `pocket-coffea run --test`: a couple of chunks, locally |
 | `--process-separately` | off | Process each dataset independently |
 | `--log` | off | Tee the output to `<output>/run_mc_truth.log` |
@@ -119,16 +121,80 @@ option.
 | `year` | Campaign to process |
 | `dataset_jsons`, `samples` | Dataset definition files and the sample name per year |
 | `columns_output_dir` | Where the parquet chunks go (`{year}` is substituted) |
+| `regressions` | One entry per pT regression: its `name` (suffix of the output columns), the `collection` the calibrator regresses, whether it is measured against the `neutrinos`-inclusive gen jets, and the `tagger` switch that enables it |
 | `pnet`, `upart`, `neutrinos` | Which responses are computed |
 | `deltaR_matching` | Cone used to match reco jets to gen jets |
 | `genjet_pt_cut` | Minimum gen jet pT (0: the pT binning is applied offline) |
 | `n_jets` | Number of leading raw-pT jets kept per event |
 | `com_energy` | Centre-of-mass energy, used to drop unphysical jets |
-| `reapply_jec` | Re-apply the L2Relative txt file on the raw pT to define the JEC response |
+| `reapply_jec` | Re-apply the L2Relative txt file on the raw pT to define the JEC response (see below) |
 | `closure` | Apply the derived corrections on top of the regressions |
-| `regression_value_when_invalid` | `raw`, `original` or a float, used when a regression factor is not positive |
+| `regression_value_when_invalid` | `raw`, `original` or a float, used when the regressed pT is not positive (invalid regression factor) |
 | `invalid_regression_eta` | Above this \|eta\| the regression falls back to the raw jet |
 | `pv_presel_distance` | Maximum distance between the reconstructed and the generated primary vertex |
+
+### How the regression is applied
+
+The regressions are **not** computed in the workflow any more: they are applied
+by the PocketCoffea `JetsCalibrator`
+(`pocket_coffea.lib.calibrators.common.common`), exactly like in the
+`met_ptreg_performance` configuration. The chain is:
+
+1. `mc_truth_workflow.py` clones the NanoAOD `Jet` collection once per
+   regression in `process_extra_after_skim`, i.e. *before* the calibrators are
+   initialised: `JetPNetReg`, `JetPNetRegNeutrino`, `JetUparTReg`,
+   `JetUparTRegNeutrino`.
+2. `params/jets_calibration_mc_truth.yaml` assigns each clone to a regression
+   jet type with `apply_pt_regr_MC: True`. The calibrator replaces its `pt` and
+   `mass` with the regressed values (raw pT × regression factor) and sets
+   `rawFactor` to 0. Which tagger and which factors are used is decided by the
+   **name** of the jet type:
+
+   | Jet type | Factor applied |
+   |---|---|
+   | `AK4PFPuppiPNetRegression` | `PNetRegPtRawCorr` |
+   | `AK4PFPuppiPNetRegressionPlusNeutrino` | `PNetRegPtRawCorr` × `PNetRegPtRawCorrNeutrino` |
+   | `AK4PFPuppiUParTAK4Regression` | `UParTAK4RegPtRawCorr` |
+   | `AK4PFPuppiUParTAK4RegressionPlusNeutrino` | `UParTAK4RegPtRawCorrNeutrino` |
+
+   which is exactly what the old workflow computed by hand.
+3. `apply_jec_MC`, `apply_jec_Data` and `apply_jer_MC` are **False** for those
+   jet types: the regressed pT is not corrected any further — applying the
+   regression is all this calibration file does. That is what the derivation
+   needs, since its whole purpose is to measure the correction that the
+   regressed pT still requires.
+4. `sort_by_pt` is False everywhere, so every collection keeps the NanoAOD jet
+   order and stays index-aligned with `Jet`. The workflow copies the regressed
+   pT back onto `Jet` as extra fields (`ptPNetReg`, …) in
+   `process_extra_after_calibrators`, so the gen-jet matching is done once and
+   all the corrections are compared on exactly the same jets.
+
+Two analysis-level fallbacks stay in the workflow, because they are not part of
+the calibration: jets whose regressed pT is not positive (invalid regression
+factor) fall back to `regression_value_when_invalid`, and jets above
+`invalid_regression_eta` fall back to the raw pT because the taggers are not
+trained there.
+
+The **nominal `Jet` collection gets no JEC either** (`apply_jec_MC: False`): the
+JEC reference response is built by re-applying the standard L2Relative txt file
+on the raw pT (`reapply_jec: true` in the run card), which is the correction the
+MC truth derivation is compared against. To use the official corrlib JEC
+(L1L2L3Res) as the reference instead, set
+`apply_jec_MC.<year>.AK4PFPuppi: True` in
+`params/jets_calibration_mc_truth.yaml` **and** `reapply_jec: false` in the run
+card.
+
+Disabling a tagger (`--no-pnet` / `--no-upart`) or the neutrinos
+(`--no-neutrinos`) drops the corresponding entries from `regressions`, and the
+configuration also switches the matching collections off in the calibration
+parameters, so the calibrator never looks for a collection the workflow did not
+clone. The configuration raises an error if a `collection` named in the run card
+is not declared in the calibration file for the year being processed.
+
+> [!NOTE]
+> This requires a PocketCoffea version that ships the calibrator framework
+> (`pocket_coffea.lib.calibrators`), the same one needed by
+> `met_ptreg_performance/MET_studies_config_calibrator.py`.
 
 ### Dumped columns
 
