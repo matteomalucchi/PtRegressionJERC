@@ -23,9 +23,9 @@ The `METProcessor` class performs the following steps:
 
 2. **Type-1 MET correction** — Raw PuppiMET is propagated to several corrected MET branches by replacing raw jet $p_T$ with JEC-corrected or PNet-regressed $p_T$ (`RawPuppiMET-Type1<suffix>`). The correction is applied as:
 
-   $$\mathbf{p}_T^{\,\text{MET,corr}} = \mathbf{p}_T^{\,\text{RawPuppiMET}} - \sum_\text{jets} \mathbf{p}_T^{\,\text{raw}} + \sum_\text{jets} \mathbf{p}_T^{\,\text{corr}}$$
+$$\mathbf{p}_T^{\,\text{MET,corr}} = \mathbf{p}_T^{\,\text{RawPuppiMET}} - \sum_\text{jets} \mathbf{p}_T^{\,\text{raw}} + \sum_\text{jets} \mathbf{p}_T^{\,\text{corr}}$$
 
-   Multiple options (`option_1` through `option_6`) control how jets without a valid regression output are handled (masked out, replaced by JEC jets, etc.).
+Multiple options (`option_1` through `option_6`) control how jets without a valid regression output are handled (masked out, replaced by JEC jets, etc.).
 
 1. **Lepton and dilepton selection** — Muons and electrons are selected; the two leading muons form the Z candidate (`ll`), whose transverse momentum defines $\mathbf{q}_T$.
 
@@ -37,7 +37,7 @@ The `METProcessor` class performs the following steps:
 
 - $u_\parallel$ (`u_paral`): component of $\mathbf{u}$ parallel to $\mathbf{q}_T$, shifted by $|\mathbf{q}_T|$ so that a perfect response gives $u_\parallel = 0$
 - $u_\perp$ (`u_perp`): component of $\mathbf{u}$ perpendicular to $\mathbf{q}_T$, which should be zero on average
-- $R$ (response): scalar response defined as $R = \mathbf{u}\cdot(-\hat{q}_T)\,/\,|\mathbf{q}_T|$, equal to 1 for perfect MET
+- $R$ (response): scalar response defined as $R = \mathbf{u}\cdot(-\hat{q}_T)/|\mathbf{q}_T|$, equal to 1 for perfect MET
 
 ### Summary plots ([`plot_MET.py`](plot_MET.py))
 
