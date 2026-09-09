@@ -8,7 +8,7 @@ This repository is structured as an analysis configuration for [PocketCoffea](ht
 
 ### Physics overview
 
-The analysis uses $Z\to\mu\mu$ events as a clean probe to measure MET performance. Since the Z boson transverse momentum $\vec{q}_T$ is precisely known from the two muons, it can be balanced against the hadronic recoil $\vec{u}$ to quantify how well MET is reconstructed. A perfect detector would give $\vec{u} = -\vec{q}_T$.
+The analysis uses $Z\to\mu\mu$ events as a clean probe to measure MET performance. Since the Z boson transverse momentum $\mathbf{q}_T$ is precisely known from the two muons, it can be balanced against the hadronic recoil $\mathbf{u}$ to quantify how well MET is reconstructed. A perfect detector would give $\mathbf{u} = -\mathbf{q}_T$.
 
 ### Event processing ([`workflow.py`](workflow.py))
 
@@ -23,21 +23,21 @@ The `METProcessor` class performs the following steps:
 
 2. **Type-1 MET correction** — Raw PuppiMET is propagated to several corrected MET branches by replacing raw jet $p_T$ with JEC-corrected or PNet-regressed $p_T$ (`RawPuppiMET-Type1<suffix>`). The correction is applied as:
 
-$$\vec{p}_T^{\,\text{MET,corr}} = \vec{p}_T^{\,\text{RawPuppiMET}} - \sum_\text{jets} \vec{p}_T^{\,\text{raw}} + \sum_\text{jets} \vec{p}_T^{\,\text{corr}}$$
+   $$\mathbf{p}_T^{\,\text{MET,corr}} = \mathbf{p}_T^{\,\text{RawPuppiMET}} - \sum_\text{jets} \mathbf{p}_T^{\,\text{raw}} + \sum_\text{jets} \mathbf{p}_T^{\,\text{corr}}$$
 
    Multiple options (`option_1` through `option_6`) control how jets without a valid regression output are handled (masked out, replaced by JEC jets, etc.).
 
-1. **Lepton and dilepton selection** — Muons and electrons are selected; the two leading muons form the Z candidate (`ll`), whose transverse momentum defines $\vec{q}_T$.
+1. **Lepton and dilepton selection** — Muons and electrons are selected; the two leading muons form the Z candidate (`ll`), whose transverse momentum defines $\mathbf{q}_T$.
 
 2. **Hadronic recoil and projections** — For each MET branch the hadronic recoil is computed as:
 
-$$\vec{u} = -\left(\vec{p}_T^{\,\text{MET}} + \vec{q}_T\right)$$
+   $$\mathbf{u} = -\left(\mathbf{p}_T^{\,\text{MET}} + \mathbf{q}_T\right)$$
 
    and projected onto two components relative to the Z direction:
 
-- $u_\parallel$ (`u_paral`): component of $\vec{u}$ parallel to $\vec{q}_T$, shifted by $|\vec{q}_T|$ so that a perfect response gives $u_\parallel = 0$
-- $u_\perp$ (`u_perp`): component of $\vec{u}$ perpendicular to $\vec{q}_T$, which should be zero on average
-- $R$ (response): scalar response defined as $R = \vec{u}\cdot(-\hat{q}_T)\,/\,|\vec{q}_T|$, equal to 1 for perfect MET
+- $u_\parallel$ (`u_paral`): component of $\mathbf{u}$ parallel to $\mathbf{q}_T$, shifted by $|\mathbf{q}_T|$ so that a perfect response gives $u_\parallel = 0$
+- $u_\perp$ (`u_perp`): component of $\mathbf{u}$ perpendicular to $\mathbf{q}_T$, which should be zero on average
+- $R$ (response): scalar response defined as $R = \mathbf{u}\cdot(-\hat{q}_T)\,/\,|\mathbf{q}_T|$, equal to 1 for perfect MET
 
 ### Summary plots ([`plot_MET.py`](plot_MET.py))
 
@@ -45,7 +45,7 @@ The plotting script reads the coffea output files and produces three categories 
 
 1. **Inclusive MET histograms** — pT distributions of the various MET collections, including relative difference plots between standard PuppiMET and the Type-1 corrected variants.
 
-2. **Response and resolution curves** — For each MET type the following quantities are computed in bins of $|\vec{q}_T|$ and number of primary vertices ($n_\text{PV}$):
+2. **Response and resolution curves** — For each MET type the following quantities are computed in bins of $|\mathbf{q}_T|$ and number of primary vertices ($n_\text{PV}$):
    - Mean response $\langle R \rangle$ (ideal value: 1)
    - Mean $u_\parallel$ and $u_\perp$ (ideal value: 0)
    - Quantile resolution: $(Q_{84} - Q_{16})/2$ of $u_\parallel$ and $u_\perp$
