@@ -334,7 +334,7 @@ python plot_jer_mc.py -i /work/<user>/out_jer_... -o test_out \
 
 `plot_jer_mc.py` (and `response.py` for the MC Truth corrections) can take hours and a lot of memory on a full dataset, so they should be run on a batch node rather than interactively. In both cases match the number of workers of the script (`-w` for `plot_jer_mc.py`, `-n` for `response.py`) to the number of requested cores.
 
-#### SLURM on the PSI Tier-3
+#### Example for SLURM on the PSI Tier-3
 
 ```bash
 cd response_plot/
@@ -343,7 +343,7 @@ sbatch -p standard --account=t3 --time=12:00:00 --mem 60gb --cpus-per-task=32 \
     --wrap="python plot_jer_mc.py -i /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_$YEAR -o plots_jer_$YEAR -c plot_jer_configs/<config>.yaml -w 32 --histo"
 ```
 
-#### HTCondor on lxplus
+#### Example for HTCondor on lxplus
 
 `lxplus` has no `sbatch`; the equivalent is to write a small executable script plus a submit file and submit it with `condor_submit`. The job must run in the same apptainer image and virtual environment used interactively, otherwise the packages are not found. The setup below is generic: the same wrapper is used for `plot_jer_mc.py`, `plot_jerc_txt.py` and `response.py`, only the arguments change.
 
