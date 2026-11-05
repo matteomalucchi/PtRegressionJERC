@@ -4015,7 +4015,9 @@ def process_response_type(
 def main():
     # make output dir if it doesn't exist
     os.makedirs(args.output, exist_ok=True)
-    shutil.copy2(args.config, os.path.join(args.output, os.path.basename(args.config)))
+    # copy the config used (the built-in default when -c is not given)
+    config_used = args.config if args.config is not None else _DEFAULT_CONFIG
+    shutil.copy2(config_used, os.path.join(args.output, os.path.basename(config_used)))
     setup_logging(args.output)
 
     # If loading from precomputed file, skip data loading and computation
