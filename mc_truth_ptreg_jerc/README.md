@@ -114,8 +114,8 @@ This is useful to plot the closure test of the MC Truth corrections in a inclusi
 
 The JER (Jet Energy Resolution) workflow has three steps:
 
-1. **Run `jer_mc_config.py` with PocketCoffea.** The MC truth corrections (standard, PNet regression, UParT regression, with and without neutrinos) are applied to the jets and, instead of filling histograms, the per-jet columns (response, $p_T$, $\eta$, nPU, $\rho$, ...) are dumped chunk by chunk as parquet files. The `.coffea` files written in the output directory (`-o`) reference these chunks.
-2. **Run `response_plot/plot_jer_mc.py`** on the output directory to build the response histograms, fit them, compute the resolution and write the JER txt files (see [JER plotting with `plot_jer_mc.py`](#jer-plotting-with-plot_jer_mcpy)).
+1. **Run `jer_mc_config.py` with PocketCoffea.** The MC truth corrections (standard, PNet regression, UParT regression, with and without neutrinos) are applied to the jets and, instead of filling histograms, the per-jet columns (response, $p_T$, $\eta$, nPU, $\rho$, gen-jet parton flavour, ...) are dumped chunk by chunk as parquet files. The `.coffea` files written in the output directory (`-o`) reference these chunks.
+2. **Run `response_plot/plot_jer_mc.py`** on the output directory to build the response histograms, fit them, compute the resolution and write the JER txt files (see [JER plotting with `plot_jer_mc.py`](#jer-plotting-with-plot_jer_mcpy)). To derive the JER separately for each jet flavour, add `--flavsplit` (see [Flavour split](#flavour-split)).
 3. **Optionally run `response_plot/plot_jerc_txt.py`** on the produced txt files to compare them (see [Plotting JERC txt files with `plot_jerc_txt.py`](#plotting-jerc-txt-files-with-plot_jerc_txtpy)).
 
 `exec.py` is **not** used for this workflow: `pocket-coffea run` is called directly.
@@ -271,7 +271,8 @@ python plot_jer_mc.py \
     [-m <max_parquet>] \
     [-l <precomputed.coffea>] \
     [--refit] \
-    [--test]
+    [--test] \
+    [--flavsplit]
 ```
 
 #### Arguments
@@ -288,6 +289,7 @@ python plot_jer_mc.py \
 | `-l`/`--load` | `None` | Path to a precomputed coffea file produced by a previous run; skips data loading and histogram filling |
 | `--refit` | off | When used with `--load`, re-merge histogram bins according to the current YAML config (coarser binning) and recompute all Gaussian fits before plotting |
 | `--test` | off | Run in test mode with reduced bin arrays (overrides the `test` flag in the YAML config) |
+| `--flavsplit` | off | Split the jets by gen-jet parton flavour and produce the full set of outputs separately for each flavour group, in `<output>/flav_<group>/` (see [Flavour split](#flavour-split)) |
 
 #### Typical workflows
 
@@ -327,6 +329,48 @@ python plot_jer_mc.py -i /work/<user>/out_jer_... -o test_out \
 ```
 
 (Use `test: true` in the YAML config to also reduce the bin granularity.)
+
+#### Flavour split
+
+The JER can be derived separately for each jet flavour. The split is done on the gen-jet **parton flavour**, using $|\text{partonFlavour}|$ so that quark and antiquark jets end up in the same group.
+
+To avoid processing the (large) QCD sample several times, the split is **not** done in the PocketCoffea step:
+
+1. `jer_mc_config.py` always saves the `partonFlavour` of the matched gen jet as an extra per-jet column (`MatchedJets_partonFlavour` and `MatchedJetsNeutrino_partonFlavour`), next to the response and kinematic columns. A single run over the events is therefore enough for both the inclusive and the per-flavour JER. Outputs produced before this column was added must be regenerated to use the flavour split.
+2. `plot_jer_mc.py --flavsplit` reads and flattens the columns only once and then, for each flavour group, selects the corresponding jets and runs the usual chain (histograms, fits, plots, `plotted_data_<category>.coffea`, JER txt files). Each group is written to its own sub-directory `<output>/flav_<group>/`, which has the same layout as the output of a run without `--flavsplit`.
+
+The groups are defined in the `flavour_split` section of the YAML config (default below). `null` means all the jets (inclusive, including the jets with undefined flavour 0, which belong to no other group):
+
+```yaml
+flavour_split:
+  column: MatchedJets_partonFlavour   # column used to build the flavour mask
+  groups:
+    inclusive: null
+    b: [5]
+    c: [4]
+    uds: [1, 2, 3]
+    g: [21]
+```
+
+The same mask is applied to all the per-jet columns (including the `MatchedJetsNeutrino_*` ones used in the `mixed` mode), so the regular and neutrino columns must have the same per-jet length, as already required by the `mixed` mode.
+
+Example:
+
+```bash
+python plot_jer_mc.py -i /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_2022_postEE \
+    -o plots_2022postEE \
+    -w 16 --histo --flavsplit
+```
+
+To re-plot or refit one flavour, use `--load` on the coffea file of that flavour (no `--flavsplit` needed):
+
+```bash
+python plot_jer_mc.py \
+    -l plots_2022postEE/flav_b/plotted_data_baseline.coffea \
+    -o plots_2022postEE_rebin/flav_b \
+    -c plot_jer_configs/plot_config_jer_mc_coarsePU_rebinResponse.yaml \
+    --refit -w 16
+```
 
 ---
 

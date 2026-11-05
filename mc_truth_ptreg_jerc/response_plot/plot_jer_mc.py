@@ -239,6 +239,16 @@ parser.add_argument(
     default=False,
     help="Run in test mode with reduced bin arrays (overrides the 'test' flag in the YAML config)",
 )
+parser.add_argument(
+    "--flavsplit",
+    action="store_true",
+    default=False,
+    help=(
+        "Split the jets by gen-jet parton flavour (groups defined in the 'flavour_split' "
+        "section of the YAML config). The input is read only once; each flavour group is "
+        "processed in turn and written to its own sub-directory <output>/flav_<group>/."
+    ),
+)
 
 args = parser.parse_args()
 cfg = _load_config(
@@ -1295,6 +1305,67 @@ def flatten_data(data):
             log.info("Flattening variables: %d/%d done", i + 1, n_vars)
 
     return flat_data
+
+
+def iter_category_data(cat_col, base_output):
+    """
+    Yield (category, flattened data) for each category.
+
+    Without --flavsplit this is just the flattened data of each category.
+    With --flavsplit the flattened jets of each category are split by gen-jet
+    parton flavour (|partonFlavour| in the groups of cfg["flavour_split"]) and
+    one entry per flavour group is yielded. The data are read and flattened only
+    once; for each group args.output is pointed to <base_output>/flav_<group> so
+    that all plots, coffea and txt files of a group go in their own directory.
+    """
+    for category, col_var in cat_col.items():
+        log.info("Processing category '%s': flattening data...", category)
+        col_var_flatten = flatten_data(col_var)
+
+        if not args.flavsplit:
+            yield category, col_var_flatten
+            continue
+
+        flav_column = cfg["flavour_split"]["column"]
+        if flav_column not in col_var_flatten:
+            raise ValueError(
+                f"--flavsplit requested but column '{flav_column}' not found in the "
+                "input. Re-run jer_mc_config.py, which saves the partonFlavour column."
+            )
+        abs_flav = np.abs(col_var_flatten[flav_column])
+        for key, arr in col_var_flatten.items():
+            if len(arr) != len(abs_flav):
+                raise ValueError(
+                    f"Column '{key}' has length {len(arr)} != {len(abs_flav)} "
+                    f"of '{flav_column}': cannot split by flavour."
+                )
+
+        for flav_name, flav_codes in cfg["flavour_split"]["groups"].items():
+            args.output = os.path.join(base_output, f"flav_{flav_name}")
+            os.makedirs(args.output, exist_ok=True)
+            if flav_codes is None:
+                # inclusive: all jets, no copy
+                flav_data = col_var_flatten
+            else:
+                mask = np.isin(abs_flav, flav_codes)
+                if not mask.any():
+                    log.warning(
+                        "Category '%s', flavour '%s': no jets, skipping.",
+                        category,
+                        flav_name,
+                    )
+                    continue
+                flav_data = {key: arr[mask] for key, arr in col_var_flatten.items()}
+            log.info(
+                "Category '%s', flavour '%s': %d jets -> %s",
+                category,
+                flav_name,
+                len(abs_flav) if flav_codes is None else int(mask.sum()),
+                args.output,
+            )
+            yield category, flav_data
+            del flav_data
+        args.output = base_output
 
 
 def create_ND_histo(variables_dict, data, bin_var_configs):
@@ -3944,7 +4015,9 @@ def process_response_type(
 def main():
     # make output dir if it doesn't exist
     os.makedirs(args.output, exist_ok=True)
-    shutil.copy2(args.config, os.path.join(args.output, os.path.basename(args.config)))
+    # copy the config used (the built-in default when -c is not given)
+    config_used = args.config if args.config is not None else _DEFAULT_CONFIG
+    shutil.copy2(config_used, os.path.join(args.output, os.path.basename(config_used)))
     setup_logging(args.output)
 
     # If loading from precomputed file, skip data loading and computation
@@ -4163,10 +4236,7 @@ def main():
     log.info("Total datasets found: %s", total_datasets_list)
     log.info("Year: %s", year)
 
-    for category, col_var in cat_col.items():
-        log.info("Processing category '%s': flattening data...", category)
-        col_var_flatten = flatten_data(col_var)
-
+    for category, col_var_flatten in iter_category_data(cat_col, args.output):
         # Process plot variables (contains both regular and neutrino versions)
         log.info("Building mapping variable histograms for category '%s'...", category)
         h_dict, h_mean_dict, h_mean_bin_var_dict = create_ND_histo(
