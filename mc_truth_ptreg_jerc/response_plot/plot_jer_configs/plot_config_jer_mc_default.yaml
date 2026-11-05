@@ -211,6 +211,24 @@ bin_limits_response: &bin_limits_response [0.5, 1.5]
 y_lim_resolution: [0, 0.35]
 
 # -----------------------------------------------------------------------------
+# Flavour split (used only with the --flavsplit command-line option)
+# -----------------------------------------------------------------------------
+# column - per-jet column holding the gen-jet parton flavour (saved by
+#          jer_mc_config.py). The same mask is applied to all the columns, which
+#          must therefore all have the same (per-jet) length.
+# groups - name -> list of |partonFlavour| values in the group. null means all
+#          jets (inclusive, also jets with undefined flavour 0).
+# Each group is written to <output>/flav_<name>/.
+flavour_split:
+  column: MatchedJets_partonFlavour
+  groups:
+    inclusive: null
+    b: [5]
+    c: [4]
+    uds: [1, 2, 3]
+    g: [21]
+
+# -----------------------------------------------------------------------------
 # Year tag mapping
 # -----------------------------------------------------------------------------
 # Maps the year tag extracted from dataset names to the campaign string used

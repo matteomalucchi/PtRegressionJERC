@@ -173,6 +173,9 @@ cfg = Configurator(
                                 "JetPtPNetReg",
                                 "ResponseUparTReg",
                                 "JetPtUparTReg",
+                                # gen-jet parton flavour, used to split the
+                                # jets by flavour in plot_jer_mc.py --flavsplit
+                                "partonFlavour",
                             ],
                             flatten=False if DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK else True,
                         ),
@@ -190,6 +193,7 @@ cfg = Configurator(
                                 "JetPtPNetRegNeutrino",
                                 "ResponseUparTRegNeutrino",
                                 "JetPtUparTRegNeutrino",
+                                "partonFlavour",
                             ],
                             flatten=False if DUMP_COLUMNS_AS_ARRAYS_PER_CHUNK else True,
                         ),
