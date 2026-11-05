@@ -4,7 +4,22 @@ Repository to compute MC Truth corrections and JER MC for regressed pT jets.
 
 This repository is structured as an analysis configurations for [PocketCoffea](https://github.com/PocketCoffea/PocketCoffea/tree/main) and was originally hosted [at this link](https://github.com/matteomalucchi/AnalysisConfigs/tree/legacy-jme-config/configs/jme).
 
-## Workflow
+## Overview
+
+This directory contains two independent workflows. They use different PocketCoffea configurations, different launch commands and different post-processing scripts, so they are described in separate sections:
+
+| Workflow | PocketCoffea config | How to launch | Post-processing |
+|---|---|---|---|
+| [MC Truth corrections](#mc-truth-corrections) (L2Relative) | `cartesian_config.py` | `exec.py` (wraps `pocket-coffea run`) | `response_plot/response.py`, `response_plot/plot_summary_reponse.py` |
+| [JER from MC truth](#jer-from-mc-truth) | `jer_mc_config.py` | `pocket-coffea run` directly | `response_plot/plot_jer_mc.py`, `response_plot/plot_jerc_txt.py` |
+
+All the commands below assume that the environment is active (see the main [README](../README.md#activate-the-environment)) and that you are inside the `mc_truth_ptreg_jerc/` directory.
+
+The post-processing scripts are heavy (many cores, a lot of memory, long runtime). Instructions to run them on a batch system (SLURM on the PSI Tier-3, HTCondor on `lxplus`) are given in [Running the post-processing scripts on a batch system](#running-the-post-processing-scripts-on-a-batch-system).
+
+---
+
+## MC Truth corrections
 
 ### Running the analysis
 
@@ -14,7 +29,7 @@ To run this over the full dataset for a particular year in each $\eta$ and $p_T$
 python exec.py --full [-pnet] [-upart] --dir <dir_name> -y <year> [--lxplus]
 ```
 
-Where `<dir_name>` is the name of the directory where you want to save the results, and `<year>` is the year you want to run the analysis for. The `--lxplus` flag is used to indicate that you are running this on `lxplus` and it will use the `pocket_coffea_env` environment.
+Where `<dir_name>` is the name of the directory where you want to save the results, and `<year>` is the year you want to run the analysis for. The `--lxplus` flag is used to indicate that you are running this on `lxplus`: jobs are submitted with `-e condor@lxplus`, and `exec.py` creates a temporary run-options file (`params/lxplus_run_options_big_<year>*.tmp.yaml`) that exports the needed environment variables on the condor workers. Without `--lxplus`, jobs are submitted on the PSI Tier-3 with `-e dask@T3_CH_PSI` and `params/t3_run_options_big.yaml`.
 
 Year can be set to:
 
@@ -41,46 +56,6 @@ pocket-coffea merge-outputs -o output_all.coffea output_job_*.coffea
 
 The output file contains 2D histograms for each $\eta$ bin in which the x-axis is the jet $p_T$ response and the y-axis is the jet $p_T$.
 
-#### Running pocket-coffea directly
-
-Instead of `exec.py`, you can also invoke `pocket-coffea` directly. This is useful when you need fine-grained control over the executor, output path, or run options. Set the `YEAR` environment variable beforehand (it is read inside `jer_mc_config.py`):
-
-```bash
-export YEAR=2022_postEE
-pocket-coffea run \
-    --cfg jer_mc_config.py \
-    --custom-run-options params/t3_run_options_jer.yaml \
-    -o /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_2022_postEE \
-    --process-separately \
-    -e dask@T3_CH_PSI
-```
-
-Key flags:
-
-| Flag | Description |
-|---|---|
-| `--cfg` | PocketCoffea configuration file (`jer_mc_config.py`) |
-| `--custom-run-options` | YAML file with executor settings (cores, memory, walltime, chunk size, etc.) |
-| `-o` | Output directory where per-dataset coffea/parquet files are written |
-| `--process-separately` | Process each dataset independently (enables partial recovery) |
-| `-e dask@T3_CH_PSI` | Run on the T3 PSI cluster via Dask; replace with `iterative` for local testing |
-
-The run-options file (`params/t3_run_options_jer.yaml`) controls the Dask workers:
-
-```yaml
-scaleout: 30          # number of parallel workers
-cores-per-worker: 1
-mem-per-worker: "10GB"
-disk-per-worker: "1GB"
-queue: "standard"
-walltime: "08:00:00"
-chunksize: 100000
-```
-
-Use `params/t3_run_options_jer_15Gb.yaml` if jobs run out of memory on the standard configuration.
-
-The coffea output is written inside the directory specified by `output_chunks_name` in `jer_mc_config.py`. By default this points to the T3 dCache store. The output files are used as input to `plot_jer_mc.py`.
-
 ### Computing the MC Truth corrections
 
 After running the full dataset, in order to compute the MC Truth corrections, you can use the following command:
@@ -96,6 +71,8 @@ To run on SLURM on tier3:
 cd response_plot/
 sbatch -p short --account=t3 --time=00:10:00 --mem 15gb --cpus-per-task=32 --wrap="python response.py --full -d  <dir_name> --histo -n 32"
 ```
+
+To run on HTCondor on `lxplus`, see [HTCondor on lxplus](#htcondor-on-lxplus) (an example for `response.py` is given there).
 
 This will:
 
@@ -130,6 +107,141 @@ python plot_summary_reponse.py -d <dir_name>
 ```
 
 This is useful to plot the closure test of the MC Truth corrections in a inclusive way.
+
+---
+
+## JER from MC truth
+
+The JER (Jet Energy Resolution) workflow has three steps:
+
+1. **Run `jer_mc_config.py` with PocketCoffea.** The MC truth corrections (standard, PNet regression, UParT regression, with and without neutrinos) are applied to the jets and, instead of filling histograms, the per-jet columns (response, $p_T$, $\eta$, nPU, $\rho$, ...) are dumped chunk by chunk as parquet files. The `.coffea` files written in the output directory (`-o`) reference these chunks.
+2. **Run `response_plot/plot_jer_mc.py`** on the output directory to build the response histograms, fit them, compute the resolution and write the JER txt files (see [JER plotting with `plot_jer_mc.py`](#jer-plotting-with-plot_jer_mcpy)).
+3. **Optionally run `response_plot/plot_jerc_txt.py`** on the produced txt files to compare them (see [Plotting JERC txt files with `plot_jerc_txt.py`](#plotting-jerc-txt-files-with-plot_jerc_txtpy)).
+
+`exec.py` is **not** used for this workflow: `pocket-coffea run` is called directly.
+
+### Running `jer_mc_config.py`
+
+#### Before running
+
+- **Year.** The year is read from the `YEAR` environment variable inside `jer_mc_config.py` (default: `2022_preEE`). The allowed values are the same as for the [MC Truth corrections](#running-the-analysis). The year selects the QCD sample and the MC truth correction files that are applied (closure), so the correction files for that year must exist in `params/`.
+- **Location of the parquet chunks.** The parquet chunks are **not** written in the `-o` directory, but in the path defined by the `output_chunks_name` variable at the top of `jer_mc_config.py`:
+
+  ```python
+  output_chunks_name = f"root://t3dcachedb03.psi.ch:1094//pnfs/psi.ch/cms/trivcat/store/user/mmalucch/out_jer_mc_ptreg/out_jer_closure_pnet_upart_{year}{add_str}/parquet_files"
+  ```
+
+  By default this points to the PSI Tier-3 dCache area of the original author. Change it to a location where you have write access before running (see the [lxplus section](#on-lxplus-htcondor) for an EOS example). `add_str` (default `_RecoEta`) is a suffix to distinguish different productions.
+
+#### On the PSI Tier-3 (Dask on SLURM)
+
+```bash
+export YEAR=2024
+pocket-coffea run \
+    --cfg jer_mc_config.py \
+    --custom-run-options params/t3_run_options_jer_15Gb.yaml \
+    -o /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_$YEAR \
+    --process-separately \
+    -e dask@T3_CH_PSI
+```
+
+Key flags:
+
+| Flag | Description |
+|---|---|
+| `--cfg` | PocketCoffea configuration file (`jer_mc_config.py`) |
+| `--custom-run-options` | YAML file with executor settings (cores, memory, walltime, chunk size, etc.) |
+| `-o` | Output directory where the per-dataset `.coffea` files are written (the parquet chunks go to `output_chunks_name`) |
+| `--process-separately` | Process each dataset independently (enables partial recovery) |
+| `-e dask@T3_CH_PSI` | Run on the T3 PSI cluster via Dask (`-e condor@lxplus` on lxplus, `-e iterative` for local testing) |
+
+Since the Dask scheduler runs in your shell for the whole duration of the processing, launch the command inside a `tmux` (or `screen`) session so that it survives a disconnection.
+
+The available run-options files for the JER on the Tier-3 are:
+
+| File | Workers | Memory per worker | Walltime |
+|---|---|---|---|
+| `params/t3_run_options_jer.yaml` | 30 | 8 GB | 3 h |
+| `params/t3_run_options_jer_15Gb.yaml` | 25 | 15 GB | 4 h |
+| `params/t3_run_options_jer_15Gb_8h.yaml` | 25 | 15 GB | 8 h |
+
+For example, `params/t3_run_options_jer_15Gb.yaml` contains:
+
+```yaml
+scaleout: 25          # number of parallel workers
+cores-per-worker: 1
+mem-per-worker: "15GB"
+disk-per-worker: "1GB"
+queue: "standard"
+walltime: "04:00:00"
+chunksize: 100000
+```
+
+Use the 15 GB versions if the workers run out of memory, and the 8 h version if they hit the walltime.
+
+To process several years, run the command once per year, changing `YEAR` (and the `-o` directory) each time:
+
+```bash
+for YEAR in 2022_preEE 2022_postEE 2023_preBPix 2023_postBPix 2024; do
+    export YEAR
+    pocket-coffea run --cfg jer_mc_config.py \
+        --custom-run-options params/t3_run_options_jer_15Gb.yaml \
+        -o /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_$YEAR \
+        --process-separately -e dask@T3_CH_PSI
+done
+```
+
+#### On lxplus (HTCondor)
+
+On `lxplus` the processing is submitted to HTCondor with the `condor@lxplus` executor. Run everything from inside the PocketCoffea apptainer image with the virtual environment active (see the main [README](../README.md#lxplus-installation)).
+
+1. **Change the output location of the parquet chunks.** In `jer_mc_config.py`, set `output_chunks_name` to a directory on EOS where you have write access, e.g.:
+
+   ```python
+   output_chunks_name = f"root://eosuser.cern.ch//eos/user/<u>/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_{year}{add_str}/parquet_files"
+   ```
+
+   The dCache path at PSI is not writable from the CERN batch nodes.
+
+2. **Create a run-options file that exports `YEAR` on the condor workers.** The condor jobs do not inherit the environment of your shell, so the environment variables read by the configuration must be exported through `custom-setup-commands` (this is what `exec.py --lxplus` does automatically for the MC Truth workflow). Start from `params/lxplus_run_options_big.yaml` (10 workers, 15 GB each, `workday` queue, `local-virtualenv: true`):
+
+   ```bash
+   export YEAR=2024
+   cp params/lxplus_run_options_big.yaml params/lxplus_run_options_jer_$YEAR.tmp.yaml
+   cat >> params/lxplus_run_options_jer_$YEAR.tmp.yaml <<EOT
+
+   custom-setup-commands:
+     - export YEAR=$YEAR
+   EOT
+   ```
+
+   Adjust `scaleout`, `mem-per-worker` and `queue` (the HTCondor `JobFlavour`, see [below](#htcondor-on-lxplus)) to your needs. If the workers do not pick up your editable PocketCoffea installation, add also the `source .../pocket_coffea_env/bin/activate` and `export PYTHONPATH=...` lines that are commented out in `params/lxplus_run_options_big.yaml` to `custom-setup-commands`.
+
+3. **Run** (preferably inside `tmux`, because the submission and the monitoring of the jobs happen in your shell):
+
+   ```bash
+   pocket-coffea run \
+       --cfg jer_mc_config.py \
+       --custom-run-options params/lxplus_run_options_jer_$YEAR.tmp.yaml \
+       -o /eos/user/<u>/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_$YEAR \
+       --process-separately \
+       -e condor@lxplus
+   ```
+
+   You can follow the jobs with `condor_q`. If they fail with import errors, check the [Troubleshooting (lxplus)](../README.md#troubleshooting-lxplus) section of the main README.
+
+4. **Outputs.** As for the MC Truth workflow, on lxplus there can be one `.coffea` file per job in the `-o` directory. `plot_jer_mc.py` reads **every** `.coffea` file in its input directory, so you can give it the directory as it is. If you prefer to merge the outputs with `pocket-coffea merge-outputs`, write the merged file to a different directory, otherwise the same events are counted twice.
+
+#### Quick local test
+
+To check that the configuration runs before submitting the full processing, run on a few chunks locally:
+
+```bash
+export YEAR=2024
+pocket-coffea run --cfg jer_mc_config.py --test -o test_jer_$YEAR
+```
+
+Note that the parquet chunks are still written to `output_chunks_name`, so point it to a test location (or a local directory) first.
 
 ### JER plotting with `plot_jer_mc.py`
 
@@ -215,6 +327,141 @@ python plot_jer_mc.py -i /work/<user>/out_jer_... -o test_out \
 ```
 
 (Use `test: true` in the YAML config to also reduce the bin granularity.)
+
+---
+
+### Running the post-processing scripts on a batch system
+
+`plot_jer_mc.py` (and `response.py` for the MC Truth corrections) can take hours and a lot of memory on a full dataset, so they should be run on a batch node rather than interactively. In both cases match the number of workers of the script (`-w` for `plot_jer_mc.py`, `-n` for `response.py`) to the number of requested cores.
+
+#### SLURM on the PSI Tier-3
+
+```bash
+cd response_plot/
+sbatch -p standard --account=t3 --time=12:00:00 --mem 60gb --cpus-per-task=32 \
+    --job-name=jer_mc_$YEAR --output=slurm_jer_mc_%j.out \
+    --wrap="python plot_jer_mc.py -i /work/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_$YEAR -o plots_jer_$YEAR -c plot_jer_configs/<config>.yaml -w 32 --histo"
+```
+
+#### HTCondor on lxplus
+
+`lxplus` has no `sbatch`; the equivalent is to write a small executable script plus a submit file and submit it with `condor_submit`. The job must run in the same apptainer image and virtual environment used interactively, otherwise the packages are not found. The setup below is generic: the same wrapper is used for `plot_jer_mc.py`, `plot_jerc_txt.py` and `response.py`, only the arguments change.
+
+Put the following files in a directory on **AFS** (HTCondor at CERN cannot write the `log`/`output`/`error` files to EOS), for example `~/condor_jer/`. Inputs and outputs of the scripts themselves can be on EOS.
+
+1. **Wrapper script** `~/condor_jer/run_in_env.sh` (replace the paths with the ones of your installation):
+
+   ```bash
+   #!/bin/bash
+   # Usage: run_in_env.sh <script.py> [script arguments...]
+   # Runs a script of mc_truth_ptreg_jerc/response_plot inside the PocketCoffea environment.
+   set -e
+
+   POCKET_COFFEA_DIR=/afs/cern.ch/user/<u>/<user>/PocketCoffea
+   RESPONSE_PLOT_DIR=/afs/cern.ch/user/<u>/<user>/PtRegressionJERC/mc_truth_ptreg_jerc/response_plot
+
+   source ${POCKET_COFFEA_DIR}/pocket_coffea_env/bin/activate
+   export PYTHONPATH=${POCKET_COFFEA_DIR}:$PYTHONPATH
+
+   cd ${RESPONSE_PLOT_DIR}
+   echo "Running on $(hostname) with $(nproc) cores: python $*"
+   python "$@"
+   ```
+
+   and make it executable:
+
+   ```bash
+   chmod +x ~/condor_jer/run_in_env.sh
+   ```
+
+2. **Submit file** `~/condor_jer/plot_jer_mc.sub`:
+
+   ```
+   universe          = vanilla
+   executable        = run_in_env.sh
+   arguments         = "plot_jer_mc.py -i /eos/user/<u>/<user>/out_jer_mc_ptreg/out_jer_closure_pnet_upart_$(YEAR) -o /eos/user/<u>/<user>/plots_jer_mc/plots_jer_$(YEAR) -c plot_jer_configs/<config>.yaml -w 16 --histo"
+
+   # Run inside the PocketCoffea image (same as the interactive apptainer shell)
+   +SingularityImage = "/cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-el9-stable"
+
+   request_cpus      = 16
+   request_memory    = 32000MB
+   +JobFlavour       = "workday"
+
+   log               = logs/plot_jer_mc_$(YEAR).$(ClusterId).log
+   output            = logs/plot_jer_mc_$(YEAR).$(ClusterId).out
+   error             = logs/plot_jer_mc_$(YEAR).$(ClusterId).err
+
+   YEAR = 2024
+   queue
+   ```
+
+3. **Submit** from `lxplus` (outside or inside the apptainer shell):
+
+   ```bash
+   cd ~/condor_jer
+   mkdir -p logs
+   condor_submit plot_jer_mc.sub
+   ```
+
+   To override the year without editing the file:
+
+   ```bash
+   condor_submit YEAR=2022_postEE plot_jer_mc.sub
+   ```
+
+   To submit one job per year in a single command, replace the last two lines of the submit file (`YEAR = 2024` and `queue`) with:
+
+   ```
+   queue YEAR in (2022_preEE 2022_postEE 2023_preBPix 2023_postBPix 2024)
+   ```
+
+4. **Monitor and manage** the jobs:
+
+   ```bash
+   condor_q
+   ```
+
+   ```bash
+   condor_tail -f <job_id>
+   ```
+
+   ```bash
+   condor_rm <job_id>
+   ```
+
+   ```bash
+   tail -f logs/plot_jer_mc_2024.*.out
+   ```
+
+Notes:
+
+- **Runtime.** `+JobFlavour` sets the maximum wall time: `espresso` (20 min), `microcentury` (1 h), `longlunch` (2 h), `workday` (8 h), `tomorrow` (1 day), `testmatch` (3 days), `nextweek` (1 week). Use `tomorrow` or longer for a full first run from scratch; `--load`/`--refit` re-runs are much faster.
+- **Memory.** On the CERN batch system about 2 GB of memory are guaranteed per requested core; if you need more memory, increase `request_cpus` (and `-w`) together with `request_memory`.
+- **Reload and refit on condor.** Just change `arguments`, e.g.
+
+  ```
+  arguments = "plot_jer_mc.py -l /eos/user/<u>/<user>/plots_jer_mc/plots_jer_$(YEAR)/plotted_data.coffea -o /eos/user/<u>/<user>/plots_jer_mc/plots_jer_$(YEAR)_rebin -c plot_jer_configs/<config>.yaml --refit -w 16"
+  ```
+
+- **`response.py` (MC Truth corrections).** Use the same wrapper with a different submit file, e.g. `~/condor_jer/response.sub`:
+
+  ```
+  universe          = vanilla
+  executable        = run_in_env.sh
+  arguments         = "response.py --full -d <dir_name> --histo -n 32"
+  +SingularityImage = "/cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/pocketcoffea:lxplus-el9-stable"
+  request_cpus      = 32
+  request_memory    = 64000MB
+  +JobFlavour       = "longlunch"
+  log               = logs/response.$(ClusterId).log
+  output            = logs/response.$(ClusterId).out
+  error             = logs/response.$(ClusterId).err
+  queue
+  ```
+
+  `<dir_name>` must be an absolute path. The minimal `response_plot/job.submit` in the repository calls `/usr/bin/python3` directly, without the apptainer image and the virtual environment, so the PocketCoffea packages are not available there; prefer the wrapper above.
+- **Import errors on the workers** (e.g. `ModuleNotFoundError: No module named 'utils_configs'`): see [Troubleshooting (lxplus)](../README.md#troubleshooting-lxplus) in the main README.
 
 ---
 
