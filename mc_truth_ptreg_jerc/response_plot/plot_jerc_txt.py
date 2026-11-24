@@ -86,6 +86,7 @@ _YEAR_MAP = {
     "2023_postBPix": "Summer23BPix",
     "2024": "Winter24",
     "2025": "Winter25",
+    "2026": "Winter26",
     # Ultra-Legacy — APV variant must come before plain UL16 (longer token wins)
     "UL16_APV": "Summer20UL16APV",
     "UL16": "Summer20UL16",

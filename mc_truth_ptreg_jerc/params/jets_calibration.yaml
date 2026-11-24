@@ -520,6 +520,8 @@ jets_calibration:
       #AK8PFPuppi: "FatJet"
     "2025":
       AK4PFPuppi: "Jet"
+    "2026":
+      AK4PFPuppi: "Jet"
 
   jec_name_map_MC: "${default_jets_calibration.jec_name_map_MC}"
   jec_name_map_Data: "${default_jets_calibration.jec_name_map_Data}"
@@ -534,6 +536,7 @@ jets_calibration:
     2023_postBPix: False
     "2024": False
     "2025": False
+    "2026": False
 
   rescale_MET:
     2016_PreVFP: False
@@ -546,6 +549,7 @@ jets_calibration:
     2023_postBPix: False
     "2024": False
     "2025": False
+    "2026": False
 
   rescale_MET_branch:
      2016_PreVFP: "PuppiMET"
@@ -558,3 +562,4 @@ jets_calibration:
      2023_postBPix: "PuppiMET"
      "2024": "PuppiMET"
      "2025": "PuppiMET"
+     "2026": "PuppiMET"

@@ -57,7 +57,7 @@ sample_name = (
     "QCD_PT-15to7000_FlatPU"
     if int(os.environ.get("PNET", 0)) == 1
     else (
-        "QCD_PT-15to7000_JMENano_Summer24"
+        "QCD_PT-15to7000_JMENano_Winter26"
         if int(os.environ.get("UPART", 0)) == 1
         else "QCD_PT-15to7000"
     )

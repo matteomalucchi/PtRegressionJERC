@@ -16,6 +16,7 @@ corr_files_pnetreg = {
     "2023_postBPix": "Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNet.txt",
     "2024": "Summer24Run3_V3_MC_L2Relative_AK4PFPNet.txt",
     "2025": "Winter25Run3_V3_MC_L2Relative_AK4PFPNet.txt",
+    "2026": "Winter26Run3_V3_MC_L2Relative_AK4PFPNet.txt",
 }
 
 corr_files_upartreg = {
@@ -29,6 +30,7 @@ corr_files_upartreg = {
     "2023_postBPix": "Summer23BPixRun3_V3_MC_L2Relative_AK4PFUparT.txt",
     "2024": "Summer24Run3_V3_MC_L2Relative_AK4PFUparT.txt",
     "2025": "Winter25Run3_V3_MC_L2Relative_AK4PFUparT.txt",
+    "2026": "Winter26Run3_V3_MC_L2Relative_AK4PFUparT.txt",
 }
 
 corr_files_pnetreg_neutrino = {
@@ -42,6 +44,7 @@ corr_files_pnetreg_neutrino = {
     "2023_postBPix": "Summer23BPixRun3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
     "2024": "Summer24Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
     "2025": "Winter25Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
+    "2026": "Winter26Run3_V3_MC_L2Relative_AK4PFPNetPlusNeutrino.txt",
 }
 
 corr_files_upartreg_neutrino = {
@@ -55,6 +58,7 @@ corr_files_upartreg_neutrino = {
     "2023_postBPix": "Summer23BPixRun3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
     "2024": "Summer24Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
     "2025": "Winter25Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
+    "2026": "Winter26Run3_V3_MC_L2Relative_AK4PFUparTPlusNeutrino.txt",
 }
 
 corr_files = {
@@ -68,6 +72,7 @@ corr_files = {
     "2023_postBPix": "Summer23BPixRun3_V3_MC_L2Relative_AK4PUPPI.txt",
     "2024": "Summer24Prompt24_V1_MC_L2Relative_AK4PFPuppi.txt",
     "2025": "Winter25Prompt25_V1_MC_L2Relative_AK4PFPuppi.txt",
+    "2026": "Winter26Prompt26_V1_MC_L2Relative_AK4PFPuppi.txt",
 }
 
 def get_corr_file(base_path):

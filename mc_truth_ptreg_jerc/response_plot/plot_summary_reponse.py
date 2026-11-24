@@ -126,6 +126,8 @@ for type_string in args.type:
             hep.cms.lumitext("2024 (13.6 TeV)")
         elif "2025" in args.dir:
             hep.cms.lumitext("2025 (13.6 TeV)")
+        elif "2026" in args.dir:
+            hep.cms.lumitext("2026 (13.6 TeV)")
         else:
             raise ValueError("Year string not found in directory name")
 

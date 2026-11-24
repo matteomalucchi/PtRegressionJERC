@@ -81,6 +81,9 @@ elif "2024" in args.dir:
 elif "2025" in args.dir:
     year = "Winter25Run3"
     year_txt = "Winter25Prompt25"
+elif "2026" in args.dir:
+    year = "Winter26Run3"
+    year_txt = "Winter26Prompt26"
 
 if args.year:
     year = args.year
@@ -93,6 +96,8 @@ if DP_NOTE_PLOTS:
         year = "2024"
     elif "25" in year:
         year = "2025"
+    elif "26" in year:
+        year = "2026"
     else:
         year = "2022"
 

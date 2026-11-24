@@ -134,6 +134,7 @@ samples_dict = {
     "2023_postBPix": "QCD_PT-15to7000_JMENanov15_Summer23BPix",
     "2024": "QCD_PT-15to7000_JMENano_Summer24",
     "2025": "QCD_PT-15to7000_JMENano_Winter25",
+    "2026": "QCD_PT-15to7000_JMENano_Winter26",
 }
 samples_PNetReg15_dict = {
     "2022_preEE": "QCD_PT-15to7000_PNetReg15_JMENano_Summer22",
